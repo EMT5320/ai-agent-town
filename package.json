@@ -1,0 +1,15 @@
+﻿{
+    "name":  "ai-agent-town-lab",
+    "version":  "0.1.0",
+    "private":  true,
+    "type":  "module",
+    "description":  "Backend-first AI Agent town simulation lab with an observer console.",
+    "scripts":  {
+                    "start":  "python scripts/start_server.py",
+                    "check":  "python scripts/check.py",
+                    "smoke":  "python scripts/smoke_test.py"
+                },
+    "engines":  {
+                    "node":  "\u003e=18.0.0"
+                }
+}

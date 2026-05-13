@@ -1,0 +1,25 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Agent 小镇实验室</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <main class="shell">
+    <section class="hero card">
+      <div><p class="eyebrow">Backend-first Multi-Agent Sandbox</p><h1>AI Agent 小镇实验室</h1><p>观察 10 个 NPC 的计划、对话、行动、记忆和人口事件。</p></div>
+      <div class="clock" id="clock">Day 1 · 08:00</div>
+    </section>
+    <section class="grid">
+      <article class="map card"><div class="map-bg" id="map"></div></article>
+      <aside class="panel card"><h2>小镇指标</h2><div class="stats" id="stats"></div><h2>开发者通道</h2><div class="controls"><button id="stepBtn">单步推进</button><button id="autoBtn">自动运行</button><button id="pauseBtn">暂停/继续</button><button id="eventBtn">注入社区事件</button></div></aside>
+      <article class="card roster"><h2>Agent 状态</h2><div id="agents"></div></article>
+      <article class="card feed"><h2>事件流 / 对话</h2><div id="events"></div></article>
+      <article class="card debug"><h2>完整 Debug</h2><pre id="debug">等待第一轮决策...</pre></article>
+    </section>
+  </main>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

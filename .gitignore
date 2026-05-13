@@ -1,0 +1,13 @@
+﻿# 本地生成文件
+node_modules/
+.DS_Store
+*.log
+
+# 实验导出
+exports/
+
+__pycache__/
+*.pyc
+.venv/
+
+config/models.local.json

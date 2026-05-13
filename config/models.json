@@ -1,0 +1,48 @@
+﻿{
+    "activeProvider":  "cloud",
+    "defaultProfile":  "default_deepseek",
+    "profiles":  {
+                     "default_deepseek":  {
+                                              "provider":  "cloud",
+                                              "baseUrl":  "https://api.deepseek.com",
+                                              "apiKeyEnv":  "DEEPSEEK_API_KEY",
+                                              "model":  "deepseek-chat",
+                                              "temperature":  0.8,
+                                              "maxTokens":  900,
+                                              "timeoutSeconds":  60
+                                          },
+                     "cheap_daily":  {
+                                         "provider":  "cloud",
+                                         "baseUrl":  "https://api.deepseek.com",
+                                         "apiKeyEnv":  "DEEPSEEK_API_KEY",
+                                         "model":  "deepseek-chat",
+                                         "temperature":  0.65,
+                                         "maxTokens":  600,
+                                         "timeoutSeconds":  45
+                                     },
+                     "creative_dialogue":  {
+                                               "provider":  "cloud",
+                                               "baseUrl":  "https://api.deepseek.com",
+                                               "apiKeyEnv":  "DEEPSEEK_API_KEY",
+                                               "model":  "deepseek-chat",
+                                               "temperature":  1.0,
+                                               "maxTokens":  1100,
+                                               "timeoutSeconds":  60
+                                           },
+                     "rule_fallback":  {
+                                           "provider":  "rule"
+                                       }
+                 },
+    "npcProfiles":  {
+                        "mira":  "cheap_daily",
+                        "kai":  "creative_dialogue",
+                        "ivy":  "creative_dialogue"
+                    },
+    "featureProfiles":  {
+                            "agent_decision":  "default_deepseek",
+                            "daily_summary":  "cheap_daily",
+                            "dialogue":  "creative_dialogue",
+                            "debug_analysis":  "default_deepseek"
+                        },
+    "fallbackProfile":  "rule_fallback"
+}
