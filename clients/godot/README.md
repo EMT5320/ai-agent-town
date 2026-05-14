@@ -12,21 +12,33 @@
 
 ## 本地启动
 
-1. 在仓库根目录启动后端：
+1. 在仓库根目录检查 Godot 环境：
+
+   ```powershell
+   npm.cmd run client:env
+   ```
+
+2. 启动后端：
 
    ```powershell
    npm.cmd run start
    ```
 
-2. 用 Godot 4.x 打开：
+3. 打开 Godot 项目：
+
+   ```powershell
+   npm.cmd run client:open
+   ```
+
+   或手动用 Godot 4.x 打开：
 
    ```text
    clients/godot/project.godot
    ```
 
-3. 运行主场景。
+4. 运行主场景。
 
-4. 确认窗口中能看到：
+5. 确认窗口中能看到：
 
    - 玩家位置。
    - 世界时间。
@@ -40,3 +52,9 @@
 - 将 6 个首发 NPC 和 3 个首发地点映射到可视化节点。
 - 增加玩家移动输入。
 - 增加 NPC 交互区域和对话面板。
+
+更完整的新手环境说明见：
+
+```text
+docs/game_client_environment.md
+```

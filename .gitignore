@@ -5,6 +5,7 @@ node_modules/
 
 # 实验导出
 exports/
+.run/
 
 __pycache__/
 *.pyc

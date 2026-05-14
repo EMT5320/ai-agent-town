@@ -219,7 +219,15 @@ Debug / 研究控制台是项目技术深度的展示窗口。任何关键玩家
 4. 增加主场景文本面板，显示玩家、地点、NPC 和事件数据。
 5. 增加 `scripts/check_godot_project.py`，让 `npm.cmd run check` 覆盖 Godot 骨架文件和 API 契约。
 
-当前环境未检测到可直接调用的 Godot CLI，已用静态项目检查覆盖骨架完整性。后续需要用 Godot 编辑器打开 `clients/godot/project.godot` 做一次窗口级实测。
+客户端环境准备已完成：
+
+- 已安装 Godot 4.6.2 标准版。
+- Godot 本机路径：`D:\Work\tools\godot\4.6.2\Godot_v4.6.2-stable_win64.exe`。
+- 已增加 `npm.cmd run client:env`，用于检查 Godot 版本和项目 headless 打开能力。
+- 已增加 `npm.cmd run client:open`，用于打开 `clients/godot/project.godot`。
+- 新手环境说明见 `docs/game_client_environment.md`。
+
+当前已通过 Godot headless 项目检查。后续仍需要在 Godot 编辑器窗口里运行主场景，确认 UI 和后端同步体验。
 
 下一轮建议继续：
 

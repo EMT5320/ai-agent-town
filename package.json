@@ -7,7 +7,9 @@
     "scripts":  {
                     "start":  "python scripts/start_server.py",
                     "check":  "python scripts/check.py",
-                    "smoke":  "python scripts/smoke_test.py"
+                    "smoke":  "python scripts/smoke_test.py",
+                    "client:env":  "python scripts/check_game_client_env.py",
+                    "client:open":  "powershell -ExecutionPolicy Bypass -File scripts/open_godot_project.ps1"
                 },
     "engines":  {
                     "node":  "\u003e=18.0.0"

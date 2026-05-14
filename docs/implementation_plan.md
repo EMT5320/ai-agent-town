@@ -272,7 +272,7 @@ ai-agent-town/
 
 下一次正式实现优先做：
 
-1. 用 Godot 编辑器打开 `clients/godot/project.godot`，运行主场景并验证状态同步。
+1. 启动后端后，用 Godot 编辑器运行 `clients/godot/project.godot` 主场景并验证状态同步。
 2. 裁剪首版 6 NPC 和 3 地点数据。
 3. 接入星灯节供应短缺事件的 `attend_event` 链路。
 4. 根据 Godot 实测调整 `GET /api/world/state` 的字段体积和同步频率。
@@ -292,6 +292,13 @@ ai-agent-town/
 - `WorldSync` 缓存玩家、地点、NPC 和最近事件。
 - 主场景文本面板显示后端状态。
 - `scripts/check_godot_project.py` 进入 `npm.cmd run check`。
+
+已完成的客户端环境准备：
+
+- 安装并验证 Godot 4.6.2 标准版。
+- 增加 `npm.cmd run client:env` 检查本机 Godot 环境。
+- 增加 `npm.cmd run client:open` 打开 Godot 项目。
+- 增加 [`game_client_environment.md`](./game_client_environment.md) 新手环境说明。
 
 ## 正式开发前置文档
 
