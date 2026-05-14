@@ -6,10 +6,12 @@
 
 完成一个可录屏、可讲解、可继续扩展的“第一天”可玩章节：
 
-- 玩家作为新搬来的农场主进入小镇。
+- 玩家作为新搬来的偏少女农场主进入小镇。
 - 小镇包含 3 个地点：农场、广场、酒馆。
-- 首发 6 个 NPC，有人设、日程、关系、喜好、记忆和对玩家的持续反应。
+- 首发 6 个 NPC，有幻想显示名、人设、日程、关系、喜好、记忆和对玩家的持续反应。
 - 玩家可以移动、聊天、送礼、触发小镇事件。
+- 首版同步具备可移动地图层和 Visual Novel 对话层。
+- 关键 NPC 可以通过对话和送礼产生恋爱铺垫级别的好感变化。
 - NPC 使用 LLM 生成关键对话、事件反应和夜间反思。
 - Debug / 研究控制台可以看到 Prompt、模型输出、行动解析、记忆写入和关系变化。
 
@@ -35,8 +37,10 @@
 - `GET /api/world/state`：给 Godot 拉取地图、玩家、NPC、时间和事件。
 - `POST /api/player/action`：处理玩家聊天、送礼和事件互动。
 - LLM Provider 接入 DeepSeek V4 Flash 测试。
-- 6 个 NPC 的首日角色卡、日程和关系。
+- 6 个 NPC 的首日角色卡、幻想显示名、日程和关系。
 - 3 个地点的静态资产与交互区域。
+- 玩家与 NPC 地图小人静态资产。
+- 角色半身立绘、基础表情差分和 Visual Novel 对话 UI。
 - 1 个小镇事件。
 - 夜晚 NPC 日记 / 反思摘要。
 - Web Debug 控制台保留并逐步迁移到 `web-admin/`。
@@ -45,7 +49,7 @@
 
 - 完整农场经营。
 - 四季、天气、作物生长循环。
-- 恋爱结婚系统。
+- 完整恋爱、告白和结婚系统。
 - 多年人口演化。
 - 大地图和复杂寻路。
 - 联机玩法。
@@ -63,56 +67,74 @@
 
 ### 首个小镇事件建议
 
-`星灯节筹备 + 农场供应短缺`
+`星灯祭前夜 + 农场供应短缺`
 
-- 酒馆计划晚上举办星灯节小聚。
-- 布拉姆因供应短缺和凯发生争执。
+- 月猫酒馆计划晚上准备星灯祭小聚和节日点心。
+- 凯想维持节日气氛，但布拉姆因为旧欠账与供货压力拒绝继续供应农产品。
 - 玩家可以选择把农场作物交给酒馆、安抚冲突、支持某一方或旁观。
-- 米拉会从经济角度评价，蕾娜会关注压力与健康，奥伦会把事件联系到小镇传统。
+- 米娅·星麦会从经济与供货角度评价，莉娜·白桦会关注压力与健康，奥伦·星历会把事件联系到星灯祭传统，托玛·榆庭可以作为默默修理灯架的背景参与者。
 - 夜晚不同 NPC 写入不同记忆，第二天对玩家态度产生差异。
 
 ## 首发 NPC 裁剪方案
 
 首版建议使用以下 6 个 NPC：
 
-| NPC | 首版作用 | 核心张力 |
-| --- | --- | --- |
-| 米拉 | 杂货铺店主，负责生活物资与经济线 | 照顾家庭与维持店铺之间的压力 |
-| 托马斯 | 木匠，负责修缮与家庭线 | 沉默保护欲与表达不足 |
-| 奥伦 | 退休教师，负责小镇历史与传统 | 健康风险与固执观念 |
-| 蕾娜 | 医生，负责健康与理性判断 | 过度疲惫与公共责任 |
-| 凯 | 酒馆乐手，负责社交与节日氛围 | 浪漫冲动与欠账冲突 |
-| 布拉姆 | 农夫，负责农场主题与供应线 | 直率记仇与酒馆欠账 |
+| NPC | 首版作用 | 核心张力 | 恋爱铺垫 |
+| --- | --- | --- | --- |
+| 米娅·星麦（`mira`） | 杂货铺店主，负责生活物资与经济线 | 照顾家庭与维持店铺之间的压力 | 温柔照顾线 |
+| 托玛·榆庭（`tomas`） | 木匠，负责修缮与家庭线 | 沉默保护欲与表达不足 | 沉默守护线 |
+| 奥伦·星历（`orren`） | 退休教师，负责小镇历史与传统 | 健康风险与固执观念 | 不作为候选 |
+| 莉娜·白桦（`lena`） | 医生，负责健康与理性判断 | 过度疲惫与公共责任 | 理性克制线 |
+| 凯伊·月弦（`kai`） | 酒馆乐手，负责社交与节日氛围 | 浪漫冲动与欠账冲突 | 热情直球线 |
+| 布拉姆·麦垄（`bram`） | 农夫，负责农场主题与供应线 | 直率记仇与酒馆欠账 | 不作为候选 |
 
 暂缓 NPC 作为扩展池：妮娜、萨娜、里奥、艾薇。
 
 ## 视觉资产计划
 
-首版主风格：温暖绘本风生活模拟。
+首版主风格：二次元轻幻想轻异世界田园生活模拟。
 
-`gpt-image-2` 更适合生成插画化角色、场景、事件 CG 和 UI 风格参考；像素风首版只作为地图小人占位或后续专项资产方向。
+`gpt-image-2` 优先用于生成二次元角色半身立绘、表情差分、场景背景、星灯祭事件 CG、Visual Novel 风格 UI 参考和作品集配图。像素风首版只作为地图小人占位或后续专项资产方向。
+
+详细美术风格、角色设定、提示词摘要和生成顺序见 [`art_direction.md`](./art_direction.md)，可复制提示词见 [`asset_generation_prompts.md`](./asset_generation_prompts.md)。
 
 ### 第一批资产
 
-- `locations/farm_day.png`：农场白天背景。
-- `locations/plaza_day.png`：广场白天背景。
-- `locations/tavern_evening.png`：酒馆傍晚背景。
-- `characters/player_farmer.png`：玩家概念图。
-- `characters/npc_mira.png`
-- `characters/npc_tomas.png`
-- `characters/npc_orren.png`
-- `characters/npc_lena.png`
-- `characters/npc_kai.png`
-- `characters/npc_bram.png`
-- `cg/starlight_shortage_event.png`：星灯节供应短缺事件 CG。
-- `ui/storybook_panel_style.png`：绘本风 UI 面板参考。
+优先生成风格锁定资产：
+
+- `style/style_key_art_agent_valley.png`：星灯谷整体风格图。
+- `style/style_character_lineup_day1.png`：6 个 NPC 同框角色比例与风格参考。
+- `ui/anime_dialogue_panel_style.png`：Visual Novel 风格 UI 参考。
+
+正式首版资产：
+
+- `locations/farm_day_anime.png`：晨露农场白天背景。
+- `locations/plaza_day_anime.png`：中央广场白天背景。
+- `locations/tavern_evening_anime.png`：月猫酒馆傍晚背景。
+- `characters/player_farmer_neutral.png`：偏少女玩家农场主默认半身立绘。
+- `characters/player_farmer_happy.png`：玩家农场主开心差分。
+- `characters/player_farmer_troubled.png`：玩家农场主困惑差分。
+- `characters/npc_mira_neutral.png`、`characters/npc_mira_happy.png`、`characters/npc_mira_troubled.png`
+- `characters/npc_tomas_neutral.png`、`characters/npc_tomas_happy.png`、`characters/npc_tomas_troubled.png`
+- `characters/npc_orren_neutral.png`、`characters/npc_orren_happy.png`、`characters/npc_orren_troubled.png`
+- `characters/npc_lena_neutral.png`、`characters/npc_lena_happy.png`、`characters/npc_lena_troubled.png`
+- `characters/npc_kai_neutral.png`、`characters/npc_kai_happy.png`、`characters/npc_kai_troubled.png`
+- `characters/npc_bram_neutral.png`、`characters/npc_bram_happy.png`、`characters/npc_bram_troubled.png`
+- `sprites/player_farmer_map_idle.png`：偏少女玩家农场主地图小人。
+- `sprites/npc_mira_map_idle.png`、`sprites/npc_tomas_map_idle.png`、`sprites/npc_orren_map_idle.png`
+- `sprites/npc_lena_map_idle.png`、`sprites/npc_kai_map_idle.png`、`sprites/npc_bram_map_idle.png`
+- `sprites/interaction_marker_talk.png`、`sprites/interaction_marker_gift.png`、`sprites/interaction_marker_event.png`
+- `cg/starlight_festival_shortage_event.png`：星灯祭供应短缺事件 CG。
+- `icons/item_fresh_turnip.png`、`icons/item_farm_flower.png`、`icons/item_starlight_lantern.png`
+- `ui/dialogue_box_anime.png`、`ui/nameplate_anime.png`、`ui/choice_button_anime.png`、`ui/memory_card_anime.png`
 
 ### 资产规则
 
 - 原始图进入 `assets/source/`。
 - 裁切、压缩、导入图进入 `assets/processed/` 或 `clients/godot/assets/`。
 - 资产清单进入 `assets/manifests/asset_manifest.json`。
-- 每张资产记录用途、生成提示词摘要、生成日期和是否进入 Godot。
+- 每张资产记录用途、生成提示词摘要、生成日期、表情差分、原始尺寸、处理路径和是否进入 Godot。
+- 同一角色的所有差分必须保持发型、服饰、瞳色和配饰一致。
 
 ## 技术推进批次
 
@@ -145,12 +167,14 @@
 4. 实现 `api_client.gd`，从后端拉取世界状态。
 5. 在场景里显示 3 个地点与 3 个测试 NPC。
 6. 点击或靠近 NPC 时打开对话面板。
+7. 对话面板支持半身立绘、表情字段和基础选择按钮占位。
 
 验收：
 
 - Godot 客户端能启动到可移动场景。
 - 能从 Python 后端读取 NPC 状态。
 - NPC 名称、位置、当前状态能显示在游戏内。
+- 玩家可以从地图移动进入 VN 对话层，再返回地图继续移动。
 
 ### 批次 2：后端游戏 API
 
@@ -187,7 +211,7 @@
 验收：
 
 - 至少 3 个 NPC 能基于玩家行为生成差异化回应。
-- 星灯节事件能让多个 NPC 写入不同记忆。
+- 星灯祭事件能让多个 NPC 写入不同记忆。
 - LLM 调用失败时 Demo 不崩溃。
 
 ### 批次 4：第一天内容落地
@@ -197,9 +221,9 @@
 任务：
 
 1. 裁剪世界到 6 个首发 NPC 和 3 个地点。
-2. 为 6 个 NPC 写首日角色卡、日程、喜好和冲突关系。
-3. 实现基础送礼和关系变化。
-4. 实现星灯节供应短缺事件。
+2. 为 6 个 NPC 写首日角色卡、幻想显示名、视觉原型、说话风格、日程、喜好和冲突关系。
+3. 实现基础送礼、关系变化和恋爱铺垫标签。
+4. 实现星灯祭供应短缺事件。
 5. 实现夜晚反思与日记摘要。
 6. 在 Debug 控制台增加事件链路视图。
 
@@ -207,6 +231,7 @@
 
 - 玩家能完整玩完第一天。
 - 至少一次玩家选择会影响后续 NPC 对话。
+- 至少 2 个恋爱候选 NPC 会在后续对话中体现轻微好感变化。
 - 夜晚能看到 6 个 NPC 中至少 3 个产生不同主观记忆。
 
 ### 批次 5：视觉与演示打磨
@@ -215,16 +240,16 @@
 
 任务：
 
-1. 生成并筛选第一批绘本风资产。
+1. 生成并筛选第一批二次元轻幻想轻异世界资产。
 2. 导入 Godot 并统一命名。
-3. 完成对话框、角色头像、事件 CG 展示。
+3. 完成地图小人、对话框、角色头像、半身立绘、表情差分和事件 CG 展示。
 4. 为 Debug 控制台整理清晰的决策记录视图。
 5. 写一份 Demo 讲解脚本。
 6. 录制 1 条 2-3 分钟演示视频。
 
 验收：
 
-- Demo 第一屏能看出“温暖小镇生活模拟”气质。
+- Demo 第一屏能看出“二次元田园轻幻想生活模拟”气质。
 - 交互链路能被清楚讲解。
 - 截图包含游戏画面、NPC 对话和 Debug 解释三类展示素材。
 
@@ -272,11 +297,12 @@ ai-agent-town/
 
 下一次正式实现优先做：
 
-1. 启动后端后，用 Godot 编辑器运行 `clients/godot/project.godot` 主场景并验证状态同步。
-2. 裁剪首版 6 NPC 和 3 地点数据。
-3. 接入星灯节供应短缺事件的 `attend_event` 链路。
-4. 根据 Godot 实测调整 `GET /api/world/state` 的字段体积和同步频率。
-5. 配置 DeepSeek V4 Flash Profile，并用 1 个 NPC 做真实 LLM 对话测试。
+1. 按 [`art_direction.md`](./art_direction.md) 先生成 3 张风格锁定资产，并由主人确认主视觉方向。
+2. 启动后端后，用 Godot 编辑器运行 `clients/godot/project.godot` 主场景并验证状态同步。
+3. 裁剪首版 6 NPC 和 3 地点数据，并补齐幻想显示名、视觉资产引用和恋爱铺垫字段。
+4. 接入星灯祭供应短缺事件的 `attend_event` 链路。
+5. 根据 Godot 实测调整 `GET /api/world/state` 的字段体积和同步频率。
+6. 配置 DeepSeek V4 Flash Profile，并用 1 个 NPC 做真实 LLM 对话测试。
 
 已完成的正式开发第一轮：
 
