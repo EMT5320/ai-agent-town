@@ -1,17 +1,20 @@
 # Agent Valley 文档索引
 
-本目录用于沉淀 `ai-agent-town-lab` 从观察台原型升级为生活模拟游戏原型的核心共识。
+本目录用于沉淀 `ai-agent-town-lab` 从观察台原型升级为生活模拟游戏原型的核心共识。当前推进目标是把 `Agent Valley` 做成具备长期扩展能力的正式游戏骨架，首版垂直切片只是第一章可玩闭环。
 
 ## 推荐阅读顺序
 
-1. [`project_vision.md`](./project_vision.md)：最高优先级推进依据，定义项目愿景、边界、成功标准。
-2. [`architecture_blueprint.md`](./architecture_blueprint.md)：整体架构、模块职责、数据流、客户端与后端协作方式。
-3. [`implementation_plan.md`](./implementation_plan.md)：初版垂直切片执行方案、批次任务、验收标准。
-4. [`open_questions.md`](./open_questions.md)：已确认决策、剩余验证点、下一轮讨论入口。
+1. [`project_vision.md`](./project_vision.md)：最高优先级推进依据，定义项目愿景、边界、成功标准和完整游戏推进原则。
+2. [`current_status.md`](./current_status.md)：当前代码状态、可复用模块、主要缺口、开发前约束。
+3. [`vertical_slice_spec.md`](./vertical_slice_spec.md)：第一版可玩切片规格、数据契约、验收边界和扩展性要求。
+4. [`architecture_blueprint.md`](./architecture_blueprint.md)：整体架构、模块职责、数据流、客户端与后端协作方式。
+5. [`implementation_plan.md`](./implementation_plan.md)：初版垂直切片执行方案、批次任务、验收标准。
+6. [`open_questions.md`](./open_questions.md)：已确认决策、剩余验证点、下一轮讨论入口。
 
 ## 当前决策摘要
 
 - 项目方向升级为“LLM 驱动 NPC 的生活模拟 RPG 垂直切片”。
+- 项目按正式游戏骨架推进，重要节点需要考虑后续 NPC、地点、事件、资产、系统玩法和 Debug 能力扩展。
 - Python Agent Runtime 继续承担世界、Agent、记忆、事件、Provider 与调试记录。
 - Godot 确定作为主要游戏客户端，负责地图、玩家操作、NPC 表现、对话与游戏 UI。
 - 首版裁剪为 6 个 NPC、3 个地点、1 个完整游戏日和 1 个小镇事件。

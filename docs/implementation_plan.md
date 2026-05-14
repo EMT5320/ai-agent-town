@@ -4,7 +4,7 @@
 
 ## 初版目标
 
-完成一个可录屏、可讲解、可继续扩展的“第一天”Demo：
+完成一个可录屏、可讲解、可继续扩展的“第一天”可玩章节：
 
 - 玩家作为新搬来的农场主进入小镇。
 - 小镇包含 3 个地点：农场、广场、酒馆。
@@ -12,6 +12,19 @@
 - 玩家可以移动、聊天、送礼、触发小镇事件。
 - NPC 使用 LLM 生成关键对话、事件反应和夜间反思。
 - Debug / 研究控制台可以看到 Prompt、模型输出、行动解析、记忆写入和关系变化。
+
+## 开发总约束
+
+首版按正式游戏骨架推进。每个批次除了完成当前体验目标，还要保护后续扩展路径：
+
+- API 设计要能支持更多玩家动作和更多客户端视图。
+- 世界状态要能支持更多地点、NPC、事件和任务。
+- 内容数据要逐步靠近数据驱动，减少新增内容时修改核心循环。
+- Debug 记录要能支持回放、问题定位和作品集讲解。
+- 资产目录和 manifest 要能承载后续角色、场景、CG、UI 和图标。
+- LLM Provider 调用要按功能 profile 管理，避免模型选择散落在业务逻辑里。
+
+批次验收时需要同时检查“体验是否跑通”和“后续同类内容能否扩展”。
 
 ## 首版范围冻结
 
@@ -259,8 +272,13 @@ ai-agent-town/
 
 下一次正式实现优先做：
 
-1. 修正本地检查命令：优先让 `python3 scripts/smoke_test.py`、`python3 -m compileall` 稳定，再处理 Windows Node / WSL Node 差异。
-2. 新建 `clients/godot/` 空项目骨架。
-3. 增加 `GET /api/world/state` 兼容接口。
-4. 增加 `POST /api/player/action` 的最小对话链路。
+1. 增加 `GET /api/world/state` 兼容接口。
+2. 增加最小 `PlayerState`。
+3. 增加 `POST /api/player/action` 的最小对话链路。
+4. 新建 `clients/godot/` 空项目骨架。
 5. 配置 DeepSeek V4 Flash Profile，并用 1 个 NPC 做真实 LLM 对话测试。
+
+## 正式开发前置文档
+
+- [`current_status.md`](./current_status.md)：用于判断当前代码基线、主要缺口和硬性工程约束。
+- [`vertical_slice_spec.md`](./vertical_slice_spec.md)：用于指导第一天可玩章节的数据契约、内容规格和扩展性验收。
