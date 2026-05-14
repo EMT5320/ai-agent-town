@@ -1,7 +1,10 @@
 extends Control
 
-var api_client: ApiClient
-var world_sync: WorldSync
+const ApiClientScript := preload("res://scripts/api_client.gd")
+const WorldSyncScript := preload("res://scripts/world_sync.gd")
+
+var api_client: Node
+var world_sync: Node
 var status_label: Label
 var player_label: Label
 var location_list: VBoxContainer
@@ -10,8 +13,8 @@ var event_list: VBoxContainer
 
 
 func _ready() -> void:
-	api_client = ApiClient.new()
-	world_sync = WorldSync.new()
+	api_client = ApiClientScript.new()
+	world_sync = WorldSyncScript.new()
 	add_child(api_client)
 	add_child(world_sync)
 	_build_layout()
@@ -92,7 +95,7 @@ func _on_refresh_pressed() -> void:
 
 func _on_test_talk_pressed() -> void:
 	_set_status("正在提交玩家对话动作...")
-	var response := await api_client.post_player_action({
+	var response = await api_client.post_player_action({
 		"type": "talk",
 		"targetId": "orren",
 		"locationId": "plaza",
@@ -109,7 +112,7 @@ func _on_test_talk_pressed() -> void:
 
 func _refresh_world() -> void:
 	_set_status("正在读取 /api/world/state ...")
-	var response := await api_client.get_world_state()
+	var response = await api_client.get_world_state()
 	if not response.get("ok", false):
 		_set_status("世界状态读取失败：%s" % response.get("error", "unknown"))
 		return

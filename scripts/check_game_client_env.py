@@ -44,9 +44,14 @@ def main() -> None:
     env["APPDATA"] = str(GODOT_APPDATA_DIR)
 
     version = subprocess.run([str(godot), "--version"], cwd=PROJECT_ROOT, text=True, capture_output=True, check=True, env=env)
-    project_check = subprocess.run([str(godot), "--headless", "--path", "clients/godot", "--quit"], cwd=PROJECT_ROOT, text=True, capture_output=True, env=env)
+    project_check = subprocess.run([str(godot), "--headless", "--path", "clients/godot", "--quit", "--verbose"], cwd=PROJECT_ROOT, text=True, capture_output=True, env=env)
     if project_check.returncode != 0:
         raise SystemExit(project_check.stderr or project_check.stdout or "Godot 项目 headless 检查失败。")
+    project_output = f"{project_check.stdout}\n{project_check.stderr}"
+    fatal_markers = ["SCRIPT ERROR", "Parse Error", "Failed to load script"]
+    for marker in fatal_markers:
+        if marker in project_output:
+            raise SystemExit(project_output)
 
     print("[client-env] ok", {"godot": str(godot), "version": version.stdout.strip()})
 
