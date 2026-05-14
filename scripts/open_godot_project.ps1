@@ -1,13 +1,14 @@
-# 打开 Agent Valley 的 Godot 客户端项目。
-# 优先使用 GODOT_EXE 环境变量，其次使用本机固定安装路径。
+param(
+    [switch]$DryRun
+)
 
 $ErrorActionPreference = "Stop"
 
-$projectRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
-$projectPath = Join-Path $projectRoot "clients\godot\project.godot"
+$projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+$projectDir = Join-Path $projectRoot "clients\godot"
 
 $candidates = @()
-if ($env:GODOT_EXE) {
+if (-not [string]::IsNullOrWhiteSpace($env:GODOT_EXE)) {
     $candidates += $env:GODOT_EXE
 }
 $candidates += "D:\Work\tools\godot\4.6.2\Godot_v4.6.2-stable_win64.exe"
@@ -21,7 +22,13 @@ foreach ($candidate in $candidates) {
 }
 
 if (-not $godot) {
-    throw "未找到 Godot。请先运行 npm.cmd run client:env 检查环境，或设置 GODOT_EXE。"
+    throw "Godot executable was not found. Run npm.cmd run client:env or set GODOT_EXE."
 }
 
-Start-Process -FilePath $godot -ArgumentList "--path", (Split-Path -Parent $projectPath)
+if ($DryRun) {
+    Write-Output "GODOT_EXE=$godot"
+    Write-Output "PROJECT_DIR=$projectDir"
+    exit 0
+}
+
+Start-Process -FilePath $godot -ArgumentList @("--path", $projectDir)

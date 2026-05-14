@@ -93,6 +93,12 @@ http://127.0.0.1:8787
 npm.cmd run client:open
 ```
 
+如果只想检查打开命令会使用哪个 Godot 和项目目录：
+
+```powershell
+npm.cmd run client:open:check
+```
+
 也可以手动打开：
 
 ```text
@@ -172,6 +178,14 @@ npm.cmd run client:open
 
 ```text
 D:\Work\tools\godot\4.6.2\Godot_v4.6.2-stable_win64.exe
+```
+
+### `client:open` 出现 PowerShell 乱码或引号解析错误
+
+旧脚本里有中文字符串时，Windows PowerShell 5.1 可能按本机代码页读取文件，导致脚本解析失败。当前脚本已改成 ASCII 安全写法。遇到类似问题时先执行：
+
+```powershell
+npm.cmd run client:open:check
 ```
 
 ### Godot 生成 `.godot/` 目录
