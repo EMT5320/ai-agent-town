@@ -1,0 +1,55 @@
+class_name ApiClient
+extends Node
+
+var base_url: String = "http://127.0.0.1:8787"
+var _http: HTTPRequest
+
+
+func get_world_state() -> Dictionary:
+	# Godot 游戏客户端只读取后端权威状态。
+	return await _request_json("GET", "/api/world/state", {})
+
+
+func post_player_action(action: Dictionary) -> Dictionary:
+	# 玩家动作统一进入后端，后端负责事件、关系、记忆和 Debug 记录。
+	return await _request_json("POST", "/api/player/action", action)
+
+
+func _ensure_http() -> void:
+	if _http == null:
+		_http = HTTPRequest.new()
+		add_child(_http)
+
+
+func _request_json(method: String, path: String, payload: Dictionary) -> Dictionary:
+	_ensure_http()
+	if _http.get_http_client_status() != HTTPClient.STATUS_DISCONNECTED:
+		_http.cancel_request()
+
+	var request_method := HTTPClient.METHOD_GET
+	var body := ""
+	if method == "POST":
+		request_method = HTTPClient.METHOD_POST
+		body = JSON.stringify(payload)
+
+	var error := _http.request(base_url + path, PackedStringArray(["Content-Type: application/json"]), request_method, body)
+	if error != OK:
+		return {"ok": false, "error": "HTTPRequest 启动失败：%s" % error}
+
+	var result: Array = await _http.request_completed
+	var request_result: int = result[0]
+	var response_code: int = result[1]
+	var raw_body: PackedByteArray = result[3]
+
+	if request_result != HTTPRequest.RESULT_SUCCESS:
+		return {"ok": false, "error": "HTTP 请求失败：%s" % request_result}
+
+	var text := raw_body.get_string_from_utf8()
+	var parsed = JSON.parse_string(text)
+	if typeof(parsed) != TYPE_DICTIONARY:
+		return {"ok": false, "error": "响应需为 JSON 对象", "raw": text}
+
+	if response_code < 200 or response_code >= 300:
+		return {"ok": false, "error": "后端返回状态码：%s" % response_code, "data": parsed}
+
+	return {"ok": true, "data": parsed}

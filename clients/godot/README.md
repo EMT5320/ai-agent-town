@@ -1,0 +1,42 @@
+# Agent Valley Godot 客户端
+
+这是 `Agent Valley` 的首版 Godot 游戏客户端骨架。当前目标是验证 Godot 能读取 Python Agent Server 的权威世界状态，并在游戏窗口中显示玩家、地点、NPC 和最近事件。
+
+## 当前能力
+
+- 主场景：`scenes/main.tscn`
+- API 客户端：`scripts/api_client.gd`
+- 世界状态缓存：`scripts/world_sync.gd`
+- 运行后读取：`GET /api/world/state`
+- 可触发一次测试对话：`POST /api/player/action`
+
+## 本地启动
+
+1. 在仓库根目录启动后端：
+
+   ```powershell
+   npm.cmd run start
+   ```
+
+2. 用 Godot 4.x 打开：
+
+   ```text
+   clients/godot/project.godot
+   ```
+
+3. 运行主场景。
+
+4. 确认窗口中能看到：
+
+   - 玩家位置。
+   - 世界时间。
+   - 地点列表。
+   - NPC 列表。
+   - 最近事件。
+
+## 下一步
+
+- 把当前文本列表替换为基础地图表现。
+- 将 6 个首发 NPC 和 3 个首发地点映射到可视化节点。
+- 增加玩家移动输入。
+- 增加 NPC 交互区域和对话面板。

@@ -25,3 +25,7 @@ if frontend_check.returncode != 0:
 smoke = subprocess.run([sys.executable, "scripts/smoke_test.py"], cwd=ROOT)
 if smoke.returncode != 0:
     raise SystemExit(smoke.returncode)
+
+godot_check = subprocess.run([sys.executable, "scripts/check_godot_project.py"], cwd=ROOT)
+if godot_check.returncode != 0:
+    raise SystemExit(godot_check.returncode)

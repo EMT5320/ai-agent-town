@@ -211,9 +211,19 @@ Debug / 研究控制台是项目技术深度的展示窗口。任何关键玩家
 3. `POST /api/player/action` 的 `move`、`talk` 和 `give_gift` 链路。
 4. 玩家动作的事件、关系、记忆和 Debug 记录。
 
+第二轮已完成：
+
+1. 创建 `clients/godot/` Godot 4.x 项目骨架。
+2. 增加 `ApiClient`，读取 `GET /api/world/state` 并提交测试对话动作。
+3. 增加 `WorldSync`，缓存玩家、地点、NPC 和最近事件。
+4. 增加主场景文本面板，显示玩家、地点、NPC 和事件数据。
+5. 增加 `scripts/check_godot_project.py`，让 `npm.cmd run check` 覆盖 Godot 骨架文件和 API 契约。
+
+当前环境未检测到可直接调用的 Godot CLI，已用静态项目检查覆盖骨架完整性。后续需要用 Godot 编辑器打开 `clients/godot/project.godot` 做一次窗口级实测。
+
 下一轮建议继续：
 
-1. 创建 `clients/godot/` 空项目并读取后端状态。
+1. 用 Godot 编辑器打开项目并运行主场景，确认能连上本地后端。
 2. 裁剪首版 6 NPC 和 3 地点数据。
 3. 接入星灯节供应短缺事件的 `attend_event` 链路。
 4. 根据 Godot 实测调整 `GET /api/world/state` 的字段体积和同步频率。

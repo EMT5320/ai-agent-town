@@ -272,10 +272,10 @@ ai-agent-town/
 
 下一次正式实现优先做：
 
-1. 新建 `clients/godot/` 空项目骨架。
-2. 在 Godot 里读取 `GET /api/world/state` 并显示玩家、地点和 NPC。
-3. 裁剪首版 6 NPC 和 3 地点数据。
-4. 接入星灯节供应短缺事件的 `attend_event` 链路。
+1. 用 Godot 编辑器打开 `clients/godot/project.godot`，运行主场景并验证状态同步。
+2. 裁剪首版 6 NPC 和 3 地点数据。
+3. 接入星灯节供应短缺事件的 `attend_event` 链路。
+4. 根据 Godot 实测调整 `GET /api/world/state` 的字段体积和同步频率。
 5. 配置 DeepSeek V4 Flash Profile，并用 1 个 NPC 做真实 LLM 对话测试。
 
 已完成的正式开发第一轮：
@@ -284,6 +284,14 @@ ai-agent-town/
 - 最小 `PlayerState`。
 - `POST /api/player/action` 的 `move`、`talk` 和 `give_gift` 链路。
 - 玩家对话后的事件、关系变化、NPC 记忆和 Debug 记录。
+
+已完成的正式开发第二轮：
+
+- `clients/godot/` Godot 4.x 项目骨架。
+- `ApiClient` 读取世界状态并提交玩家动作。
+- `WorldSync` 缓存玩家、地点、NPC 和最近事件。
+- 主场景文本面板显示后端状态。
+- `scripts/check_godot_project.py` 进入 `npm.cmd run check`。
 
 ## 正式开发前置文档
 
