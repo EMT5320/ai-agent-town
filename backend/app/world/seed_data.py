@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 LOCATIONS = [
+    {"id": "farm", "name": "晨露农场", "type": "player_home", "x": 18, "y": 76, "color": "#a7f3d0", "description": "玩家刚搬入的小农场，后续会承载作物、仓库和房屋升级。"},
     {"id": "home-north", "name": "北街住宅区", "type": "home", "x": 18, "y": 28, "color": "#7dd3fc", "description": "安静的家庭住宅区，适合休息、照顾家人和邻里闲聊。"},
     {"id": "plaza", "name": "中央广场", "type": "public", "x": 50, "y": 45, "color": "#facc15", "description": "小镇的公共中心，公告、庆典、争执和偶遇都常发生在这里。"},
     {"id": "shop", "name": "星露杂货铺", "type": "commerce", "x": 74, "y": 36, "color": "#fb7185", "description": "购买食物、药品和生活用品，也是居民交换消息的地方。"},

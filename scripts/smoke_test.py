@@ -13,6 +13,24 @@ initial = app.get_public_state()
 if len(initial["agents"]) != 10:
     raise RuntimeError(f"期望 10 个初始 Agent，实际得到 {len(initial['agents'])}")
 
+game_state = app.get_game_state()
+if game_state["player"]["locationId"] != "farm":
+    raise RuntimeError("玩家初始位置应为 farm")
+if len(game_state["npcs"]) != 10:
+    raise RuntimeError(f"游戏状态应暴露 10 个 NPC，实际得到 {len(game_state['npcs'])}")
+if not any(location["id"] == "farm" for location in game_state["locations"]):
+    raise RuntimeError("游戏状态缺少玩家农场地点")
+
+talk = app.player_action({"type": "talk", "targetId": "orren", "locationId": "plaza", "topic": "first_meeting", "message": "你好，我刚搬到晨露农场。"})
+if not talk["ok"]:
+    raise RuntimeError("玩家对话动作应执行成功")
+if "orren" not in talk["state"]["player"]["knownNpcs"]:
+    raise RuntimeError("玩家对话后应记录已认识 NPC")
+if not talk["result"]["dialogue"]:
+    raise RuntimeError("玩家对话后应返回 NPC 回复")
+if not any(event["type"] == "debug.turn_recorded" for event in talk["state"]["recentEvents"]):
+    raise RuntimeError("玩家对话后应写入 Debug 决策记录")
+
 step = app.step_simulation({"actorId": "smoke-test"})
 state = step["state"]
 if state["clock"]["tick"] != 1:

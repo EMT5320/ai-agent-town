@@ -24,12 +24,31 @@ def create_initial_world() -> dict[str, Any]:
         relations[relation_key(a, b)] = {"affection": affection, "trust": trust, "conflict": conflict, "kind": kind}
     return {
         "clock": {"day": 1, "hour": 8, "tick": 0, "phase": "morning", "paused": False},
+        "player": create_player(),
         "locations": {location["id"]: deepcopy(location) for location in LOCATIONS},
         "agents": agents,
         "relations": relations,
         "population": {"births": 0, "deaths": 0, "migrationsIn": 1, "migrationsOut": 0, "growthEvents": 0},
         "townStats": {"funds": 500, "harmony": 63, "economy": 58, "health": 72, "curiosity": 80},
+        "activeEvents": [],
         "activeFocus": None,
+    }
+
+
+def create_player() -> dict[str, Any]:
+    """创建首版玩家状态，后续存档系统会直接围绕这些字段扩展。"""
+    return {
+        "id": "player",
+        "name": "新来的农场主",
+        "locationId": "farm",
+        "inventory": [
+            {"id": "fresh_turnip", "name": "新鲜芜菁", "quantity": 1, "tags": ["crop", "gift"]},
+            {"id": "farm_flower", "name": "农场小花", "quantity": 1, "tags": ["flower", "gift"]},
+        ],
+        "knownNpcs": [],
+        "questFlags": {"day1_intro": "started"},
+        "actionHistory": [],
+        "memories": [{"tick": 0, "importance": 0.6, "tags": ["arrival"], "text": "我搬进了晨露农场，准备认识这座小镇。"}],
     }
 
 
@@ -94,7 +113,23 @@ def public_world(world: dict[str, Any]) -> dict[str, Any]:
     view = deepcopy(world)
     view["locations"] = list(view["locations"].values())
     view["agents"] = list(view["agents"].values())
+    view["player"]["actionHistory"] = view["player"].get("actionHistory", [])[-10:]
+    view["player"]["memories"] = view["player"].get("memories", [])[-10:]
     for agent in view["agents"]:
         agent["memories"] = agent.get("memories", [])[-5:]
         agent["decisionHistory"] = agent.get("decisionHistory", [])[-3:]
     return view
+
+
+def public_game_world(world: dict[str, Any], recent_events: list[dict[str, Any]]) -> dict[str, Any]:
+    """输出 Godot 游戏客户端使用的状态契约，保留后续扩展字段。"""
+    view = public_world(world)
+    return {
+        "clock": view["clock"],
+        "player": view["player"],
+        "locations": view["locations"],
+        "npcs": view["agents"],
+        "activeEvents": view.get("activeEvents", []),
+        "recentEvents": recent_events[-20:],
+        "townStats": view["townStats"],
+    }

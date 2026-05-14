@@ -72,11 +72,12 @@
 
 ### 后端游戏 API 缺口
 
-- 缺少 `GET /api/world/state` 游戏客户端状态接口。
-- 缺少 `POST /api/player/action` 玩家动作入口。
-- 缺少玩家状态：位置、背包、已认识 NPC、当天行动记录、任务进度。
-- 缺少面向 Godot 的低频同步数据结构。
-- 缺少玩家动作对关系、记忆和事件链路的标准写入规则。
+- 已有 `GET /api/world/state` 游戏客户端状态接口，返回 `player`、`locations`、`npcs`、`activeEvents`、`recentEvents` 和 `townStats`。
+- 已有最小 `PlayerState`，包含位置、背包、已认识 NPC、任务标记、行动历史和玩家记忆。
+- 已有 `POST /api/player/action` 玩家动作入口，当前支持 `move`、`talk` 和 `give_gift`。
+- 玩家 `talk` 和 `give_gift` 已写入事件、关系变化、NPC 记忆和 Debug 决策记录。
+- 仍需根据 Godot Spike 继续调整同步频率、字段裁剪和客户端缓存策略。
+- 仍需扩展 `attend_event`、`inspect`、事件选择和更细的物品喜好规则。
 
 ### 内容系统缺口
 
@@ -203,10 +204,16 @@ Debug / 研究控制台是项目技术深度的展示窗口。任何关键玩家
 - 批次 0 阻塞项列表明确。
 - 首个开发任务能直接落到代码。
 
-当前文档整理完成后，建议第一个开发任务为：
+当前已进入正式开发阶段，第一轮已完成：
 
-1. 增加 `GET /api/world/state` 兼容接口。
-2. 增加最小 `PlayerState`。
-3. 增加 `POST /api/player/action` 的 `talk` 最小链路。
-4. 创建 `clients/godot/` 空项目并读取后端状态。
-5. 裁剪首版 6 NPC 和 3 地点数据。
+1. `GET /api/world/state` 兼容接口。
+2. 最小 `PlayerState`。
+3. `POST /api/player/action` 的 `move`、`talk` 和 `give_gift` 链路。
+4. 玩家动作的事件、关系、记忆和 Debug 记录。
+
+下一轮建议继续：
+
+1. 创建 `clients/godot/` 空项目并读取后端状态。
+2. 裁剪首版 6 NPC 和 3 地点数据。
+3. 接入星灯节供应短缺事件的 `attend_event` 链路。
+4. 根据 Godot 实测调整 `GET /api/world/state` 的字段体积和同步频率。

@@ -272,11 +272,18 @@ ai-agent-town/
 
 下一次正式实现优先做：
 
-1. 增加 `GET /api/world/state` 兼容接口。
-2. 增加最小 `PlayerState`。
-3. 增加 `POST /api/player/action` 的最小对话链路。
-4. 新建 `clients/godot/` 空项目骨架。
+1. 新建 `clients/godot/` 空项目骨架。
+2. 在 Godot 里读取 `GET /api/world/state` 并显示玩家、地点和 NPC。
+3. 裁剪首版 6 NPC 和 3 地点数据。
+4. 接入星灯节供应短缺事件的 `attend_event` 链路。
 5. 配置 DeepSeek V4 Flash Profile，并用 1 个 NPC 做真实 LLM 对话测试。
+
+已完成的正式开发第一轮：
+
+- `GET /api/world/state` 游戏状态接口。
+- 最小 `PlayerState`。
+- `POST /api/player/action` 的 `move`、`talk` 和 `give_gift` 链路。
+- 玩家对话后的事件、关系变化、NPC 记忆和 Debug 记录。
 
 ## 正式开发前置文档
 

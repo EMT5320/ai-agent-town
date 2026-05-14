@@ -21,11 +21,17 @@ class TownApplication:
     def get_public_state(self) -> dict[str, Any]:
         return self.runtime.get_public_state()
 
+    def get_game_state(self) -> dict[str, Any]:
+        return self.runtime.get_game_state()
+
     def step_simulation(self, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         return self.runtime.step(actor_id=(payload or {}).get("actorId", "developer"))
 
     def command(self, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         return apply_developer_command(self.runtime, payload or {})
+
+    def player_action(self, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+        return self.runtime.handle_player_action(payload or {})
 
 
 def create_town_app(provider_mode: str | None = None) -> TownApplication:
@@ -40,19 +46,28 @@ def create_handler(app: TownApplication, project_root: Path):
         """轻量 HTTP 适配器，保持和前端一致的 REST/SSE API。"""
 
         def do_GET(self) -> None:  # noqa: N802 - http.server 约定方法名
-            if self.path == "/api/state":
+            route = self.path.split("?", 1)[0]
+            if route == "/api/state":
                 return self.write_json(app.get_public_state())
-            if self.path == "/api/model-config":
+            if route == "/api/world/state":
+                return self.write_json(app.get_game_state())
+            if route == "/api/model-config":
                 return self.write_json(app.runtime.model_config.public_config())
-            if self.path == "/api/events":
+            if route == "/api/events":
                 return self.stream_events(app)
             return self.serve_static(frontend_root)
 
         def do_POST(self) -> None:  # noqa: N802 - http.server 约定方法名
             payload = self.read_json()
-            if self.path == "/api/step":
+            route = self.path.split("?", 1)[0]
+            if route == "/api/step":
                 return self.write_json(app.step_simulation(payload))
-            if self.path == "/api/developer":
+            if route == "/api/player/action":
+                try:
+                    return self.write_json(app.player_action(payload))
+                except ValueError as error:
+                    return self.write_json({"ok": False, "error": str(error)}, HTTPStatus.BAD_REQUEST)
+            if route == "/api/developer":
                 return self.write_json(app.command(payload))
             return self.write_json({"error": "unknown endpoint"}, HTTPStatus.NOT_FOUND)
 
