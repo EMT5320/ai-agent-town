@@ -47,7 +47,7 @@ Codex Visual Asset Pipeline
 - 记忆写入与反思
 - 关系变化
 - 事件流广播
-- 实验日志落盘
+- 运行日志与调试记录落盘
 
 ### Web Debug Console
 
@@ -63,7 +63,7 @@ Codex Visual Asset Pipeline
 - 查看关系变化
 - 注入事件
 - 暂停、继续、单步推进
-- 导出实验记录
+- 导出运行记录与调试记录
 
 ### Codex Visual Asset Pipeline
 
@@ -117,7 +117,7 @@ Web Debug Console
 游戏时间推进
   -> Scheduler 选择需要决策的 NPC
   -> 构建上下文
-  -> Provider 生成计划或行动
+  -> LLM Provider 生成计划或行动
   -> Action Executor 执行
   -> World State 更新
   -> Event Store 记录
@@ -216,7 +216,7 @@ POST /api/dev/pause
 POST /api/dev/resume
 POST /api/dev/inject-event
 GET  /api/debug/turns/{turn_id}
-GET  /api/export/experiment
+GET  /api/export/run-log
 ```
 
 ### WebSocket
@@ -307,9 +307,9 @@ ai-agent-town-lab/
 
 缓解方式：
 
-- 高频行为使用规则。
-- 中频关键决策使用 LLM。
-- 低频夜间反思使用 LLM。
+- 首版直接使用 DeepSeek V4 Flash 验证关键体验。
+- 高频移动和纯日程可以在后续回到规则或缓存。
+- 玩家对话、重大事件反应和夜间反思优先使用 LLM。
 - Debug 面板记录 token、成本和延迟。
 
 ### 美术一致性
