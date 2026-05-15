@@ -56,7 +56,8 @@
 ### 项目文档
 
 - `docs/project_vision.md` 已定义最高优先级愿景。
-- `docs/architecture_blueprint.md` 已定义 Godot、Python Server、Web Debug 和资产管线的职责。
+- `docs/agentic_game_design.md` 已沉淀多层 Agent 游戏系统定调，覆盖 Director System、Event Skill、Director Beat、异步队列、模型分工和记忆/RAG 方向。
+- `docs/architecture_blueprint.md` 已定义 Godot、Python Server、Director System、Event Skill、Web Debug 和资产管线的职责。
 - `docs/implementation_plan.md` 已定义批次 0 到批次 5 的推进顺序。
 - `docs/open_questions.md` 已记录已确认决策和剩余验证点。
 - `docs/vertical_slice_spec.md` 进一步约束第一天可玩切片的实现规格。
@@ -79,18 +80,19 @@
 
 - 已有 `GET /api/world/state` 游戏客户端状态接口，返回 `player`、`locations`、`npcs`、`activeEvents`、`recentEvents` 和 `townStats`。
 - 已有最小 `PlayerState`，包含位置、背包、已认识 NPC、任务标记、行动历史和玩家记忆。
-- 已有 `POST /api/player/action` 玩家动作入口，当前支持 `move`、`talk` 和 `give_gift`。
+- 已有 `POST /api/player/action` 玩家动作入口，当前支持 `move`、`talk`、`give_gift`、`inspect` 和 `attend_event`。
 - 玩家 `talk` 和 `give_gift` 已写入事件、关系变化、NPC 记忆和 Debug 决策记录。
 - 仍需根据 Godot Spike 继续调整同步频率、字段裁剪和客户端缓存策略。
-- 仍需扩展 `attend_event`、`inspect`、事件选择和更细的物品喜好规则。
+- 已落地星灯祭供应短缺事件的查看、选择、关系变化、即时记忆和夜间反思种子。
+- 仍需扩展 Director Beat 队列、Event Skill 数据化、更细的物品喜好规则、事件分支 UI、事件反应 LLM Profile 和夜间反思 LLM Profile。
 
 ### 内容系统缺口
 
-- 10 个 NPC 仍需裁剪为首发 6 个 NPC 和扩展池；首发名单已确定为 5 女 1 男，只保留托玛·榆庭作为男性首发 NPC。
-- 5 个地点仍需裁剪为首发 3 个地点和扩展地点。
-- 星灯祭供应短缺事件需要落成可执行事件规格。
-- 夜间反思需要明确触发时机、输入上下文和输出结构。
+- Godot 游戏状态已裁剪为首发 6 个 NPC 和首版 3 个地点；旧 Web Debug 仍可观察完整 10 NPC 原型。
+- 星灯祭供应短缺事件已落成可执行事件规格，支持 `donate_crop`、`mediate`、`support_kai`、`support_bram` 和 `observe`。
+- 夜间反思已有规则种子，仍需明确正式夜晚触发时机、LLM 输入上下文和输出结构。
 - 角色卡、幻想显示名、性别认同、视觉原型、说话风格、日程、喜好、冲突关系、恋爱铺垫标签和资产引用需要结构化。
+- 多层 Agent 游戏系统方向已确定，下一步需要把当前硬编码事件迁移为 Event Skill schema，并实现规则版 Director v0。
 
 ### 工程稳定性缺口
 
@@ -108,6 +110,8 @@
 - `backend/app/events/event_store.py`：继续作为事件链路和调试回放基础。
 - `backend/app/memory/memory_store.py`：扩展为事件记忆、关系记忆和夜间反思入口。
 - `backend/app/providers/`：保留模型 Provider 抽象，补齐玩家对话、事件反应和夜间反思 profile。
+- `backend/app/director/`：后续新增 Director Beat、WorldDigest、TensionDetector、SkillRouter、Validator 和 QueueManager。
+- `backend/app/skills/`：后续新增 Event Skill schema 与数据化事件定义。
 - `frontend/`：迁移为 `web-admin/` 前的 Debug Console 原型。
 
 ## 开发前硬性约束
@@ -240,6 +244,9 @@ Debug / 研究控制台是项目技术深度的展示窗口。任何关键玩家
 1. 用 `npm.cmd run start` + `npm.cmd run client:run` 验收真实窗口内背景、立绘、地点按钮、NPC 按钮和聊天动作体验。
 2. 继续生成玩家与 6 个首发 NPC 的 `happy` / `troubled` 表情差分，并检查同角色发型、服饰、瞳色和配饰一致性。
 3. 生成并接入地图小人、对话/送礼/事件交互标记，让地图层从背景切换推进到可移动角色节点。
-4. 裁剪首版 6 NPC 和 3 地点数据，并补齐幻想显示名、性别认同、视觉资产引用和恋爱铺垫字段。
-5. 接入星灯祭供应短缺事件的 `attend_event` 链路。
-6. 根据 Godot 实测调整 `GET /api/world/state` 的字段体积和同步频率。
+4. 将 Godot 当前图片背景 + 立绘面板重构为正式的地图层和 Visual Novel 对话层。
+5. 实现规则版 Director v0：生成 WorldDigest，检测星灯祭触发条件，产出可验证 Director Beat。
+6. 将星灯祭供应短缺迁移为 Event Skill 数据结构，再由 Runtime 加载和结算。
+7. 在 Godot 中接入 `inspect` / `attend_event` 交互 UI，并把星灯祭结算结果展示到 VN 对话层。
+8. 将事件反应和夜间反思从规则摘要升级为可配置 LLM Profile。
+9. 根据 Godot 实测调整 `GET /api/world/state` 的字段体积和同步频率。

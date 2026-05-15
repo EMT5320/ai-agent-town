@@ -3,7 +3,7 @@
 from copy import deepcopy
 from typing import Any
 
-from .seed_data import AGENTS, INITIAL_RELATIONS, LOCATIONS
+from .seed_data import AGENTS, DAY1_EVENTS, DAY1_LOCATION_IDS, DAY1_NPC_IDS, INITIAL_RELATIONS, LOCATIONS
 
 
 def clamp(value: int | float, min_value: int = 0, max_value: int = 100) -> int:
@@ -30,7 +30,9 @@ def create_initial_world() -> dict[str, Any]:
         "relations": relations,
         "population": {"births": 0, "deaths": 0, "migrationsIn": 1, "migrationsOut": 0, "growthEvents": 0},
         "townStats": {"funds": 500, "harmony": 63, "economy": 58, "health": 72, "curiosity": 80},
-        "activeEvents": [],
+        "activeEvents": deepcopy(DAY1_EVENTS),
+        "completedEvents": [],
+        "nightReflections": [],
         "activeFocus": None,
     }
 
@@ -124,12 +126,17 @@ def public_world(world: dict[str, Any]) -> dict[str, Any]:
 def public_game_world(world: dict[str, Any], recent_events: list[dict[str, Any]]) -> dict[str, Any]:
     """输出 Godot 游戏客户端使用的状态契约，保留后续扩展字段。"""
     view = public_world(world)
+    location_ids = set(DAY1_LOCATION_IDS)
+    npc_ids = set(DAY1_NPC_IDS)
     return {
         "clock": view["clock"],
         "player": view["player"],
-        "locations": view["locations"],
-        "npcs": view["agents"],
+        "locations": [location for location in view["locations"] if location["id"] in location_ids],
+        "npcs": [agent for agent in view["agents"] if agent["id"] in npc_ids],
         "activeEvents": view.get("activeEvents", []),
+        "completedEvents": view.get("completedEvents", []),
+        "nightReflections": view.get("nightReflections", [])[-10:],
         "recentEvents": recent_events[-20:],
+        "slice": {"npcIds": DAY1_NPC_IDS, "locationIds": DAY1_LOCATION_IDS},
         "townStats": view["townStats"],
     }

@@ -6,7 +6,7 @@
 Godot Game Client
   -> HTTP / WebSocket
 Python Agent Server
-  -> Provider / Memory / Event Store / World State
+  -> Director System / Event Skill Layer / Provider / Memory / Event Store / World State
 Web Debug Console
   -> HTTP / WebSocket
 Codex Visual Asset Pipeline
@@ -39,6 +39,8 @@ Codex Visual Asset Pipeline
 
 - 时间推进
 - 世界状态读写
+- Director Beat 队列消费
+- Event Skill 激活与结算
 - NPC 调度
 - 日程系统
 - Agent 上下文构建
@@ -50,6 +52,29 @@ Codex Visual Asset Pipeline
 - 关系变化
 - 事件流广播
 - 运行日志与调试记录落盘
+
+### Director System
+
+负责低频节奏规划和事件 Skill 调度。导演层由一组可校验的规划组件构成：
+
+- `WorldDigestBuilder`：把世界状态、关系张力、近期事件和玩家位置压缩成稳定摘要。
+- `TensionDetector`：扫描高冲突关系、资源短缺、健康风险和玩家附近压力源。
+- `SkillRouter`：根据触发条件筛选候选事件 Skill。
+- `DirectorPlanner`：在高价值节点调用强模型或规则规划下一组 Director Beat。
+- `DirectorValidator`：校验 Director Beat schema、权限、世界版本和生效窗口。
+- `DirectorQueueManager`：把可执行 Beat 放入队列，按 tick 或时间段消费。
+
+Director System 只提出阶段性目标、候选事件和 NPC brief。世界状态仍由 Runtime 执行合法工具后修改。
+
+### Event Skill Layer
+
+负责把传统固定剧情拆成可运行情境模块：
+
+- 常驻轻量 Skill Manifest：触发条件、参与者、标签、资产提示。
+- 触发后完整 Skill：导演 brief、NPC brief、玩家动作、工具权限、约束边界、后果类型。
+- 生命周期：`dormant -> candidate -> loaded -> active -> resolved -> reflected -> archived`。
+
+事件 Skill 给 Agent 提供情境压力，不强制 NPC 走固定结局。
 
 ### Web Debug Console
 
@@ -63,6 +88,8 @@ Codex Visual Asset Pipeline
 - 查看工具执行结果
 - 查看记忆写入
 - 查看关系变化
+- 查看 Director Beat 队列
+- 查看事件 Skill 触发条件与加载结果
 - 注入事件
 - 暂停、继续、单步推进
 - 导出运行记录与调试记录
@@ -127,6 +154,34 @@ Web Debug Console
   -> WebSocket 推送给 Godot 和 Debug Console
 ```
 
+### Director Beat 异步规划
+
+```text
+时间段开始 / 关键玩家行为 / 事件结束
+  -> WorldDigestBuilder 生成摘要
+  -> TensionDetector 找到关系张力和候选压力源
+  -> SkillRouter 筛选候选 Event Skills
+  -> DirectorPlanner 低频生成 Director Beat
+  -> DirectorValidator 校验 schema、世界版本、生效窗口和权限
+  -> DirectorQueueManager 入队
+  -> Runtime 在合适 tick 消费 Beat
+  -> 相关 NPC 收到局势 brief 和可用工具
+```
+
+如果 Director Beat 返回太晚、世界版本落后、过期或命中取消条件，Runtime 会丢弃或降级为建议，并把原因写入 Debug 事件。
+
+### Event Skill 渐进式加载
+
+```text
+常驻 Skill Manifest
+  -> 只暴露 trigger、participants、tags、assetHints
+触发条件满足
+  -> 加载完整 Skill
+  -> 分发 directorBrief 和 npcBriefs
+  -> 开放该事件允许的工具行动
+  -> 事件结算后写入关系变化、记忆和反思
+```
+
 ### 夜间反思
 
 ```text
@@ -152,6 +207,49 @@ Web Debug Console
 - 物品状态
 - 事件状态
 - 关系图谱
+
+### Director Beat
+
+导演层的基本输出单位，代表一个异步生成、可验证、可过期的阶段性世界指令。
+
+关键字段：
+
+- `directiveId`
+- `worldVersion`
+- `validFromTick`
+- `expiresAtTick`
+- `priority`
+- `beatType`
+- `targetAgents`
+- `goal`
+- `allowedSkills`
+- `directorBrief`
+- `npcBriefs`
+- `constraints`
+- `cancelIf`
+- `assetHints`
+
+Director Beat 不直接改世界，只进入队列，由 Runtime 在合法时间窗口消费。
+
+### Event Skill
+
+事件 Skill 是情境模块，提供可运行局势、工具边界和后果类型。
+
+最低字段：
+
+- `skillId`
+- `title`
+- `trigger`
+- `participants`
+- `tags`
+- `directorBrief`
+- `npcBriefs`
+- `playerActions`
+- `tools`
+- `outcomeTypes`
+- `constraints`
+- `assetHints`
+- `debugFields`
 
 ### Agent Profile
 
@@ -284,6 +382,8 @@ clients/godot/
 ```text
 ai-agent-town-lab/
 ├── backend/                 # Python Agent Server
+│   ├── app/director/         # Director Beat、WorldDigest、Skill 路由和队列
+│   └── app/skills/           # Event Skill schema 与事件数据
 ├── clients/
 │   └── godot/               # Godot 游戏客户端
 ├── web-admin/               # Debug / 研究控制台
@@ -319,10 +419,21 @@ ai-agent-town-lab/
 
 缓解方式：
 
-- 首版直接使用 DeepSeek V4 Flash 验证关键体验。
-- 高频移动和纯日程可以在后续回到规则或缓存。
-- 玩家对话、重大事件反应和夜间反思优先使用 LLM。
+- 强模型只用于低频高价值导演规划、复杂事件复盘和多角色冲突判断。
+- 高频移动、纯日程、合法性校验和简单触发检测使用规则或缓存。
+- 玩家对话、普通 NPC 反应和摘要优先使用低延迟模型。
+- Director Beat 异步生成，过期或世界版本不匹配时丢弃或降级为建议。
 - Debug 面板记录 token、成本和延迟。
+
+### 导演层单点风险
+
+缓解方式：
+
+- Director System 拆成摘要、张力检测、Skill 路由、规划、校验和队列多个部件。
+- 模型只能输出 Director Beat，不能直接修改 World State。
+- 每个 Beat 带 `worldVersion`、生效窗口、取消条件和约束。
+- Runtime 使用纯代码 Validator 和工具权限系统控制落地。
+- 强模型失败时继续使用当前 brief、规则 fallback 或跳过本轮规划。
 
 ### 美术一致性
 
@@ -333,4 +444,3 @@ ai-agent-town-lab/
 - 同一角色的立绘、头像和表情差分必须保持发型、服饰、瞳色和配饰一致。
 - 每张资产记录提示词摘要、用途、生成工具、审稿备注和 Godot 导入路径。
 - 游戏内尽量使用静态图和少量差分。
-

@@ -23,6 +23,6 @@ class RuleBasedProvider:
         elif any(keyword in agent["job"] for keyword in ["店主", "木匠", "农夫", "农场主"]):
             response = {"speech": "先把工作处理好，小镇稳定需要每个人尽责。", "action": "work", "args": {"job": agent["job"]}, "memory_to_save": "我完成了一段职业工作。"}
         else:
-            destinations = ["plaza", "shop", "clinic", "tavern", "home-north"]
+            destinations = ["farm", "plaza", "tavern"]
             response = {"speech": "我想换个地方观察大家今天的状态。", "action": "moveTo", "args": {"location": destinations[(clock["tick"] + len(agent["name"])) % len(destinations)]}, "memory_to_save": "我根据小镇气氛调整了当前位置。"}
         return {"provider": self.name, "rawText": json.dumps(response, ensure_ascii=False), "parsed": response, "usage": {"tokens": 0, "cost": 0, "latencyMs": 1}}

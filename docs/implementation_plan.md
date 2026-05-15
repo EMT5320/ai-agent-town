@@ -214,6 +214,27 @@
 - 星灯祭事件能让多个 NPC 写入不同记忆。
 - LLM 调用失败时 Demo 不崩溃。
 
+### 批次 3.5：Director 与 Event Skill 最小原型
+
+目标：把项目从单层 NPC 调度推进到多层 Agent 游戏系统，让事件由 Director Beat 和 Event Skill 驱动。
+
+任务：
+
+1. 定义 `WorldDigest`、`DirectorBeat` 和 `EventSkill` schema。
+2. 增加规则版 `WorldDigestBuilder`，输出时间段、玩家位置、高张力关系、候选事件和关键记忆摘要。
+3. 增加规则版 `TensionDetector` 和 `SkillRouter`，先覆盖星灯祭供应短缺触发。
+4. 增加 `DirectorQueueManager`，支持 Beat 入队、过期、取消和按 tick 消费。
+5. 增加 `DirectorValidator`，校验世界版本、生效窗口、目标 Agent、允许 Skill 和工具权限。
+6. 将星灯祭供应短缺从硬编码事件迁移为 Event Skill 数据。
+7. Debug Console 记录 Director Beat 输入、输出、校验结果、消费结果和 fallback。
+
+验收：
+
+- 规则版 Director v0 能根据世界摘要生成一个可消费的 `activate_event_skill` Beat。
+- Beat 过期或世界版本不匹配时不会改动世界状态，并会进入 Debug 事件。
+- 星灯祭供应短缺可由 Event Skill 加载，仍保持玩家查看、选择、关系变化、记忆和夜间反思链路。
+- 不调用强模型时，完整 Demo 仍可离线运行。
+
 ### 批次 4：第一天内容落地
 
 目标：完成一条可玩的主线体验。

@@ -297,6 +297,29 @@ fallbackReason
 
 所有 LLM 输出需要支持结构化 JSON 解析，并保留自然语言兜底。
 
+## Director 与 Event Skill 边界
+
+首版切片虽然只包含 1 个小镇事件，但事件结构需要对齐多层 Agent 游戏系统：
+
+- 星灯祭供应短缺应逐步迁移为 Event Skill，减少 Runtime 长期硬编码。
+- Director v0 可以先用规则生成 Director Beat，后续再接入强模型做低频规划。
+- Director Beat 只负责激活事件、分发 brief、安排阶段目标和触发反思，不直接修改世界状态。
+- NPC 根据角色卡、关系、记忆、当前事件 brief 和可用工具自主生成行动。
+- Runtime 使用 Validator 校验 Beat、事件选择、工具权限和世界状态。
+
+首版最低需要支持一个 `activate_event_skill` Beat：
+
+```json
+{
+  "beatType": "activate_event_skill",
+  "allowedSkills": ["starlight_festival_shortage"],
+  "targetAgents": ["kai", "bram"],
+  "validFromTick": 0,
+  "expiresAtTick": 12,
+  "goal": "让星灯祭供应冲突进入玩家可感知状态"
+}
+```
+
 ## 资产规格
 
 ### 首批资产清单
@@ -407,12 +430,14 @@ ai-agent-town-lab/
 - 至少 2 个恋爱候选 NPC 的后续对话能体现轻微好感变化。
 - 星灯祭供应短缺事件可以触发和完成。
 - 夜晚能看到 NPC 记忆或日记结果。
+- 规则版 Director v0 能生成并消费至少 1 个有效 Director Beat。
 
 ### 技术验收
 
 - Godot 通过 `GET /api/world/state` 获取状态。
 - 玩家动作通过 `POST /api/player/action` 进入后端。
 - 后端写入玩家动作、NPC 反应、关系变化和记忆事件。
+- 后端能记录 Director Beat、事件 Skill 触发、校验结果和消费结果。
 - Debug Console 能解释至少 1 条完整玩家互动链路。
 - LLM 失败时可以 fallback，游戏流程继续推进。
 
@@ -422,7 +447,7 @@ ai-agent-town-lab/
 - 新增一个地点不需要改动 Agent Runtime 核心循环。
 - 新增一个玩家动作有明确 API 类型、事件类型和 Debug 记录位置。
 - 新增一张资产可以进入资产清单并被 Godot 引用。
-- 首版事件结构能复用到后续节日、冲突、委托和危机事件。
+- 首版事件结构能通过 Event Skill 复用到后续节日、冲突、委托和危机事件。
 
 ## 开发启动顺序
 

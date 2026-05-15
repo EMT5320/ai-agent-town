@@ -12,6 +12,7 @@ from app.providers.context_builder import build_agent_context, build_player_dial
 from app.providers.rule_based_provider import RuleBasedProvider
 from app.runtime.action_executor import execute_action, maybe_population_event
 from app.runtime.action_parser import parse_provider_output
+from app.world.seed_data import DAY1_EVENT_ID
 from app.world.world_state import advance_clock, adjust_relation, create_initial_world, get_relation, living_agents, public_game_world, public_world
 
 
@@ -49,6 +50,10 @@ class AgentRuntime:
             result = self._handle_player_talk(payload)
         elif action_type == "give_gift":
             result = self._handle_player_gift(payload)
+        elif action_type == "inspect":
+            result = self._handle_player_inspect(payload)
+        elif action_type == "attend_event":
+            result = self._handle_player_attend_event(payload)
         else:
             raise ValueError(f"未知玩家动作：{action_type}")
         return {"ok": True, "result": result, "state": self.get_game_state()}
@@ -219,6 +224,259 @@ class AgentRuntime:
             "memoryWrites": [memory_payload],
             "eventIds": event_ids,
         }
+
+    def _handle_player_inspect(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """查看地点或事件提示，给 Godot 地图层提供轻量调查动作。"""
+        event_id = str(payload.get("eventId") or "")
+        location_id = str(payload.get("locationId") or self.world["player"].get("locationId") or "")
+        if event_id:
+            event = self._get_active_event(event_id)
+            inspect_payload = {
+                "subjectType": "event",
+                "subjectId": event["id"],
+                "title": event["title"],
+                "summary": event["summary"],
+                "locationId": event["locationId"],
+                "status": event["status"],
+                "choices": event.get("choices", []),
+            }
+        else:
+            if location_id not in self.world["locations"]:
+                raise ValueError(f"未知地点：{location_id}")
+            location = self.world["locations"][location_id]
+            nearby = [agent for agent in living_agents(self.world) if agent.get("locationId") == location_id]
+            inspect_payload = {
+                "subjectType": "location",
+                "subjectId": location_id,
+                "title": location["name"],
+                "summary": location["description"],
+                "nearbyNpcs": [{"id": agent["id"], "name": agent["name"], "job": agent["job"]} for agent in nearby],
+            }
+
+        event = self.event_store.append("player.inspected", {"playerId": "player", **inspect_payload})
+        self.world["player"].setdefault("questFlags", {})[f"inspected_{inspect_payload['subjectId']}"] = True
+        self._record_player_history("inspect", payload, [event["id"]])
+        return {
+            "dialogue": [{"speakerId": "system", "speakerName": "旁白", "text": inspect_payload["summary"]}],
+            "relationshipDeltas": [],
+            "memoryWrites": [],
+            "inspect": inspect_payload,
+            "eventIds": [event["id"]],
+        }
+
+    def _handle_player_attend_event(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """处理星灯祭供应短缺事件选择，并写入关系、记忆和夜间反思种子。"""
+        event_id = str(payload.get("eventId") or DAY1_EVENT_ID)
+        choice = str(payload.get("choice") or "mediate")
+        event = self._get_active_event(event_id)
+        if event.get("status") == "resolved":
+            raise ValueError(f"事件已结算：{event_id}")
+        if choice == "donate_crop":
+            donated_item = self._take_player_item("fresh_turnip")
+        else:
+            donated_item = None
+
+        self.world["player"]["locationId"] = event["locationId"]
+        outcome = self._starlight_outcome(choice, donated_item)
+        choice_event = self.event_store.append(
+            "player.event_choice",
+            {
+                "playerId": "player",
+                "eventId": event_id,
+                "choice": choice,
+                "choiceLabel": outcome["choiceLabel"],
+                "summary": outcome["summary"],
+            },
+        )
+
+        relationship_events: list[dict[str, Any]] = []
+        relationship_payloads: list[dict[str, Any]] = []
+        for target_id, delta in outcome["relationDeltas"].items():
+            if target_id in self.world["agents"]:
+                payload_delta = self._apply_player_relation_delta(target_id, delta)
+                relationship_payloads.append(payload_delta)
+                relationship_events.append(self.event_store.append("relationship.changed", payload_delta))
+
+        memory_payloads, memory_events = self._write_starlight_memories(choice, outcome)
+        dialogue_payloads, dialogue_events = self._write_starlight_dialogue(choice, outcome)
+        reflection_payloads, reflection_events = self._write_starlight_reflections(choice, outcome)
+
+        event["status"] = "resolved"
+        event["resolution"] = {"choice": choice, "summary": outcome["summary"], "resolvedTick": self.world["clock"]["tick"]}
+        self.world.setdefault("completedEvents", []).append(dict(event))
+        self.world["player"].setdefault("questFlags", {})["starlight_shortage"] = f"resolved_{choice}"
+        resolved_event = self.event_store.append("town.event_resolved", {"eventId": event_id, "choice": choice, "summary": outcome["summary"]})
+
+        event_ids = (
+            [choice_event["id"]]
+            + [item["id"] for item in relationship_events]
+            + [item["id"] for item in memory_events]
+            + [item["id"] for item in dialogue_events]
+            + [item["id"] for item in reflection_events]
+            + [resolved_event["id"]]
+        )
+        self._record_player_history("attend_event", payload, event_ids)
+        return {
+            "dialogue": dialogue_payloads,
+            "relationshipDeltas": relationship_payloads,
+            "memoryWrites": memory_payloads + reflection_payloads,
+            "eventResult": {"eventId": event_id, "choice": choice, "summary": outcome["summary"]},
+            "eventIds": event_ids,
+        }
+
+    def _get_active_event(self, event_id: str) -> dict[str, Any]:
+        """按 id 读取当前可交互事件。"""
+        for event in self.world.get("activeEvents", []):
+            if event.get("id") == event_id:
+                return event
+        raise ValueError(f"未知事件：{event_id}")
+
+    def _starlight_outcome(self, choice: str, donated_item: dict[str, Any] | None) -> dict[str, Any]:
+        """返回星灯祭供应短缺事件的规则结算表。"""
+        item_name = donated_item["name"] if donated_item else "农场作物"
+        outcomes: dict[str, dict[str, Any]] = {
+            "donate_crop": {
+                "choiceLabel": f"拿出{item_name}帮酒馆渡过今晚",
+                "summary": f"玩家拿出{item_name}补上节日食材，凯娅松了一口气，布兰娜也承认这份帮忙很实在。",
+                "relationDeltas": {
+                    "kai": {"affection": 5, "trust": 4, "conflict": -5},
+                    "bram": {"affection": 2, "trust": 3, "conflict": -4},
+                    "mira": {"affection": 1, "trust": 2, "conflict": -1},
+                    "lena": {"affection": 1, "trust": 1, "conflict": -1},
+                    "orren": {"affection": 1, "trust": 2, "conflict": -1},
+                    "tomas": {"affection": 1, "trust": 1, "conflict": -1},
+                },
+            },
+            "mediate": {
+                "choiceLabel": "调解凯娅和布兰娜的欠账冲突",
+                "summary": "玩家请凯娅先确认还款安排，也帮布兰娜保住供货底线，争执被暂时压了下来。",
+                "relationDeltas": {
+                    "kai": {"affection": 3, "trust": 4, "conflict": -4},
+                    "bram": {"affection": 3, "trust": 4, "conflict": -5},
+                    "mira": {"affection": 1, "trust": 2, "conflict": -1},
+                    "lena": {"affection": 1, "trust": 2, "conflict": -1},
+                    "orren": {"affection": 1, "trust": 2, "conflict": -1},
+                },
+            },
+            "support_kai": {
+                "choiceLabel": "优先支持凯娅维持节日气氛",
+                "summary": "玩家站在凯娅这边让星灯祭继续热闹，但布兰娜对酒馆旧账更加不满。",
+                "relationDeltas": {
+                    "kai": {"affection": 5, "trust": 2, "conflict": -2},
+                    "bram": {"affection": -1, "trust": -1, "conflict": 4},
+                    "mira": {"trust": 1},
+                    "orren": {"trust": 1},
+                },
+            },
+            "support_bram": {
+                "choiceLabel": "优先支持布兰娜守住供货底线",
+                "summary": "玩家支持布兰娜先把欠账说清，酒馆气氛短暂降温，但供货压力被认真看见了。",
+                "relationDeltas": {
+                    "kai": {"affection": -1, "trust": 0, "conflict": 3},
+                    "bram": {"affection": 5, "trust": 3, "conflict": -2},
+                    "mira": {"trust": 1},
+                    "lena": {"trust": 1},
+                },
+            },
+            "observe": {
+                "choiceLabel": "先旁观并记录大家的反应",
+                "summary": "玩家没有立刻介入，只观察到凯娅的焦虑、布兰娜的压力，以及旁观居民的担心。",
+                "relationDeltas": {
+                    "orren": {"trust": 1},
+                    "lena": {"trust": 1},
+                },
+            },
+        }
+        if choice not in outcomes:
+            raise ValueError(f"未知星灯祭事件选项：{choice}")
+        return outcomes[choice]
+
+    def _apply_player_relation_delta(self, target_id: str, delta: dict[str, int | str]) -> dict[str, Any]:
+        """调整玩家与 NPC 的关系并返回 Debug 友好的差值记录。"""
+        target = self.world["agents"][target_id]
+        before_relation = get_relation(self.world, "player", target_id)
+        adjust_relation(self.world, "player", target_id, delta)
+        after_relation = get_relation(self.world, "player", target_id)
+        return {
+            "sourceId": "player",
+            "targetId": target_id,
+            "targetName": target["name"],
+            "delta": self._relation_diff(before_relation, after_relation),
+            "after": after_relation,
+        }
+
+    def _write_starlight_memories(self, choice: str, outcome: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        """让参与者写入对星灯祭事件的即时主观记忆。"""
+        memory_templates = {
+            "kai": "星灯祭前夜差点因为食材短缺冷场，玩家的选择让我重新看见节日还能继续发光。",
+            "bram": "酒馆欠账和供货压力被摆到台面上，玩家的处理方式让我重新评估这个新农场主。",
+            "mira": "今晚的供应短缺让我担心小镇账目，但玩家让局面没有继续恶化。",
+            "lena": "争执让大家都紧绷，玩家的介入至少让晚上的情绪风险降了下来。",
+            "orren": "星灯祭的传统需要年轻人接住，玩家今晚给这段传统留下了新的注脚。",
+            "tomas": "我在旁边修灯架时看见玩家处理争执，这个人也许愿意认真守护小镇。",
+        }
+        payloads: list[dict[str, Any]] = []
+        events: list[dict[str, Any]] = []
+        for agent_id, text in memory_templates.items():
+            agent = self.world["agents"][agent_id]
+            memory_text = f"{text} 结局：{outcome['summary']}"
+            remember(agent, memory_text, tick=self.world["clock"]["tick"], importance=0.8, tags=["starlight_shortage", choice])
+            payload = {"agentId": agent_id, "agentName": agent["name"], "text": memory_text, "tags": ["starlight_shortage", choice]}
+            payloads.append(payload)
+            events.append(self.event_store.append("npc.memory_created", payload))
+        return payloads, events
+
+    def _write_starlight_dialogue(self, choice: str, outcome: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        """生成事件结算时玩家能看到的关键 NPC 台词。"""
+        lines_by_choice = {
+            "donate_crop": [
+                ("kai", "你真的把农场作物拿来了？今晚的星灯不会暗下去了，谢谢你！"),
+                ("bram", "哼，至少你知道作物不是凭空来的。这份人情我记下。"),
+            ],
+            "mediate": [
+                ("kai", "好啦好啦，我会把账单写清楚。谢谢你没有让今晚变成吵架大会。"),
+                ("bram", "能把话说到点子上，比单纯站队强。新来的，你有点分寸。"),
+            ],
+            "support_kai": [
+                ("kai", "我就知道有人懂星灯祭的重要！今晚先让大家笑起来吧。"),
+                ("bram", "热闹不能抵账。你今天的选择我看见了。"),
+            ],
+            "support_bram": [
+                ("bram", "总算有人听见供货人的难处。节日也得先把账算明白。"),
+                ("kai", "我知道她辛苦，可今晚的灯要是灭了，大家都会难过的。"),
+            ],
+            "observe": [
+                ("orren", "观察也是选择。你至少看见了节日背后的裂缝。"),
+                ("lena", "先不急着介入也可以，但今晚需要有人继续照看大家的情绪。"),
+            ],
+        }
+        payloads: list[dict[str, Any]] = []
+        events: list[dict[str, Any]] = []
+        for agent_id, speech in lines_by_choice[choice]:
+            agent = self.world["agents"][agent_id]
+            payload = {"speakerId": agent_id, "speakerName": agent["name"], "text": speech}
+            payloads.append(payload)
+            events.append(self.event_store.append("npc.dialogue", {"agentId": agent_id, "agentName": agent["name"], "targetId": "player", "speech": speech, "topic": "starlight_shortage"}))
+        payloads.append({"speakerId": "system", "speakerName": "旁白", "text": outcome["summary"]})
+        return payloads, events
+
+    def _write_starlight_reflections(self, choice: str, outcome: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        """生成首版夜间反思摘要，后续可替换为 LLM night_reflection profile。"""
+        reflections = [
+            ("kai", f"如果不是玩家选择“{outcome['choiceLabel']}”，我可能会把节日压力全推给别人。明天要认真面对欠账。"),
+            ("bram", "这个新来的农场主没有把供应当成理所当然。无论是否站在我这边，至少看见了农场人的压力。"),
+            ("lena", "今晚的冲突证明节日压力会影响健康和关系。玩家的选择值得继续观察。"),
+        ]
+        payloads: list[dict[str, Any]] = []
+        events: list[dict[str, Any]] = []
+        for agent_id, text in reflections:
+            agent = self.world["agents"][agent_id]
+            remember(agent, text, tick=self.world["clock"]["tick"], importance=0.86, tags=["night_reflection", "starlight_shortage", choice])
+            payload = {"agentId": agent_id, "agentName": agent["name"], "text": text, "tags": ["night_reflection", "starlight_shortage", choice]}
+            self.world.setdefault("nightReflections", []).append(payload)
+            payloads.append(payload)
+            events.append(self.event_store.append("npc.night_reflection", payload))
+        return payloads, events
 
     def _decide_player_dialogue(self, target: dict[str, Any], payload: dict[str, Any], context: dict[str, Any], messages: list[dict[str, str]]) -> tuple[dict[str, Any], dict[str, Any]]:
         """按模型配置生成玩家对话回复，失败时退回规则回复。"""
