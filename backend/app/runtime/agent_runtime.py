@@ -5,6 +5,7 @@ import os
 from typing import Any
 
 from app.config.model_config import ModelConfigStore
+from app.director import DirectorBeat, DirectorQueueManager, DirectorValidator, SkillRouter, TensionDetector, WorldDigest
 from app.events.event_store import EventStore
 from app.memory.memory_store import remember
 from app.providers.cloud_api_provider import CloudApiProvider
@@ -12,6 +13,7 @@ from app.providers.context_builder import build_agent_context, build_player_dial
 from app.providers.rule_based_provider import RuleBasedProvider
 from app.runtime.action_executor import execute_action, maybe_population_event
 from app.runtime.action_parser import parse_provider_output
+from app.skills import STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID, EventSkillSchema, get_event_skill, list_event_skills
 from app.world.seed_data import DAY1_EVENT_ID
 from app.world.world_state import advance_clock, adjust_relation, create_initial_world, get_relation, living_agents, public_game_world, public_world
 
@@ -26,6 +28,15 @@ class AgentRuntime:
         self.rule_provider = RuleBasedProvider()
         self.cloud_provider = CloudApiProvider()
         self.provider_mode = provider_mode or os.getenv("AGENT_TOWN_PROVIDER") or self.model_config.active_provider()
+        self.event_skills = {skill.skill_id: skill for skill in list_event_skills()}
+        self.tension_detector = TensionDetector()
+        self.skill_router = SkillRouter()
+        self.director_validator = DirectorValidator(
+            allowed_skill_registry=list(self.event_skills),
+            valid_target_agents=["player", *self.world["agents"].keys()],
+        )
+        self.director_queue = DirectorQueueManager(self.director_validator)
+        self.world.setdefault("directorState", {"activatedEventSkills": [], "consumedBeatIds": []})
         self.event_store.append("system.ready", {"message": "AI Agent 小镇 Python 运行时已启动。", "providerMode": self.provider_mode})
 
     def get_public_state(self) -> dict[str, Any]:
@@ -61,6 +72,7 @@ class AgentRuntime:
     def step(self, actor_id: str = "developer") -> dict[str, Any]:
         if self.world["clock"].get("paused"):
             return {"skipped": True, "reason": "paused", "state": self.get_public_state()}
+        self._run_director_v0()
         actors = self.pick_actors()
         decisions = []
         for agent in actors:
@@ -105,6 +117,138 @@ class AgentRuntime:
         count = min(3, len(agents))
         start = self.world["clock"]["tick"] % len(agents)
         return [agents[(start + index) % len(agents)] for index in range(count)]
+
+    def _run_director_v0(self) -> None:
+        """运行规则版 Director v0，并把摘要、Beat 和队列结果写入 Debug 事件流。"""
+        digest = WorldDigest.from_world(self.world)
+        self.event_store.append("director.digest_created", self._director_digest_payload(digest))
+
+        skill = get_event_skill(STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID)
+        if self._should_activate_event_skill(skill):
+            beat = self._create_activate_event_skill_beat(digest, skill)
+            self.event_store.append("director.beat_created", beat.to_dict())
+            validation = self.director_validator.validate(beat, current_world_version=digest.world_version)
+            self.event_store.append(
+                "director.beat_validated",
+                {"beatId": beat.beatId, "ok": validation.ok, "errors": list(validation.errors), "beat": beat.to_dict()},
+            )
+            if validation.ok:
+                enqueue_result = self.director_queue.enqueue(beat, current_world_version=digest.world_version)
+                if enqueue_result.discarded:
+                    self.event_store.append("director.beat_discarded", enqueue_result.discarded.to_event_payload())
+            else:
+                self.event_store.append(
+                    "director.beat_discarded",
+                    {"beatId": beat.beatId, "reason": "validation_failed", "detail": "; ".join(validation.errors), "beat": beat.to_dict()},
+                )
+
+        self._consume_director_queue(digest)
+
+    def _consume_director_queue(self, digest: WorldDigest | None = None) -> None:
+        """消费 Director 队列，并记录已消费或丢弃的 Beat。"""
+        digest = digest or WorldDigest.from_world(self.world)
+        consume_result = self.director_queue.consume(digest)
+        for beat in consume_result.ready:
+            active_focus = self._apply_director_beat(beat)
+            self.event_store.append("director.beat_consumed", {"beat": beat.to_dict(), "activeFocus": active_focus})
+        for discarded in consume_result.discarded:
+            self.event_store.append("director.beat_discarded", discarded.to_event_payload())
+
+    def _director_digest_payload(self, digest: WorldDigest) -> dict[str, Any]:
+        """把 WorldDigest 转成 EventStore 友好的调试载荷。"""
+        return {
+            "worldVersion": digest.world_version,
+            "tick": digest.tick,
+            "livingAgentIds": list(digest.living_agent_ids),
+            "activeEventCount": digest.active_event_count,
+            "avgStress": digest.avg_stress,
+        }
+
+    def _should_activate_event_skill(self, skill: EventSkillSchema) -> bool:
+        """检测星灯祭供应短缺候选，避免同一个事件技能重复激活。"""
+        director_state = self.world.setdefault("directorState", {"activatedEventSkills": [], "consumedBeatIds": []})
+        if skill.skill_id in director_state.setdefault("activatedEventSkills", []):
+            return False
+        trigger = skill.trigger
+        required_event_id = trigger.required_active_event_id or skill.event_id
+        for event in self.world.get("activeEvents", []):
+            if event.get("id") != required_event_id:
+                continue
+            if event.get("status") != trigger.required_status:
+                continue
+            if event.get("locationId") != trigger.location_id:
+                continue
+            if event.get("phase") != trigger.phase:
+                continue
+            return True
+        return False
+
+    def _create_activate_event_skill_beat(self, digest: WorldDigest, skill: EventSkillSchema) -> DirectorBeat:
+        """把事件技能候选转为 activate_event_skill Beat。"""
+        tension = self.tension_detector.detect(digest)
+        target_agents = [agent_id for agent_id in skill.participants if agent_id != "player" and agent_id in self.world["agents"]]
+        allowed_skills = [skill.skill_id]
+        routed_skills = self.skill_router.route(tension, target_agents, candidate_skills=allowed_skills)
+        if not routed_skills:
+            routed_skills = allowed_skills
+        return DirectorBeat(
+            beatType="activate_event_skill",
+            worldVersion=digest.world_version,
+            validFromTick=digest.tick,
+            expiresAtTick=digest.tick + 2,
+            targetAgents=target_agents,
+            allowedSkills=routed_skills,
+            payload={
+                "skillId": skill.skill_id,
+                "eventId": skill.event_id,
+                "title": skill.title,
+                "brief": skill.brief,
+                "trigger": {
+                    "phase": skill.trigger.phase,
+                    "locationId": skill.trigger.location_id,
+                    "requiredStatus": skill.trigger.required_status,
+                    "requiredActiveEventId": skill.trigger.required_active_event_id,
+                },
+                "playerOptions": [
+                    {
+                        "id": option.option_id,
+                        "label": option.label,
+                        "brief": option.brief,
+                        "requiresPlayerItemId": option.requires_player_item_id,
+                        "consequenceTypes": [consequence.consequence_type for consequence in option.consequences],
+                    }
+                    for option in skill.player_options
+                ],
+                "assetHints": [
+                    {"id": hint.hint_id, "type": hint.asset_type, "brief": hint.brief, "tags": list(hint.tags)}
+                    for hint in skill.asset_hints
+                ],
+                "tension": {"level": tension.level, "score": tension.score, "evidence": tension.evidence},
+            },
+        )
+
+    def _apply_director_beat(self, beat: DirectorBeat) -> dict[str, Any]:
+        """把已消费 Beat 写入世界的轻量 Director 状态，供后续层读取。"""
+        director_state = self.world.setdefault("directorState", {"activatedEventSkills": [], "consumedBeatIds": []})
+        director_state.setdefault("consumedBeatIds", []).append(beat.beatId)
+        payload = dict(beat.payload)
+        skill_id = str(payload.get("skillId") or "")
+        if skill_id:
+            activated = director_state.setdefault("activatedEventSkills", [])
+            if skill_id not in activated:
+                activated.append(skill_id)
+        active_focus = {
+            "type": beat.beatType,
+            "beatId": beat.beatId,
+            "skillId": skill_id,
+            "eventId": payload.get("eventId"),
+            "brief": payload.get("brief"),
+            "targetAgents": list(beat.targetAgents),
+            "validFromTick": beat.validFromTick,
+            "expiresAtTick": beat.expiresAtTick,
+        }
+        self.world["activeFocus"] = active_focus
+        return active_focus
 
     def _handle_player_move(self, payload: dict[str, Any]) -> dict[str, Any]:
         """移动玩家位置，为 Godot 地图切换保留统一事件记录。"""
