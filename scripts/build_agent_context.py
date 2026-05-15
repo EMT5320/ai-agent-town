@@ -14,11 +14,12 @@ if hasattr(sys.stdout, "reconfigure"):
 
 # 这些文档构成新对话上下文的最小来源集合。
 REQUIRED_DOCS = [
+    "docs/agent_context.md",
+    "docs/goal_board.md",
     "docs/README.md",
     "docs/project_vision.md",
     "docs/current_status.md",
     "docs/agentic_game_design.md",
-    "docs/implementation_plan.md",
     "docs/vertical_slice_spec.md",
 ]
 
@@ -46,6 +47,25 @@ def extract_section_after_heading(text: str, heading: str, max_lines: int = 2) -
     return ""
 
 
+def extract_bullet_section(text: str, heading: str, max_items: int = 6) -> list[str]:
+    """提取某个标题下的首批列表项，供 brief 输出当前入口。"""
+    lines = text.splitlines()
+    for index, line in enumerate(lines):
+        if line.strip() == heading:
+            collected: list[str] = []
+            for next_line in lines[index + 1 :]:
+                stripped = next_line.strip()
+                if stripped.startswith("#"):
+                    break
+                # 支持普通列表和编号列表，避免状态文档格式变化后 brief 失效。
+                if stripped.startswith("- ") or (stripped[:2].strip(".").isdigit() and ". " in stripped[:4]):
+                    collected.append(stripped)
+                if len(collected) >= max_items:
+                    break
+            return collected
+    return []
+
+
 def collect_missing_docs() -> list[str]:
     """返回当前缺失的关键文档路径。"""
     return [path for path in REQUIRED_DOCS if not (ROOT / path).exists()]
@@ -53,13 +73,15 @@ def collect_missing_docs() -> list[str]:
 
 def build_brief() -> str:
     """基于现有文档生成轻量 brief 草稿。"""
+    agent_context = read_text("docs/agent_context.md")
+    goal_board = read_text("docs/goal_board.md")
     vision = read_text("docs/project_vision.md")
     status = read_text("docs/current_status.md")
-    plan = read_text("docs/implementation_plan.md")
 
     one_liner = extract_section_after_heading(vision, "## 一句话定位", max_lines=1)
-    phase = extract_section_after_heading(status, "## 当前阶段判断", max_lines=2)
-    next_step = extract_section_after_heading(plan, "## 最近一次工作建议", max_lines=8)
+    phase = extract_section_after_heading(status, "## 1. 当前阶段判断", max_lines=6)
+    next_steps = extract_bullet_section(agent_context, "## 6. 下一轮最短开发入口", max_items=6)
+    schedule = extract_bullet_section(goal_board, "## 8. 下一轮推荐排程", max_items=5)
 
     return "\n".join(
         [
@@ -75,7 +97,11 @@ def build_brief() -> str:
             "",
             "## 最近下一步",
             "",
-            next_step or "- 未能从 `docs/implementation_plan.md` 提取最近工作建议。",
+            "\n".join(next_steps) or "- 未能从 `docs/agent_context.md` 提取下一步。",
+            "",
+            "## 推荐排程",
+            "",
+            "\n".join(schedule) or "- 未能从 `docs/goal_board.md` 提取推荐排程。",
             "",
             "## 建议下一步",
             "",

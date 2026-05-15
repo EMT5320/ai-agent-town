@@ -7,6 +7,10 @@ const LOCATION_BACKGROUNDS := {
 	"tavern": "res://assets/locations/tavern_evening_anime.png",
 }
 
+const EVENT_CGS := {
+	"starlight_festival_shortage": "res://assets/cg/starlight_festival_shortage_event.png",
+}
+
 const PORTRAITS := {
 	"player": {"neutral": "res://assets/characters/player_farmer_neutral.png"},
 	"mira": {"neutral": "res://assets/characters/npc_mira_neutral.png"},
@@ -17,6 +21,10 @@ const PORTRAITS := {
 	"bram": {"neutral": "res://assets/characters/npc_bram_neutral.png"},
 }
 
+# 首版约定的表情键；后续补图时在 PORTRAITS 对应角色下补同名键即可。
+const SUPPORTED_PORTRAIT_EXPRESSIONS := ["neutral", "happy", "troubled"]
+const PORTRAIT_NEUTRAL_EXPRESSION := "neutral"
+
 var _texture_cache: Dictionary = {}
 
 
@@ -25,20 +33,44 @@ func has_location_background(location_id: String) -> bool:
 
 
 func has_portrait(owner_id: String, expression: String = "neutral") -> bool:
-	if not PORTRAITS.has(owner_id):
-		return false
-	return PORTRAITS[owner_id].has(expression) or PORTRAITS[owner_id].has("neutral")
+	return not _resolve_portrait_path(owner_id, expression).is_empty()
+
+
+func has_event_cg(event_id: String) -> bool:
+	return EVENT_CGS.has(event_id)
 
 
 func get_location_background(location_id: String) -> Texture2D:
 	return _load_texture(LOCATION_BACKGROUNDS.get(location_id, ""))
 
 
+func get_event_cg(event_id: String) -> Texture2D:
+	return _load_texture(EVENT_CGS.get(event_id, ""))
+
+
 func get_portrait(owner_id: String, expression: String = "neutral") -> Texture2D:
+	return _load_texture(_resolve_portrait_path(owner_id, expression))
+
+
+func normalize_portrait_expression(expression: String) -> String:
+	var normalized := expression.strip_edges().to_lower()
+	if SUPPORTED_PORTRAIT_EXPRESSIONS.has(normalized):
+		return normalized
+	return PORTRAIT_NEUTRAL_EXPRESSION
+
+
+func _resolve_portrait_path(owner_id: String, expression: String) -> String:
 	if not PORTRAITS.has(owner_id):
-		return null
+		return ""
+
 	var variants: Dictionary = PORTRAITS[owner_id]
-	return _load_texture(variants.get(expression, variants.get("neutral", "")))
+	var requested_expression := normalize_portrait_expression(expression)
+	var requested_path := str(variants.get(requested_expression, ""))
+	if not requested_path.is_empty():
+		return requested_path
+
+	# 目标表情缺图时回退 neutral，保证主流程可显示。
+	return str(variants.get(PORTRAIT_NEUTRAL_EXPRESSION, ""))
 
 
 func _load_texture(path: String) -> Texture2D:

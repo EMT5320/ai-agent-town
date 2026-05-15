@@ -29,3 +29,14 @@ func get_npcs() -> Array:
 
 func get_recent_events() -> Array:
 	return current_state.get("recentEvents", [])
+
+
+func get_active_events() -> Array:
+	return current_state.get("activeEvents", [])
+
+
+func find_active_event(event_id: String) -> Dictionary:
+	for event in get_active_events():
+		if str(event.get("id", "")) == event_id:
+			return event
+	return {}

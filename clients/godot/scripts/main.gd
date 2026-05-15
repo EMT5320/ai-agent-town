@@ -13,12 +13,16 @@ var player_label: Label
 var location_list: VBoxContainer
 var npc_list: VBoxContainer
 var event_list: VBoxContainer
+var event_choice_list: VBoxContainer
+var dialogue_scroll: ScrollContainer
 var portrait_rect: TextureRect
 var speaker_label: Label
 var dialogue_label: Label
 var selected_location_id := "farm"
 var selected_npc_id := "orren"
 var selected_expression := "neutral"
+var selected_event_id := ""
+var selected_event_location_id := ""
 
 
 func _ready() -> void:
@@ -108,7 +112,7 @@ func _build_top_layer() -> void:
 	right_panel.add_child(npc_list)
 
 	var event_title := Label.new()
-	event_title.text = "最近事件"
+	event_title.text = "进行中事件"
 	event_title.add_theme_font_size_override("font_size", 18)
 	right_panel.add_child(event_title)
 
@@ -149,11 +153,15 @@ func _build_dialogue_layer() -> void:
 	speaker_label.add_theme_font_size_override("font_size", 22)
 	text_box.add_child(speaker_label)
 
+	dialogue_scroll = ScrollContainer.new()
+	dialogue_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	text_box.add_child(dialogue_scroll)
+
 	dialogue_label = Label.new()
 	dialogue_label.text = "选择一个居民后，这里会显示对应立绘和后端返回的对话。"
 	dialogue_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	dialogue_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	text_box.add_child(dialogue_label)
+	dialogue_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dialogue_scroll.add_child(dialogue_label)
 
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 10)
@@ -178,6 +186,16 @@ func _build_dialogue_layer() -> void:
 	tavern_button.text = "去酒馆"
 	tavern_button.pressed.connect(_on_location_pressed.bind("tavern"))
 	actions.add_child(tavern_button)
+
+	var choice_title := Label.new()
+	choice_title.text = "事件选项"
+	choice_title.add_theme_font_size_override("font_size", 18)
+	text_box.add_child(choice_title)
+
+	event_choice_list = VBoxContainer.new()
+	event_choice_list.add_theme_constant_override("separation", 6)
+	text_box.add_child(event_choice_list)
+	_render_event_choice_buttons([])
 
 
 func _create_panel(parent: Control, minimum_size: Vector2) -> VBoxContainer:
@@ -219,14 +237,15 @@ func _on_refresh_pressed() -> void:
 
 
 func _on_location_pressed(location_id: String) -> void:
+	_clear_event_focus()
 	var previous_location_id := selected_location_id
 	selected_location_id = location_id
 	_set_status("正在移动到 %s ..." % location_id)
 	var response = await api_client.post_player_action({"type": "move", "locationId": location_id})
-	if not response.get("ok", false):
+	if not _is_action_response_ok(response):
 		selected_location_id = previous_location_id
 		_render_world()
-		_set_status("移动失败：%s" % response.get("error", "unknown"))
+		_set_status("移动失败：%s" % _response_error(response))
 		return
 	world_sync.apply_state(response["data"]["state"])
 	_render_world()
@@ -237,6 +256,7 @@ func _on_talk_pressed() -> void:
 	if selected_npc_id.is_empty():
 		_set_status("请先选择一个居民。")
 		return
+	_clear_event_focus()
 	_set_status("正在和 %s 聊天..." % selected_npc_id)
 	var response = await api_client.post_player_action({
 		"type": "talk",
@@ -245,8 +265,8 @@ func _on_talk_pressed() -> void:
 		"topic": "first_meeting",
 		"message": "你好，我刚搬到晨露农场，想认识一下小镇。"
 	})
-	if not response.get("ok", false):
-		_set_status("对话动作失败：%s" % response.get("error", "unknown"))
+	if not _is_action_response_ok(response):
+		_set_status("对话动作失败：%s" % _response_error(response))
 		return
 	world_sync.apply_state(response["data"]["state"])
 	var dialogue: Array = response["data"]["result"].get("dialogue", [])
@@ -256,7 +276,46 @@ func _on_talk_pressed() -> void:
 	_set_status("对话完成：%s" % world_sync.get_clock_label())
 
 
+func _on_inspect_event_pressed(event_id: String, event_location: String) -> void:
+	selected_event_id = event_id
+	selected_event_location_id = event_location
+	_set_status("正在查看事件：%s ..." % event_id)
+	# 事件查看只通过后端 inspect 获取可见信息，客户端不复制事件规则。
+	var response = await api_client.post_player_action({
+		"type": "inspect",
+		"eventId": event_id,
+		"locationId": event_location,
+	})
+	if not _is_action_response_ok(response):
+		_set_status("查看事件失败：%s" % _response_error(response))
+		return
+	world_sync.apply_state(response["data"]["state"])
+	var inspect_payload: Dictionary = response["data"].get("result", {}).get("inspect", {})
+	_render_world()
+	_render_inspect_result(inspect_payload)
+	_set_status("已获取事件线索：%s" % inspect_payload.get("title", event_id))
+
+
+func _on_attend_event_choice_pressed(event_id: String, event_location: String, choice_id: String) -> void:
+	_set_status("正在提交事件选择：%s ..." % choice_id)
+	# 玩家选择统一提交后端，事件结算、关系变化和记忆写入都由 Runtime 返回。
+	var response = await api_client.post_player_action({
+		"type": "attend_event",
+		"eventId": event_id,
+		"choice": choice_id,
+		"locationId": event_location,
+	})
+	if not _is_action_response_ok(response):
+		_set_status("事件结算失败：%s" % _response_error(response))
+		return
+	world_sync.apply_state(response["data"]["state"])
+	_render_world()
+	_render_attend_result(response["data"].get("result", {}))
+	_set_status("事件已提交：%s" % choice_id)
+
+
 func _on_npc_pressed(npc_id: String) -> void:
+	_clear_event_focus()
 	selected_npc_id = npc_id
 	var npc := _find_npc(npc_id)
 	_render_portrait(npc)
@@ -276,6 +335,7 @@ func _refresh_world() -> void:
 	world_sync.apply_state(response["data"])
 	selected_location_id = str(response["data"].get("player", {}).get("locationId", selected_location_id))
 	_ensure_selected_npc()
+	_sync_event_focus_with_world()
 	_render_world()
 	_set_status("世界状态已同步：%s" % world_sync.get_clock_label())
 
@@ -286,7 +346,7 @@ func _render_world() -> void:
 	_render_locations()
 	_render_npcs()
 	_render_events()
-	_render_portrait(_find_npc(selected_npc_id))
+	_render_focus_visual()
 
 
 func _render_background() -> void:
@@ -331,20 +391,172 @@ func _render_npcs() -> void:
 
 func _render_events() -> void:
 	_clear_column(event_list)
-	var events: Array = world_sync.get_recent_events().duplicate()
-	events = events.slice(max(0, events.size() - 5))
-	events.reverse()
-	if events.is_empty():
+	var active_events: Array = world_sync.get_active_events()
+	if active_events.is_empty():
 		var empty_item := Label.new()
-		empty_item.text = "暂无事件"
+		empty_item.text = "当前无进行中事件"
 		event_list.add_child(empty_item)
+	else:
+		for event_data in active_events:
+			var event_id := str(event_data.get("id", ""))
+			var event_location := str(event_data.get("locationId", selected_location_id))
+			var event_title := str(event_data.get("title", event_id))
+			var event_status := str(event_data.get("status", "unknown"))
+			var event_box := VBoxContainer.new()
+			event_box.add_theme_constant_override("separation", 4)
+			event_list.add_child(event_box)
+
+			var header := Label.new()
+			header.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			header.text = "%s（%s）" % [event_title, event_status]
+			event_box.add_child(header)
+
+			var summary := Label.new()
+			summary.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			summary.text = str(event_data.get("summary", ""))
+			event_box.add_child(summary)
+
+			var inspect_button := Button.new()
+			inspect_button.text = "查看事件"
+			inspect_button.disabled = event_id.is_empty()
+			inspect_button.pressed.connect(_on_inspect_event_pressed.bind(event_id, event_location))
+			event_box.add_child(inspect_button)
+
+	var history_title := Label.new()
+	history_title.text = "最近事件日志"
+	history_title.add_theme_font_size_override("font_size", 16)
+	event_list.add_child(history_title)
+
+	var history: Array = world_sync.get_recent_events().duplicate()
+	history = history.slice(max(0, history.size() - 5))
+	history.reverse()
+	if history.is_empty():
+		var history_empty := Label.new()
+		history_empty.text = "暂无日志"
+		event_list.add_child(history_empty)
 		return
-	for event in events:
+	for event in history:
 		var item := Label.new()
 		item.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		var payload: Dictionary = event.get("payload", {})
 		item.text = "%s\n%s" % [event.get("type", "event"), payload.get("summary", payload.get("message", payload.get("speech", "")))]
 		event_list.add_child(item)
+
+
+func _render_focus_visual() -> void:
+	if selected_event_id.is_empty():
+		_render_portrait(_find_npc(selected_npc_id))
+		return
+	var event_texture: Texture2D = asset_registry.get_event_cg(selected_event_id)
+	if event_texture == null:
+		_render_portrait(_find_npc(selected_npc_id))
+		return
+	portrait_rect.texture = event_texture
+
+
+func _render_inspect_result(inspect_payload: Dictionary) -> void:
+	var title := str(inspect_payload.get("title", selected_event_id))
+	var summary := str(inspect_payload.get("summary", "暂无事件描述。"))
+	var location_name := _get_location_name(str(inspect_payload.get("locationId", selected_event_location_id)))
+	var event_status := str(inspect_payload.get("status", "available"))
+	speaker_label.text = "事件 · %s" % title
+	dialogue_label.text = "%s\n地点：%s\n状态：%s\n\n%s" % [title, location_name, event_status, summary]
+	if event_status == "resolved":
+		dialogue_label.text += "\n\n事件已结算，不能再次提交选择。"
+		_render_event_choice_buttons([])
+	else:
+		_render_event_choice_buttons(inspect_payload.get("choices", []))
+	_render_focus_visual()
+
+
+func _render_event_choice_buttons(choices: Array) -> void:
+	if event_choice_list == null:
+		return
+	_clear_column(event_choice_list)
+	if selected_event_id.is_empty() or choices.is_empty():
+		var empty_hint := Label.new()
+		empty_hint.text = "当前事件没有可提交选项。"
+		event_choice_list.add_child(empty_hint)
+		return
+	for choice_data in choices:
+		var choice_id := str(choice_data.get("id", ""))
+		var choice_label := str(choice_data.get("label", choice_id))
+		var button := Button.new()
+		button.text = choice_label
+		button.disabled = choice_id.is_empty()
+		button.pressed.connect(_on_attend_event_choice_pressed.bind(selected_event_id, selected_event_location_id, choice_id))
+		event_choice_list.add_child(button)
+
+
+func _render_attend_result(result: Dictionary) -> void:
+	var lines: Array[String] = []
+	var event_result: Dictionary = result.get("eventResult", {})
+	if not event_result.is_empty():
+		lines.append("事件结果：%s" % str(event_result.get("summary", "")))
+	var dialogue: Array = result.get("dialogue", [])
+	if not dialogue.is_empty():
+		lines.append("NPC 台词：")
+		for item in dialogue:
+			lines.append("- %s：%s" % [item.get("speakerName", item.get("speakerId", "未知角色")), item.get("text", "")])
+	var relationship_deltas: Array = result.get("relationshipDeltas", [])
+	if not relationship_deltas.is_empty():
+		lines.append("关系变化：")
+		for delta in relationship_deltas:
+			var change: Dictionary = delta.get("delta", {})
+			lines.append(
+				"- %s 亲密%+d / 信任%+d / 冲突%+d"
+				% [
+					delta.get("targetName", delta.get("targetId", "未知角色")),
+					int(change.get("affection", 0)),
+					int(change.get("trust", 0)),
+					int(change.get("conflict", 0)),
+				]
+			)
+	var memory_writes: Array = result.get("memoryWrites", [])
+	var immediate_memories: Array = []
+	var night_reflections: Array = []
+	for memory in memory_writes:
+		if not (memory is Dictionary):
+			continue
+		if _memory_has_tag(memory, "night_reflection"):
+			night_reflections.append(memory)
+		else:
+			immediate_memories.append(memory)
+	if not immediate_memories.is_empty():
+		lines.append("记忆写入：")
+		for memory in immediate_memories:
+			lines.append("- %s：%s" % [memory.get("agentName", memory.get("agentId", "系统")), memory.get("text", "")])
+	if not night_reflections.is_empty():
+		lines.append("夜间反思摘要：")
+		for memory in night_reflections:
+			lines.append("- %s：%s" % [memory.get("agentName", memory.get("agentId", "系统")), memory.get("text", "")])
+	if lines.is_empty():
+		lines.append("事件提交完成。")
+	dialogue_label.text = "\n".join(lines)
+	speaker_label.text = "事件结算回执"
+	_clear_event_focus()
+
+
+func _clear_event_focus() -> void:
+	selected_event_id = ""
+	selected_event_location_id = ""
+	_render_event_choice_buttons([])
+
+
+func _sync_event_focus_with_world() -> void:
+	if selected_event_id.is_empty():
+		return
+	var current_event: Dictionary = world_sync.find_active_event(selected_event_id)
+	if current_event.is_empty():
+		_clear_event_focus()
+
+
+func _memory_has_tag(memory: Dictionary, target_tag: String) -> bool:
+	var tags: Array = memory.get("tags", [])
+	for tag in tags:
+		if str(tag) == target_tag:
+			return true
+	return false
 
 
 func _render_portrait(npc: Dictionary) -> void:
@@ -393,6 +605,20 @@ func _get_location_name(location_id: String) -> String:
 		if str(location.get("id", "")) == location_id:
 			return str(location.get("name", location_id))
 	return location_id
+
+
+func _is_action_response_ok(response: Dictionary) -> bool:
+	if not response.get("ok", false):
+		return false
+	var data: Dictionary = response.get("data", {})
+	return data.get("ok", false) and data.has("state")
+
+
+func _response_error(response: Dictionary) -> String:
+	if not response.get("ok", false):
+		return str(response.get("error", "unknown"))
+	var data: Dictionary = response.get("data", {})
+	return str(data.get("error", "unknown"))
 
 
 func _clear_column(column: VBoxContainer) -> void:
