@@ -144,3 +144,11 @@
 4. LLM 首轮实测后确认模型名、成本、延迟和 fallback 策略。
 5. 第一批风格锁定资产生成后确认二次元轻幻想轻异世界是否作为长期主风格。
 6. 偏少女玩家主角确认后，生成正式玩家半身立绘、表情差分和地图小人。
+## 2026-05-15 收口后仍需实现中验证
+
+- Godot 真实窗口里，背景切换、NPC 选择、聊天提交、错误提示和同步频率是否适合首版演示。
+- Godot 事件 UI 如何展示 `inspect`、`attend_event`、事件选择结果和关系/记忆变化。
+- 星灯祭 Event Skill 的选项、后果、记忆模板、fallback 台词和 asset hints 是否能继续从 Runtime 硬编码迁入数据层。
+- 单个 Event Skill 的结构是否足以复用到后续节日、委托、危机和恋爱铺垫事件。
+- 配置真实 API key 后，dialogue、event_reaction、night_reflection 三条 LLM profile 的延迟、成本、失败率和 fallback 表现。
+- 表情差分、地图小人、UI 组件入库后，角色一致性和 Godot registry 维护方式是否稳定。
