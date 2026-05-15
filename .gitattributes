@@ -1,0 +1,20 @@
+# Normalize text files to LF so Windows Git and WSL Git see the same tree.
+* text=auto eol=lf
+
+# Binary assets must never be line-ending converted.
+*.bmp binary
+*.gif binary
+*.ico binary
+*.jpg binary
+*.jpeg binary
+*.otf binary
+*.png binary
+*.ttf binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.zip binary
+
+# Windows command wrappers keep their conventional line endings if added later.
+*.bat text eol=crlf
+*.cmd text eol=crlf
