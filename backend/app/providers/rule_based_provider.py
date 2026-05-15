@@ -20,7 +20,7 @@ class RuleBasedProvider:
             response = {"speech": f"{target['name']}，今天小镇的气氛有些不同，我们聊聊近况吧。", "action": "talkTo", "args": {"npc": target["id"], "topic": "daily_check", "message": "今天感觉怎么样？如果需要帮助可以告诉我。"}, "memory_to_save": f"我主动和 {target['name']} 交流了今日近况。"}
         elif "医生" in agent["job"]:
             response = {"speech": "我需要巡查看看老人和孩子的健康状况。", "action": "careFor", "args": {"npc": "orren"}, "memory_to_save": "我把公共健康放在今天的优先级。"}
-        elif any(keyword in agent["job"] for keyword in ["店主", "木匠", "农夫"]):
+        elif any(keyword in agent["job"] for keyword in ["店主", "木匠", "农夫", "农场主"]):
             response = {"speech": "先把工作处理好，小镇稳定需要每个人尽责。", "action": "work", "args": {"job": agent["job"]}, "memory_to_save": "我完成了一段职业工作。"}
         else:
             destinations = ["plaza", "shop", "clinic", "tavern", "home-north"]

@@ -256,6 +256,14 @@ assets/source/ui/night_diary_panel_anime.png
 
 ## 角色设定表
 
+### 首发性别比例与多元化原则
+
+首版 6 个 NPC 调整为 **5 女 1 男**，只保留托玛·榆庭作为男性首发 NPC。这个比例优先服务二次元轻幻想风格下的角色生成稳定性、角色辨识度和女性角色人设多样化。
+
+后续扩展 NPC 时默认沿用女性占多数的设计方向，建议保持约 5:1 或相近比例。若后续开发验证男性角色立绘、表情差分和地图小人能稳定保持高质量与一致性，再逐步增加男性角色比重。
+
+角色关系与家庭结构按叙事需要设计。小镇可以自然存在同性配偶、双母家庭、单亲家庭、收养关系、非血缘家庭和其他多元关系结构，这些关系不作为风险或限制项处理。
+
 ### 玩家：新搬来的农场主
 
 - 视觉定位：异乡搬来的年轻农场主，干净、亲和、有一点轻异世界冒险感。
@@ -269,16 +277,16 @@ assets/source/ui/night_diary_panel_anime.png
 
 ## 首发 NPC 显示名规则
 
-首版保留 `mira`、`tomas`、`orren`、`lena`、`kai`、`bram` 作为内部 ID，降低代码和数据迁移成本。游戏内显示名改为更偏二次元轻幻想的名字。文档中可在过渡期同时写“幻想显示名 / 内部 ID”。
+首版保留 `mira`、`tomas`、`orren`、`lena`、`kai`、`bram` 作为内部 ID，降低代码和数据迁移成本。内部 ID 不再强绑定原始性别或旧显示名，游戏内显示名改为更偏二次元轻幻想的名字。文档中可在过渡期同时写“幻想显示名 / 内部 ID”。
 
 | 内部 ID | 游戏内显示名 | 简称 | 英文别名 |
 | --- | --- | --- | --- |
 | `mira` | 米娅·星麦 | 米娅 | Mia Starwheat |
 | `tomas` | 托玛·榆庭 | 托玛 | Toma Elmgarden |
-| `orren` | 奥伦·星历 | 奥伦 | Orren Asterchron |
+| `orren` | 奥蕾娅·星历 | 奥蕾娅 | Aurea Asterchron |
 | `lena` | 莉娜·白桦 | 莉娜 | Lena Birchveil |
-| `kai` | 凯伊·月弦 | 凯伊 | Kai Moonstring |
-| `bram` | 布拉姆·麦垄 | 布拉姆 | Bram Wheatrow |
+| `kai` | 凯娅·月弦 | 凯娅 | Kaya Moonstring |
+| `bram` | 布兰娜·麦垄 | 布兰娜 | Branna Wheatrow |
 
 ### 米娅·星麦 Mira
 
@@ -318,15 +326,15 @@ assets/source/ui/night_diary_panel_anime.png
 - 恋爱铺垫：偏沉默守护线，初期通过帮玩家修理农场设施和笨拙关心体现。
 - 生图提示摘要：`anime half-body portrait of Toma Elmgarden, quiet dependable carpenter, broad shoulders, messy dark brown hair, rolled sleeves, leather tool belt, wooden hammer, rural fantasy village, transparent background`
 
-### 奥伦·星历 Orren
+### 奥蕾娅·星历 Aurea
 
 - 职业：退休教师。
 - 角色功能：历史、传统、星灯祭解释者。
-- 视觉原型：固执但可爱的老教师。
+- 视觉原型：优雅固执、记忆力惊人的老年女教师。
 - 年龄感：72 岁。
-- 发型：银白短发或后梳发，胡须修整干净。
+- 发型：银白长发盘起，或整齐短发配发簪。
 - 瞳色：浅灰或淡蓝。
-- 服饰：旧式马甲、长围巾、怀表、厚书。
+- 服饰：旧式长外套或马甲、长围巾、怀表、厚书。
 - 主色：深绿、羊皮纸米色、古铜。
 - 标志物：旧书、星图、怀表。
 - 表情差分：
@@ -335,7 +343,7 @@ assets/source/ui/night_diary_panel_anime.png
   - `troubled`：为年轻人不重视传统而生气。
 - 说话风格：带历史引用，容易说教，也会突然流露关心。
 - 恋爱铺垫：不作为首版恋爱候选，承担亲情、导师和小镇传统线。
-- 生图提示摘要：`anime half-body portrait of Orren Asterchron, elderly retired teacher, silver hair, old green vest, long scarf, pocket watch, ancient book with star map, light fantasy farming town, transparent background`
+- 生图提示摘要：`anime half-body portrait of Aurea Asterchron, elegant elderly female retired teacher, silver hair, old green vest or long coat, long scarf, pocket watch, ancient book with star map, light fantasy farming town, transparent background`
 
 ### 莉娜·白桦 Lena
 
@@ -356,11 +364,11 @@ assets/source/ui/night_diary_panel_anime.png
 - 恋爱铺垫：偏理性克制线，初期表现为对玩家身体状况和生活节奏的特别关注。
 - 生图提示摘要：`anime half-body portrait of Lena Birchveil, calm young doctor, dark teal hair, tired gentle eyes, white medical coat, mint green accents, herb satchel, light fantasy village clinic, transparent background`
 
-### 凯伊·月弦 Kai
+### 凯娅·月弦 Kaya
 
 - 职业：酒馆乐手。
 - 角色功能：社交、节日氛围、冲突引爆点。
-- 视觉原型：热情轻浮的吟游系乐手。
+- 视觉原型：热情张扬、舞台感很强的年轻女性吟游乐手。
 - 年龄感：22 岁。
 - 发型：红棕或紫棕色微卷发。
 - 瞳色：金色或紫色。
@@ -373,17 +381,17 @@ assets/source/ui/night_diary_panel_anime.png
   - `troubled`：欠账和活动压力下的慌张。
 - 说话风格：情绪饱满，喜欢打比方，会把小事说得像舞台剧。
 - 恋爱铺垫：偏热情直球线，初期会用玩笑和音乐邀请玩家参与祭典。
-- 生图提示摘要：`anime half-body portrait of Kai Moonstring, cheerful tavern musician, wavy auburn hair, golden eyes, burgundy cape, lute, star pendant, lively light fantasy festival mood, transparent background`
+- 生图提示摘要：`anime half-body portrait of Kaya Moonstring, cheerful young female tavern musician, wavy auburn hair, golden eyes, burgundy cape, lute, star pendant, lively light fantasy festival mood, transparent background`
 
-### 布拉姆·麦垄 Bram
+### 布兰娜·麦垄 Branna
 
-- 职业：农夫。
+- 职业：农场主。
 - 角色功能：农场主题、供应线、欠账冲突。
-- 视觉原型：强壮顽固的中年农夫。
-- 年龄感：46 岁。
-- 发型：深棕夹灰短发，胡茬。
+- 视觉原型：强壮爽朗、说话直白的壮年女性农场主。
+- 年龄感：36 岁。
+- 发型：深棕短发或高马尾，带少量日晒挑染。
 - 瞳色：土褐或橄榄绿。
-- 服饰：粗布衬衫、背带裤、旧手套、草帽或肩披毛巾。
+- 服饰：粗布衬衫、背带裤、旧手套、草帽或肩披毛巾，整体更干练利落。
 - 主色：麦穗黄、泥土棕、橄榄绿。
 - 标志物：木箱、作物篮、旧账单。
 - 表情差分：
@@ -391,8 +399,8 @@ assets/source/ui/night_diary_panel_anime.png
   - `happy`：认可玩家踏实。
   - `troubled`：被欠账和歉收激怒。
 - 说话风格：直白、重劳动价值、讨厌空口承诺。
-- 恋爱铺垫：不作为首版恋爱候选，承担农场导师、供应冲突和劳动价值线。
-- 生图提示摘要：`anime half-body portrait of Bram Wheatrow, stubborn middle-aged farmer, tanned skin, short dark hair with gray, work gloves, straw hat, crop crate, earthy rural fantasy palette, transparent background`
+- 恋爱铺垫：首版先承担农场导师、供应冲突和劳动价值线，后续可扩展为成熟直率的并肩劳动线。
+- 生图提示摘要：`anime half-body portrait of Branna Wheatrow, strong adult female farm owner, tanned skin, short dark brown hair or high ponytail, work gloves, straw hat, crop crate, earthy rural fantasy palette, transparent background`
 
 ## 地点设定
 
@@ -419,12 +427,12 @@ assets/source/ui/night_diary_panel_anime.png
 
 ## 星灯祭供应短缺事件 CG
 
-事件核心：星灯祭前夜，月猫酒馆需要节日食材。凯想把活动办起来，布拉姆因为旧欠账拒绝继续供货。玩家可以交出农场作物、调解、支持一方或旁观。
+事件核心：星灯祭前夜，月猫酒馆需要节日食材。凯娅想把活动办起来，布兰娜因为旧欠账拒绝继续供货。玩家可以交出农场作物、调解、支持一方或旁观。
 
 推荐构图：
 
-1. **冲突构图**：酒馆门口，凯站在灯光下解释，布拉姆抱着作物箱皱眉，玩家站在两人之间，背景有围观居民。
-2. **交付构图**：玩家递出新鲜芜菁或农场小花，凯伊·月弦露出希望，布拉姆·麦垄表情松动，米娅·星麦和莉娜·白桦在旁边观察。
+1. **冲突构图**：酒馆门口，凯娅站在灯光下解释，布兰娜抱着作物箱皱眉，玩家站在两人之间，背景有围观居民。
+2. **交付构图**：玩家递出新鲜芜菁或农场小花，凯娅·月弦露出希望，布兰娜·麦垄表情松动，米娅·星麦和莉娜·白桦在旁边观察。
 3. **记忆构图**：夜晚星灯亮起，几个 NPC 看向同一盏星灯，画面表达同一事件进入不同人的记忆。
 
 首版推荐先生成第 1 张。
@@ -432,7 +440,7 @@ assets/source/ui/night_diary_panel_anime.png
 生图提示摘要：
 
 ```text
-anime event CG, light fantasy farming town, evening outside Moon Cat Tavern, starlight festival lanterns glowing, cheerful young musician Kai Moonstring looks anxious, stubborn middle-aged farmer Bram Wheatrow holds a crate of crops, young female farmer protagonist stands between them with fresh turnips, villagers watching in background, warm amber and violet lighting, emotional slice-of-life anime scene, 16:9, no text, no watermark
+anime event CG, light fantasy farming town, evening outside Moon Cat Tavern, starlight festival lanterns glowing, cheerful young female musician Kaya Moonstring looks anxious, strong adult female farm owner Branna Wheatrow holds a crate of crops, young female farmer protagonist stands between them with fresh turnips, villagers watching in background, warm amber and violet lighting, emotional slice-of-life anime scene, 16:9, no text, no watermark
 ```
 
 ## 资产清单字段
@@ -501,5 +509,6 @@ reviewNotes
 1. 玩家初版默认形象为偏少女的年轻农场主。
 2. 首版同步推进可移动地图层和 Visual Novel 对话层，让 Demo 可以正常游玩和展示角色魅力。
 3. NPC 游戏内显示名改为二次元轻幻想风，内部 ID 暂时保留，减少代码迁移成本。
-4. 前期保持低魔法生活感，星灯、符文和作物发光只作为氛围点缀。
-5. 首版开始恋爱铺垫，通过对话、送礼、记忆和关系变化表现好感倾向；完整恋爱、告白、结婚系统后续扩展。
+4. 首版 NPC 性别比例调整为 5 女 1 男，只保留托玛·榆庭作为男性首发 NPC；多元家庭和配偶关系作为小镇正常生态处理。
+5. 前期保持低魔法生活感，星灯、符文和作物发光只作为氛围点缀。
+6. 首版开始恋爱铺垫，通过对话、送礼、记忆和关系变化表现好感倾向；完整恋爱、告白、结婚系统后续扩展。

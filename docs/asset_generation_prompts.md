@@ -39,7 +39,7 @@ Key art for Agent Valley, a bright anime light fantasy isekai farming life sim. 
 ### `assets/source/style/style_character_lineup_day1.png`
 
 ```text
-Character lineup sheet for six villagers in a bright anime light fantasy farming town. Include Mia Starwheat the warm grocery shop owner, Toma Elmgarden the quiet carpenter, Orren Asterchron the elderly retired teacher, Lena Birchveil the calm tired doctor, Kai Moonstring the cheerful tavern musician, Bram Wheatrow the stubborn middle-aged farmer. Full body or three-quarter view, consistent anime style, clean line art, cel-shaded colors, each character has clear silhouette and profession props, simple neutral background, no text, no watermark.
+Character lineup sheet for six villagers in a bright anime light fantasy farming town, five women and one man. Include Mia Starwheat the warm grocery shop owner, Toma Elmgarden the quiet male carpenter, Aurea Asterchron the elegant elderly female retired teacher, Lena Birchveil the calm tired young female doctor, Kaya Moonstring the cheerful young female tavern musician, and Branna Wheatrow the strong adult female farm owner. Full body or three-quarter view, consistent anime style, clean line art, cel-shaded colors, each character has clear silhouette and profession props, simple neutral background, no text, no watermark.
 ```
 
 ### `assets/source/ui/anime_dialogue_panel_style.png`
@@ -88,7 +88,7 @@ Anime half-body portrait of Toma Elmgarden, a quiet dependable carpenter in a li
 ### `assets/source/characters/npc_orren_neutral.png`
 
 ```text
-Anime half-body portrait of Orren Asterchron, an elderly retired teacher and town historian in a light fantasy farming town, 72 years old, silver hair, neatly trimmed beard, pale gray or blue eyes, old green vest, parchment-colored shirt, long scarf, pocket watch, ancient book with star map, strict but lovable expression, visual novel character portrait, transparent background, clean line art, cel-shaded, no text, no watermark.
+Anime half-body portrait of Aurea Asterchron, an elegant elderly female retired teacher and town historian in a light fantasy farming town, 72 years old, silver hair pinned up or neatly cut, pale gray or blue eyes, old green vest or long coat, parchment-colored shirt, long scarf, pocket watch, ancient book with star map, strict but lovable expression, visual novel character portrait, transparent background, clean line art, cel-shaded, no text, no watermark.
 ```
 
 表情差分追加：
@@ -110,7 +110,7 @@ Anime half-body portrait of Lena Birchveil, a calm young doctor in a light fanta
 ### `assets/source/characters/npc_kai_neutral.png`
 
 ```text
-Anime half-body portrait of Kai Moonstring, a cheerful tavern musician in a light fantasy farming town, 22 years old, wavy auburn or reddish purple hair, golden or purple eyes, burgundy short cape, lively performance outfit, belt accessories, star pendant, lute or violin, confident playful smile, visual novel character portrait, transparent background, clean line art, cel-shaded, no text, no watermark.
+Anime half-body portrait of Kaya Moonstring, a cheerful young female tavern musician in a light fantasy farming town, 22 years old, wavy auburn or reddish purple hair, golden or purple eyes, burgundy short cape, lively performance outfit, belt accessories, star pendant, lute or violin, confident playful smile, visual novel character portrait, transparent background, clean line art, cel-shaded, no text, no watermark.
 ```
 
 表情差分追加：
@@ -121,7 +121,7 @@ Anime half-body portrait of Kai Moonstring, a cheerful tavern musician in a ligh
 ### `assets/source/characters/npc_bram_neutral.png`
 
 ```text
-Anime half-body portrait of Bram Wheatrow, a stubborn middle-aged farmer in a light fantasy rural town, 46 years old, tanned skin, short dark brown hair with gray, light stubble, earthy shirt, suspenders or work overalls, old work gloves, straw hat or towel over shoulder, crop crate, serious direct gaze, wheat yellow, soil brown and olive green palette, visual novel character portrait, transparent background, clean line art, cel-shaded, no text, no watermark.
+Anime half-body portrait of Branna Wheatrow, a strong adult female farm owner in a light fantasy rural town, 36 years old, tanned skin, short dark brown hair or practical high ponytail with sunlit streaks, earthy shirt, suspenders or work overalls, old work gloves, straw hat or towel over shoulder, crop crate, serious direct gaze, wheat yellow, soil brown and olive green palette, visual novel character portrait, transparent background, clean line art, cel-shaded, no text, no watermark.
 ```
 
 表情差分追加：
@@ -144,10 +144,10 @@ small anime map character sprite concept, light fantasy farming life sim, full b
 - `player_farmer_map_idle.png`：`young female farmer protagonist, cream white and leaf green outfit, seed pouch, small starlight charm`
 - `npc_mira_map_idle.png`：`Mia Starwheat, warm grocery shop owner, orange apron, seed packets, star hairpin`
 - `npc_tomas_map_idle.png`：`Toma Elmgarden, quiet carpenter, dark blue work shirt, leather tool belt, wooden hammer`
-- `npc_orren_map_idle.png`：`Orren Asterchron, elderly teacher, green vest, scarf, old book`
+- `npc_orren_map_idle.png`：`Aurea Asterchron, elderly female teacher, green vest or long coat, scarf, old book`
 - `npc_lena_map_idle.png`：`Lena Birchveil, calm doctor, white short coat, mint accents, herb satchel`
-- `npc_kai_map_idle.png`：`Kai Moonstring, cheerful musician, burgundy cape, lute, star pendant`
-- `npc_bram_map_idle.png`：`Bram Wheatrow, stubborn farmer, work gloves, straw hat, crop crate`
+- `npc_kai_map_idle.png`：`Kaya Moonstring, cheerful young female musician, burgundy cape, lute, star pendant`
+- `npc_bram_map_idle.png`：`Branna Wheatrow, strong adult female farm owner, work gloves, straw hat, crop crate`
 
 交互标记统一追加：
 
@@ -184,13 +184,13 @@ Anime light fantasy tavern interior at evening, Moon Cat Tavern motif, wooden ba
 ### `assets/source/cg/starlight_festival_shortage_event.png`
 
 ```text
-Anime event CG for a light fantasy farming town, evening outside Moon Cat Tavern, starlight festival lanterns glowing, cheerful young musician Kai Moonstring looks anxious, stubborn middle-aged farmer Bram Wheatrow holds a crate of crops, young female farmer protagonist stands between them with fresh turnips, Mia Starwheat the grocery shop owner, Lena Birchveil the doctor and Orren Asterchron the elderly teacher watching in background, warm amber and violet lighting, emotional slice-of-life anime scene, 16:9, no text, no watermark.
+Anime event CG for a light fantasy farming town, evening outside Moon Cat Tavern, starlight festival lanterns glowing, cheerful young female musician Kaya Moonstring looks anxious, strong adult female farm owner Branna Wheatrow holds a crate of crops, young female farmer protagonist stands between them with fresh turnips, Mia Starwheat the grocery shop owner, Lena Birchveil the doctor and Aurea Asterchron the elderly female teacher watching in background, warm amber and violet lighting, emotional slice-of-life anime scene, 16:9, no text, no watermark.
 ```
 
 ### `assets/source/cg/starlight_festival_gift_choice.png`
 
 ```text
-Anime event CG for a cozy farming life sim, close-up scene of a young female farmer protagonist offering fresh turnips and a small farm flower under glowing starlight festival lanterns, Kai Moonstring smiles with relief, Bram Wheatrow's stern expression softens, warm tavern lights in background, gentle emotional anime scene, light fantasy rural town, 16:9, no text, no watermark.
+Anime event CG for a cozy farming life sim, close-up scene of a young female farmer protagonist offering fresh turnips and a small farm flower under glowing starlight festival lanterns, Kaya Moonstring smiles with relief, Branna Wheatrow's stern expression softens, warm tavern lights in background, gentle emotional anime scene, light fantasy rural town, 16:9, no text, no watermark.
 ```
 
 ## 生成批次 6：道具图标

@@ -4,7 +4,7 @@ import { memorySummary } from '../memory/memoryStore.js';
 export function buildAgentContext(world, agent, eventStore) {
   const nearby = livingAgents(world).filter((other) => other.id !== agent.id && other.locationId === agent.locationId).map((other) => ({ id: other.id, name: other.name, job: other.job, mood: other.status.mood }));
   return {
-    agent: { id: agent.id, name: agent.name, age: agent.age, job: agent.job, personality: agent.personality, goals: agent.todayGoals, status: agent.status, intent: agent.currentIntent },
+    agent: { id: agent.id, name: agent.name, genderIdentity: agent.genderIdentity, age: agent.age, job: agent.job, personality: agent.personality, goals: agent.todayGoals, status: agent.status, intent: agent.currentIntent },
     clock: world.clock,
     location: world.locations[agent.locationId],
     nearby,

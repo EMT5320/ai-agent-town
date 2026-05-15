@@ -20,6 +20,7 @@
 - Python Agent Runtime 继续承担世界、Agent、记忆、事件、Provider 与调试记录。
 - Godot 确定作为主要游戏客户端，负责地图、玩家操作、NPC 表现、对话与游戏 UI。
 - 首版裁剪为 6 个 NPC、3 个地点、1 个完整游戏日和 1 个小镇事件。
+- 首版 NPC 性别比例为 5 女 1 男，只保留托玛·榆庭作为男性首发 NPC；后续扩展默认女性占多数，并自然支持多元家庭和配偶关系。
 - 玩家身份是新搬来的偏少女农场主，Debug / 研究控制台保留研究院视角。
 - 首版同步推进可移动地图层和 Visual Novel 对话层，并开始恋爱铺垫。
 - 首版直接接入 LLM 做测试，DeepSeek V4 Flash 作为优先低成本模型，RuleBasedProvider 保留为 fallback。

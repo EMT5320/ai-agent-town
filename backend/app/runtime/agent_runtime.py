@@ -244,7 +244,7 @@ class AgentRuntime:
             speech = "欢迎来到小镇。刚搬家别太劳累，如果农场生活让你不适应，可以来白桦诊所找我。"
         elif "酒馆" in target["job"] or target["id"] == "kai":
             speech = "新来的农场主？太好了，月猫酒馆今晚也许会有新故事。等你有空，来听我弹一曲吧。"
-        elif "农夫" in target["job"]:
+        elif "农夫" in target["job"] or "农场主" in target["job"]:
             speech = "晨露农场终于有人打理了。只要你踏实干活，小镇会慢慢接纳你。"
         elif "店主" in target["job"]:
             speech = "欢迎你，农场主。需要种子、食材或生活用品时，可以来星露杂货铺找我。"

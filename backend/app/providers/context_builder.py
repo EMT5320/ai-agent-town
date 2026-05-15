@@ -15,7 +15,17 @@ def build_agent_context(world: dict[str, Any], agent: dict[str, Any], event_stor
         if other["id"] != agent["id"] and other["locationId"] == agent["locationId"]
     ]
     return {
-        "agent": {"id": agent["id"], "name": agent["name"], "age": agent["age"], "job": agent["job"], "personality": agent["personality"], "goals": agent["todayGoals"], "status": agent["status"], "intent": agent["currentIntent"]},
+        "agent": {
+            "id": agent["id"],
+            "name": agent["name"],
+            "genderIdentity": agent.get("genderIdentity"),
+            "age": agent["age"],
+            "job": agent["job"],
+            "personality": agent["personality"],
+            "goals": agent["todayGoals"],
+            "status": agent["status"],
+            "intent": agent["currentIntent"],
+        },
         "clock": world["clock"],
         "location": world["locations"][agent["locationId"]],
         "nearby": nearby,
@@ -44,6 +54,7 @@ def build_player_dialogue_context(world: dict[str, Any], npc: dict[str, Any], pl
         "npc": {
             "id": npc["id"],
             "name": npc["name"],
+            "genderIdentity": npc.get("genderIdentity"),
             "age": npc["age"],
             "job": npc["job"],
             "personality": npc["personality"],

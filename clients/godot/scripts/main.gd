@@ -58,7 +58,7 @@ func _build_layout() -> void:
 	actions.add_child(refresh_button)
 
 	var talk_button := Button.new()
-	talk_button.text = "向奥伦打招呼"
+	talk_button.text = "向奥蕾娅打招呼"
 	talk_button.pressed.connect(_on_test_talk_pressed)
 	actions.add_child(talk_button)
 
