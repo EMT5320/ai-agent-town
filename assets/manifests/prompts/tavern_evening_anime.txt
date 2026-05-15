@@ -1,0 +1,8 @@
+Use case: illustration-story
+Asset type: 16:9 location background for Agent Valley first playable day
+Primary request: Create an anime light fantasy tavern interior at evening for Moon Cat Tavern, the social and festival conflict location in Starlight Valley.
+Scene/backdrop: wooden bar, small music stage with lute or violin, warm amber lantern lights, moon cat motif as shapes only with no readable sign text, window showing violet dusk, harvest festival decorations.
+Subject: cozy rural tavern where Kaya performs and the starlight festival shortage event begins.
+Composition: cinematic 16:9 background, readable stage and bar, lower third and side edges safe for visual novel dialogue UI and half-body character portraits.
+Style: bright anime farming life sim, cozy rural town, light fantasy isekai tavern, clean line art, cel-shaded anime illustration, warm amber and burgundy palette, soft starlight glow, wholesome social atmosphere.
+Avoid: readable text, logo, watermark, photorealistic, western storybook watercolor, heavy oil painting, dark grim fantasy, cyberpunk, horror, nightclub mood, cluttered UI area, giant magic effects.

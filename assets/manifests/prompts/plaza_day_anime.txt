@@ -1,0 +1,8 @@
+Use case: illustration-story
+Asset type: 16:9 location background for Agent Valley first playable day
+Primary request: Create an anime pastoral fantasy town plaza in bright daytime for Starlight Valley, the social meeting location for the first day.
+Scene/backdrop: stone fountain, bulletin board with no readable text, small market stalls, strings of star lanterns, flower beds, clean stone paths and open walking space.
+Subject: cozy village square for first meetings with Mia, Aurea and Lena, warm community atmosphere, low-magic harvest festival details.
+Composition: cinematic 16:9 background, open center path, clear foreground/midground/background, lower third and side edges safe for dialogue UI and half-body portraits.
+Style: bright anime farming life sim, light fantasy isekai village, clean line art, cel-shaded anime illustration, warm daylight, soft magical starlight accents, wholesome slice-of-life anime mood, high quality, readable game background.
+Avoid: readable text, logo, watermark, photorealistic, western storybook watercolor, heavy oil painting, dark grim fantasy, cyberpunk, horror, crowded unreadable stalls, modern city elements, noisy background.

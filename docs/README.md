@@ -9,9 +9,10 @@
 3. [`vertical_slice_spec.md`](./vertical_slice_spec.md)：第一版可玩切片规格、数据契约、验收边界和扩展性要求。
 4. [`art_direction.md`](./art_direction.md)：二次元轻幻想轻异世界美术风格、角色设定、资产清单和生图顺序。
 5. [`asset_generation_prompts.md`](./asset_generation_prompts.md)：首版生图提示词包，方便直接产出对接资产。
-6. [`architecture_blueprint.md`](./architecture_blueprint.md)：整体架构、模块职责、数据流、客户端与后端协作方式。
-7. [`implementation_plan.md`](./implementation_plan.md)：初版垂直切片执行方案、批次任务、验收标准。
-8. [`open_questions.md`](./open_questions.md)：已确认决策、剩余验证点、下一轮讨论入口。
+6. [`initial_asset_generation_plan.md`](./initial_asset_generation_plan.md)：正式资产生成批次、优先级和 Godot 接入路线。
+7. [`architecture_blueprint.md`](./architecture_blueprint.md)：整体架构、模块职责、数据流、客户端与后端协作方式。
+8. [`implementation_plan.md`](./implementation_plan.md)：初版垂直切片执行方案、批次任务、验收标准。
+9. [`open_questions.md`](./open_questions.md)：已确认决策、剩余验证点、下一轮讨论入口。
 
 ## 当前决策摘要
 

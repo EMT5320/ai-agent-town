@@ -1,0 +1,8 @@
+Use case: stylized-concept
+Asset type: visual novel half-body character portrait for Agent Valley
+Primary request: Create Toma Elmgarden as a neutral visual novel half-body portrait for a bright anime light fantasy farming life sim.
+Subject: Toma Elmgarden, ownerId tomas, the only male starter NPC, 34 years old male dependable carpenter, broad shoulders, messy dark brown short hair, gray-blue or dark brown eyes, calm focused neutral expression, dark blue work shirt with rolled sleeves, leather tool belt, wooden hammer, measuring ruler, tiny wood shavings on clothing, gentle protective aura.
+Composition: single character only, vertical 2:3 portrait, half-body from head to waist, centered with generous padding, clean silhouette, looking toward the viewer, no extra characters, no item callout sheet, no labels.
+Style: bright anime farming life sim, light fantasy isekai village, visual novel character portrait, clean line art, cel-shaded anime illustration, expressive anime eyes, warm sunlight, wholesome pastoral slice-of-life mood, high quality, detailed but readable.
+Chroma key: perfectly flat solid #ff00ff background for background removal; no shadows, gradients, floor plane, texture, reflections, or lighting variation on the background; do not use #ff00ff anywhere in the character.
+Avoid: text, labels, watermark, logo, more than one male character, rough middle-aged farmer look, flashy idol design, warrior armor, photorealistic, western storybook watercolor, heavy oil painting, dark grim fantasy, cyberpunk, horror, giant magic effects, distorted hands, extra fingers, malformed anatomy, inconsistent eyes.

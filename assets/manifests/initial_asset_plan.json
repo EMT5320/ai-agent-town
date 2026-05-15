@@ -1,0 +1,120 @@
+{
+  "updatedAt": "2026-05-15",
+  "style": "anime_light_fantasy_isekai_farming",
+  "scope": "day1_vertical_slice",
+  "sourceOfTruth": [
+    "docs/art_direction.md",
+    "docs/asset_generation_prompts.md",
+    "docs/vertical_slice_spec.md",
+    "docs/initial_asset_generation_plan.md"
+  ],
+  "batches": [
+    {
+      "id": "batch_0_style_lock",
+      "status": "completed",
+      "assets": [
+        "style_key_art_agent_valley",
+        "style_character_lineup_day1",
+        "anime_dialogue_panel_style",
+        "player_farmer_reference",
+        "npc_mira_reference",
+        "npc_tomas_reference",
+        "npc_aurea_reference",
+        "npc_lena_reference",
+        "npc_kaya_reference",
+        "npc_branna_reference"
+      ]
+    },
+    {
+      "id": "batch_1a_scene_first_screen",
+      "status": "completed",
+      "assets": [
+        "farm_day_anime",
+        "plaza_day_anime",
+        "tavern_evening_anime",
+        "starlight_festival_shortage_event"
+      ],
+      "goal": "Generate location backgrounds and the first event CG before character expression batches."
+    },
+    {
+      "id": "batch_1b_dialogue_portraits",
+      "status": "in_progress",
+      "assets": [
+        "player_farmer_neutral",
+        "player_farmer_happy",
+        "player_farmer_troubled",
+        "npc_mira_neutral",
+        "npc_mira_happy",
+        "npc_mira_troubled",
+        "npc_tomas_neutral",
+        "npc_tomas_happy",
+        "npc_tomas_troubled",
+        "npc_orren_neutral",
+        "npc_orren_happy",
+        "npc_orren_troubled",
+        "npc_lena_neutral",
+        "npc_lena_happy",
+        "npc_lena_troubled",
+        "npc_kai_neutral",
+        "npc_kai_happy",
+        "npc_kai_troubled",
+        "npc_bram_neutral",
+        "npc_bram_happy",
+        "npc_bram_troubled"
+      ],
+      "completedAssets": [
+        "player_farmer_neutral",
+        "npc_mira_neutral",
+        "npc_tomas_neutral",
+        "npc_orren_neutral",
+        "npc_lena_neutral",
+        "npc_kai_neutral",
+        "npc_bram_neutral"
+      ],
+      "goal": "Generate VN portrait assets after scene batch style review."
+    },
+    {
+      "id": "batch_1c_map_sprites",
+      "status": "planned",
+      "assets": [
+        "player_farmer_map_idle",
+        "npc_mira_map_idle",
+        "npc_tomas_map_idle",
+        "npc_orren_map_idle",
+        "npc_lena_map_idle",
+        "npc_kai_map_idle",
+        "npc_bram_map_idle",
+        "interaction_marker_talk",
+        "interaction_marker_gift",
+        "interaction_marker_event"
+      ],
+      "goal": "Provide static map-layer readable sprites and interaction markers."
+    },
+    {
+      "id": "batch_1d_items_and_ui",
+      "status": "planned",
+      "assets": [
+        "item_fresh_turnip",
+        "item_farm_flower",
+        "item_starlight_lantern",
+        "dialogue_box_anime",
+        "nameplate_anime",
+        "choice_button_anime",
+        "memory_card_anime"
+      ],
+      "goal": "Support gifts, item UI, dialogue layout and memory presentation."
+    }
+  ],
+  "deferredExpansionPool": {
+    "npcs": ["nina", "sana", "rio", "ivy"],
+    "locations": ["home-north", "shop", "clinic"],
+    "assets": [
+      "starlight_festival_gift_choice",
+      "gift_panel_anime",
+      "relationship_delta_badge",
+      "night_diary_panel_anime",
+      "item_star_soup_ingredient",
+      "item_tavern_receipt"
+    ]
+  }
+}
