@@ -1,8 +1,19 @@
 param(
-    [switch]$DryRun
+    [switch]$DryRun,
+    [switch]$Run,
+    [switch]$Editor
 )
 
 $ErrorActionPreference = "Stop"
+
+if ($Run -and $Editor) {
+    throw "Use only one mode: -Run or -Editor."
+}
+
+$mode = "editor"
+if ($Run) {
+    $mode = "run"
+}
 
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $projectDir = Join-Path $projectRoot "clients\godot"
@@ -38,10 +49,17 @@ if (-not $godot) {
     throw "Godot executable was not found. Run npm.cmd run client:env or set GODOT_EXE."
 }
 
+$arguments = @("--editor", "--path", $projectDir)
+if ($mode -eq "run") {
+    $arguments = @("--path", $projectDir)
+}
+
 if ($DryRun) {
+    Write-Output "MODE=$mode"
     Write-Output "GODOT_EXE=$godot"
     Write-Output "PROJECT_DIR=$projectDir"
+    Write-Output "GODOT_ARGS=$($arguments -join ' ')"
     exit 0
 }
 
-Start-Process -FilePath $godot -ArgumentList @("--path", $projectDir)
+Start-Process -FilePath $godot -ArgumentList $arguments

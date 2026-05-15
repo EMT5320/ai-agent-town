@@ -30,6 +30,7 @@ func _ready() -> void:
 	add_child(world_sync)
 	_build_layout()
 	await _refresh_world()
+	_show_selected_npc_hint()
 
 
 func _build_layout() -> void:
@@ -149,7 +150,7 @@ func _build_dialogue_layer() -> void:
 	text_box.add_child(speaker_label)
 
 	dialogue_label = Label.new()
-	dialogue_label.text = "选择一个居民后，浮浮酱会把对应的 neutral 立绘和后端返回的对话展示在这里喵。"
+	dialogue_label.text = "选择一个居民后，这里会显示对应立绘和后端返回的对话。"
 	dialogue_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	dialogue_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	text_box.add_child(dialogue_label)
@@ -162,6 +163,11 @@ func _build_dialogue_layer() -> void:
 	talk_button.text = "聊天"
 	talk_button.pressed.connect(_on_talk_pressed)
 	actions.add_child(talk_button)
+
+	var farm_button := Button.new()
+	farm_button.text = "回农场"
+	farm_button.pressed.connect(_on_location_pressed.bind("farm"))
+	actions.add_child(farm_button)
 
 	var plaza_button := Button.new()
 	plaza_button.text = "去广场"
@@ -213,10 +219,13 @@ func _on_refresh_pressed() -> void:
 
 
 func _on_location_pressed(location_id: String) -> void:
+	var previous_location_id := selected_location_id
 	selected_location_id = location_id
 	_set_status("正在移动到 %s ..." % location_id)
 	var response = await api_client.post_player_action({"type": "move", "locationId": location_id})
 	if not response.get("ok", false):
+		selected_location_id = previous_location_id
+		_render_world()
 		_set_status("移动失败：%s" % response.get("error", "unknown"))
 		return
 	world_sync.apply_state(response["data"]["state"])
@@ -266,6 +275,7 @@ func _refresh_world() -> void:
 		return
 	world_sync.apply_state(response["data"])
 	selected_location_id = str(response["data"].get("player", {}).get("locationId", selected_location_id))
+	_ensure_selected_npc()
 	_render_world()
 	_set_status("世界状态已同步：%s" % world_sync.get_clock_label())
 
@@ -290,9 +300,13 @@ func _render_locations() -> void:
 	_clear_column(location_list)
 	for location in world_sync.get_locations():
 		var location_id := str(location.get("id", "unknown"))
+		var location_name: String = str(location.get("name", location_id))
+		var has_visual: bool = asset_registry.has_location_background(location_id)
+		var current_marker: String = "（当前）" if location_id == selected_location_id else ""
 		var button := Button.new()
-		button.text = "%s\n%s" % [location.get("name", location_id), location_id]
-		button.disabled = not asset_registry.has_location_background(location_id)
+		button.text = "%s%s\n%s" % [location_name, current_marker, location_id]
+		button.disabled = not has_visual or location_id == selected_location_id
+		button.tooltip_text = ("移动到 %s" % location_name) if has_visual else "首版暂未接入该地点背景"
 		button.pressed.connect(_on_location_pressed.bind(location_id))
 		location_list.add_child(button)
 
@@ -303,9 +317,11 @@ func _render_npcs() -> void:
 		var npc_id := str(npc.get("id", "unknown"))
 		if not asset_registry.has_portrait(npc_id, selected_expression):
 			continue
+		var selected_marker: String = "（选中）" if npc_id == selected_npc_id else ""
 		var button := Button.new()
-		button.text = "%s · %s\n%s" % [
+		button.text = "%s%s · %s\n%s" % [
 			npc.get("name", npc_id),
+			selected_marker,
 			npc.get("job", "居民"),
 			_get_location_name(str(npc.get("locationId", "unknown")))
 		]
@@ -315,7 +331,15 @@ func _render_npcs() -> void:
 
 func _render_events() -> void:
 	_clear_column(event_list)
-	for event in world_sync.get_recent_events().slice(-5):
+	var events: Array = world_sync.get_recent_events().duplicate()
+	events = events.slice(max(0, events.size() - 5))
+	events.reverse()
+	if events.is_empty():
+		var empty_item := Label.new()
+		empty_item.text = "暂无事件"
+		event_list.add_child(empty_item)
+		return
+	for event in events:
 		var item := Label.new()
 		item.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		var payload: Dictionary = event.get("payload", {})
@@ -324,10 +348,37 @@ func _render_events() -> void:
 
 
 func _render_portrait(npc: Dictionary) -> void:
+	if npc.is_empty():
+		portrait_rect.texture = asset_registry.get_portrait("player", selected_expression)
+		speaker_label.text = "新来的农场主"
+		return
 	var npc_id := str(npc.get("id", selected_npc_id))
 	var texture: Texture2D = asset_registry.get_portrait(npc_id, selected_expression)
 	portrait_rect.texture = texture
 	speaker_label.text = "%s · %s" % [npc.get("name", npc_id), npc.get("job", "居民")]
+
+
+func _ensure_selected_npc() -> void:
+	var selected_npc := _find_npc(selected_npc_id)
+	if not selected_npc.is_empty() and asset_registry.has_portrait(selected_npc_id, selected_expression):
+		return
+	for npc in world_sync.get_npcs():
+		var npc_id := str(npc.get("id", ""))
+		if asset_registry.has_portrait(npc_id, selected_expression):
+			selected_npc_id = npc_id
+			return
+	selected_npc_id = ""
+
+
+func _show_selected_npc_hint() -> void:
+	var npc := _find_npc(selected_npc_id)
+	if npc.is_empty():
+		dialogue_label.text = "后端已同步，但当前没有可交互居民。"
+		return
+	dialogue_label.text = "%s 正在 %s。点击聊天后会请求后端生成 first_meeting 回应。" % [
+		npc.get("name", selected_npc_id),
+		_get_location_name(str(npc.get("locationId", "unknown")))
+	]
 
 
 func _find_npc(npc_id: String) -> Dictionary:

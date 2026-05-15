@@ -72,6 +72,7 @@
 - 已有正式资产源目录 `assets/source/`，并完成风格锁定图、玩家与 6 个首发 NPC reference sheet、3 张地点背景、1 张星灯祭事件 CG，以及玩家与 6 个首发 NPC 的 `neutral` 半身立绘。
 - 已增加 `assets/manifests/asset_manifest.json` 登记与 `scripts/check_asset_manifest.py` 校验入口，首批场景图和 `neutral` 半身立绘已同步到 `clients/godot/assets/` 并填写 `godotPath`。
 - Godot 主场景已通过 `AssetRegistry` 接入 3 张地点背景和玩家 + 6 个首发 NPC 的 `neutral` 半身立绘，支持地点背景切换、NPC 选择和聊天动作提交。
+- 已增加 `npm.cmd run client:run` / `client:run:check`，可一条命令直接运行 P0 游戏窗口或检查运行入口。
 - 仍需补地图小人、剩余表情差分和更正式的地图/Visual Novel 分层场景结构。
 
 ### 后端游戏 API 缺口
@@ -226,16 +227,17 @@ Debug / 研究控制台是项目技术深度的展示窗口。任何关键玩家
 客户端环境准备已完成：
 
 - 已安装 Godot 4.6.2 标准版。
-- Godot 本机路径：`D:\Work\tools\godot\4.6.2\Godot_v4.6.2-stable_win64.exe`。
+- Godot 由脚本自动检测，当前机器优先命中 winget 安装目录。
 - 已增加 `npm.cmd run client:env`，用于检查 Godot 版本和项目 headless 打开能力。
-- 已增加 `npm.cmd run client:open`，用于打开 `clients/godot/project.godot`。
+- 已增加 `npm.cmd run client:open`，用于打开 `clients/godot/project.godot` 编辑器。
+- 已增加 `npm.cmd run client:run`，用于直接运行当前主场景。
 - 新手环境说明见 `docs/game_client_environment.md`。
 
-当前已通过 Godot headless 项目检查。后续仍需要在 Godot 编辑器窗口里运行主场景，确认 UI 和后端同步体验。
+当前已通过 Godot headless 项目检查。后续仍需要在真实游戏窗口里确认背景、立绘、地点切换、NPC 选择和聊天动作体验。
 
 下一轮建议继续：
 
-1. 用 Godot 编辑器打开项目并运行主场景，确认窗口内背景、立绘、地点按钮、NPC 按钮和聊天动作体验。
+1. 用 `npm.cmd run start` + `npm.cmd run client:run` 验收真实窗口内背景、立绘、地点按钮、NPC 按钮和聊天动作体验。
 2. 继续生成玩家与 6 个首发 NPC 的 `happy` / `troubled` 表情差分，并检查同角色发型、服饰、瞳色和配饰一致性。
 3. 生成并接入地图小人、对话/送礼/事件交互标记，让地图层从背景切换推进到可移动角色节点。
 4. 裁剪首版 6 NPC 和 3 地点数据，并补齐幻想显示名、性别认同、视觉资产引用和恋爱铺垫字段。

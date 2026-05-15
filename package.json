@@ -11,6 +11,8 @@
                     "client:env":  "python scripts/check_game_client_env.py",
                     "client:open":  "powershell -ExecutionPolicy Bypass -File scripts/open_godot_project.ps1",
                     "client:open:check":  "powershell -ExecutionPolicy Bypass -File scripts/open_godot_project.ps1 -DryRun",
+                    "client:run":  "powershell -ExecutionPolicy Bypass -File scripts/open_godot_project.ps1 -Run",
+                    "client:run:check":  "powershell -ExecutionPolicy Bypass -File scripts/open_godot_project.ps1 -Run -DryRun",
                     "asset:check":  "python scripts/check_asset_manifest.py"
                 },
     "engines":  {

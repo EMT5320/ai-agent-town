@@ -11,6 +11,7 @@
 - 运行后读取：`GET /api/world/state`
 - 可触发一次测试对话：`POST /api/player/action`
 - 已能加载 3 张地点背景和玩家 + 6 个首发 NPC 的 `neutral` 半身立绘
+- 可通过一条命令直接运行当前 P0 游戏窗口
 
 ## 本地启动
 
@@ -26,21 +27,25 @@
    npm.cmd run start
    ```
 
-3. 打开 Godot 项目：
+3. 直接运行游戏窗口：
+
+   ```powershell
+   npm.cmd run client:run
+   ```
+
+   如果需要进入编辑器：
 
    ```powershell
    npm.cmd run client:open
    ```
 
-   或手动用 Godot 4.x 打开：
+   也可以手动用 Godot 4.x 打开：
 
    ```text
    clients/godot/project.godot
    ```
 
-4. 运行主场景。
-
-5. 确认窗口中能看到：
+4. 确认窗口中能看到：
 
    - 玩家位置。
    - 世界时间。
@@ -50,7 +55,7 @@
 
 ## 下一步
 
-- 把当前文本列表替换为基础地图表现。
+- 把当前列表式地点/NPC 交互替换为基础地图表现。
 - 将 6 个首发 NPC 和 3 个首发地点映射到可视化节点。
 - 增加玩家移动输入。
 - 增加 NPC 交互区域和对话面板。

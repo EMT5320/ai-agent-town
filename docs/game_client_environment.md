@@ -99,6 +99,20 @@ npm.cmd run client:open
 npm.cmd run client:open:check
 ```
 
+### 直接运行 Godot 游戏窗口
+
+如果只想快速验收当前 P0 客户端，不进入编辑器：
+
+```powershell
+npm.cmd run client:run
+```
+
+如果只想检查运行命令会使用哪个 Godot 和项目目录：
+
+```powershell
+npm.cmd run client:run:check
+```
+
 也可以手动打开：
 
 ```text
@@ -122,31 +136,31 @@ clients/godot/project.godot
 2. 另开一个 PowerShell，执行：
 
    ```powershell
-   npm.cmd run client:open
+   npm.cmd run client:run
    ```
 
-3. Godot 打开后，运行主场景。
-
-4. 看到文本面板后，确认里面有：
+3. 看到游戏窗口后，确认里面有：
 
    - 玩家位置。
    - 世界时间。
-   - 地点列表。
-   - NPC 列表。
+   - 农场、广场、酒馆地点列表与背景切换。
+   - 首发 NPC 列表和 `neutral` 半身立绘。
    - 最近事件。
+   - 底部对话面板。
 
-5. 点击“向奥蕾娅打招呼”，确认后端会返回 NPC 回复。
+4. 点击“聊天”，确认后端会返回 NPC 回复。
 
 ## 当前项目阶段
 
-当前 Godot 客户端仍是文本面板骨架，用于验证 API 契约。下一步会逐步替换成：
+当前 Godot 客户端已经从纯文本面板推进到 P0 视觉主场景：
 
-- 基础地图。
-- 玩家角色节点。
-- NPC 节点。
-- 对话面板。
-- 事件卡片。
-- 调试信息入口。
+- 3 张地点背景：农场、广场、酒馆。
+- 玩家与 6 个首发 NPC 的 `neutral` 半身立绘。
+- 地点移动动作：`POST /api/player/action`。
+- NPC 对话动作：`POST /api/player/action`。
+- 最近事件列表和底部对话面板。
+
+下一步会继续补基础地图节点、角色站位、交互区域和调试信息入口。
 
 ## 常见问题
 
