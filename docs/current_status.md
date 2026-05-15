@@ -70,8 +70,9 @@
 - 已有 `clients/godot/` 项目骨架，仍缺少可移动地图场景、玩家节点、NPC 节点和正式对话 UI。
 - Godot 与 Python 后端已有最小状态读取链路，仍需在编辑器窗口中验证主场景运行体验和同步频率。
 - 已有正式资产源目录 `assets/source/`，并完成风格锁定图、玩家与 6 个首发 NPC reference sheet、3 张地点背景、1 张星灯祭事件 CG，以及玩家与 6 个首发 NPC 的 `neutral` 半身立绘。
-- 已增加 `assets/manifests/asset_manifest.json` 登记与 `scripts/check_asset_manifest.py` 校验入口，首批场景图和 `neutral` 半身立绘已同步到 `clients/godot/assets/` 并填写 `godotPath`，仍需补 Godot 运行时加载、地图小人和剩余表情差分接入流程。
-- 仍缺二次元地图小人、`happy` / `troubled` 表情差分、道具图标和可拆分 UI 组件的实际资产。
+- 已增加 `assets/manifests/asset_manifest.json` 登记与 `scripts/check_asset_manifest.py` 校验入口，首批场景图和 `neutral` 半身立绘已同步到 `clients/godot/assets/` 并填写 `godotPath`。
+- Godot 主场景已通过 `AssetRegistry` 接入 3 张地点背景和玩家 + 6 个首发 NPC 的 `neutral` 半身立绘，支持地点背景切换、NPC 选择和聊天动作提交。
+- 仍需补地图小人、剩余表情差分和更正式的地图/Visual Novel 分层场景结构。
 
 ### 后端游戏 API 缺口
 
@@ -234,9 +235,9 @@ Debug / 研究控制台是项目技术深度的展示窗口。任何关键玩家
 
 下一轮建议继续：
 
-1. 把 3 张地点背景和 7 张 `neutral` 半身立绘接入 Godot 主场景，验证 `location.id`、`npc.id` 和 `expression` 到纹理的最小映射。
+1. 用 Godot 编辑器打开项目并运行主场景，确认窗口内背景、立绘、地点按钮、NPC 按钮和聊天动作体验。
 2. 继续生成玩家与 6 个首发 NPC 的 `happy` / `troubled` 表情差分，并检查同角色发型、服饰、瞳色和配饰一致性。
-3. 用 Godot 编辑器打开项目并运行主场景，确认能连上本地后端。
+3. 生成并接入地图小人、对话/送礼/事件交互标记，让地图层从背景切换推进到可移动角色节点。
 4. 裁剪首版 6 NPC 和 3 地点数据，并补齐幻想显示名、性别认同、视觉资产引用和恋爱铺垫字段。
 5. 接入星灯祭供应短缺事件的 `attend_event` 链路。
 6. 根据 Godot 实测调整 `GET /api/world/state` 的字段体积和同步频率。

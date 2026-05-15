@@ -11,12 +11,12 @@
 | Python 3.12 | 后端 Agent Server、检查脚本 |
 | Node.js / npm | 统一启动和检查入口 |
 | Git | 版本管理 |
-| Godot 4.6.2 标准版 | 游戏客户端编辑器和运行环境 |
+| Godot 4.6.2 标准版 | 游戏客户端编辑器和运行环境，当前通过 winget 安装 |
 
-Godot 当前安装路径：
+Godot 当前由脚本自动查找，优先使用 `GODOT_EXE`，其次查找 winget 安装目录和固定工具目录。当前机器的 winget 安装目录类似：
 
 ```text
-D:\Work\tools\godot\4.6.2\Godot_v4.6.2-stable_win64.exe
+%LOCALAPPDATA%\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_...\Godot_v4.6.2-stable_win64_console.exe
 ```
 
 ## 必须知道的最少概念

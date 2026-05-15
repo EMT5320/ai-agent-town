@@ -11,7 +11,20 @@ $candidates = @()
 if (-not [string]::IsNullOrWhiteSpace($env:GODOT_EXE)) {
     $candidates += $env:GODOT_EXE
 }
+$candidates += "D:\Work\tools\godot\4.6.2\Godot_v4.6.2-stable_win64_console.exe"
 $candidates += "D:\Work\tools\godot\4.6.2\Godot_v4.6.2-stable_win64.exe"
+$wingetRoot = Join-Path $env:LOCALAPPDATA "Microsoft\WinGet\Packages"
+if (Test-Path -LiteralPath $wingetRoot) {
+    $candidates += Get-ChildItem -LiteralPath $wingetRoot -Recurse -Filter "Godot*_console.exe" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName
+    $candidates += Get-ChildItem -LiteralPath $wingetRoot -Recurse -Filter "Godot*.exe" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName
+}
+$commands = @("godot_console", "godot")
+foreach ($command in $commands) {
+    $found = Get-Command $command -ErrorAction SilentlyContinue
+    if ($found) {
+        $candidates += $found.Source
+    }
+}
 
 $godot = $null
 foreach ($candidate in $candidates) {

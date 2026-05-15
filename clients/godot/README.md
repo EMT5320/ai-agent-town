@@ -6,9 +6,11 @@
 
 - 主场景：`scenes/main.tscn`
 - API 客户端：`scripts/api_client.gd`
+- 资产注册：`scripts/asset_registry.gd`
 - 世界状态缓存：`scripts/world_sync.gd`
 - 运行后读取：`GET /api/world/state`
 - 可触发一次测试对话：`POST /api/player/action`
+- 已能加载 3 张地点背景和玩家 + 6 个首发 NPC 的 `neutral` 半身立绘
 
 ## 本地启动
 
@@ -42,8 +44,8 @@
 
    - 玩家位置。
    - 世界时间。
-   - 地点列表。
-   - NPC 列表。
+   - 农场、广场、酒馆背景切换。
+   - 玩家与首发 NPC 的 `neutral` 半身立绘。
    - 最近事件。
 
 ## 下一步
