@@ -17,6 +17,8 @@ const PORTRAITS := {
 	"bram": {"neutral": "res://assets/characters/npc_bram_neutral.png"},
 }
 
+var _texture_cache: Dictionary = {}
+
 
 func has_location_background(location_id: String) -> bool:
 	return LOCATION_BACKGROUNDS.has(location_id)
@@ -42,7 +44,20 @@ func get_portrait(owner_id: String, expression: String = "neutral") -> Texture2D
 func _load_texture(path: String) -> Texture2D:
 	if path.is_empty():
 		return null
+	if _texture_cache.has(path):
+		return _texture_cache[path]
+
 	var resource := load(path)
 	if resource is Texture2D:
+		_texture_cache[path] = resource
 		return resource
-	return null
+
+	var image := Image.new()
+	var error := image.load(path)
+	if error != OK:
+		push_warning("Texture load failed: %s (%s)" % [path, error])
+		return null
+
+	var texture := ImageTexture.create_from_image(image)
+	_texture_cache[path] = texture
+	return texture

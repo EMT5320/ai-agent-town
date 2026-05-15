@@ -33,6 +33,8 @@
    npm.cmd run client:run
    ```
 
+   该命令会先执行 Godot 资源导入，再打开游戏窗口。
+
    如果需要进入编辑器：
 
    ```powershell

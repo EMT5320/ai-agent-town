@@ -69,4 +69,12 @@ missing_assets = [str(path.relative_to(GODOT_ROOT)) for path in required_assets 
 if missing_assets:
     raise RuntimeError(f"Godot 客户端缺少首批视觉资产：{', '.join(missing_assets)}")
 
+missing_imports = [
+    str(path.with_name(path.name + ".import").relative_to(GODOT_ROOT))
+    for path in required_assets
+    if not path.with_name(path.name + ".import").exists()
+]
+if missing_imports:
+    raise RuntimeError(f"Godot 客户端缺少首批视觉资产导入元数据：{', '.join(missing_imports)}")
+
 print("[godot-check] ok", {"files": len(required_files)})

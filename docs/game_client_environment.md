@@ -107,6 +107,8 @@ npm.cmd run client:open:check
 npm.cmd run client:run
 ```
 
+该命令会先执行一次 Godot headless import，确保 `clients/godot/assets/` 下的 PNG 已生成导入元数据，然后再启动游戏窗口。
+
 如果只想检查运行命令会使用哪个 Godot 和项目目录：
 
 ```powershell
@@ -205,6 +207,10 @@ npm.cmd run client:open:check
 ### Godot 生成 `.godot/` 目录
 
 这是 Godot 的本地导入缓存，已经在 `.gitignore` 里忽略，不需要提交。
+
+### Godot 生成 `.png.import` 文件
+
+这是 Godot 对 PNG 源资产的导入元数据，需要随资产一起提交。缺少这些文件时，直接运行游戏窗口可能出现 UI 正常但背景、立绘为空的情况。
 
 ### 检查命令生成 `.run/` 目录
 

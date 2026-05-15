@@ -53,13 +53,24 @@ $arguments = @("--editor", "--path", $projectDir)
 if ($mode -eq "run") {
     $arguments = @("--path", $projectDir)
 }
+$importArguments = @("--headless", "--import", "--path", $projectDir)
 
 if ($DryRun) {
     Write-Output "MODE=$mode"
     Write-Output "GODOT_EXE=$godot"
     Write-Output "PROJECT_DIR=$projectDir"
+    if ($mode -eq "run") {
+        Write-Output "IMPORT_ARGS=$($importArguments -join ' ')"
+    }
     Write-Output "GODOT_ARGS=$($arguments -join ' ')"
     exit 0
+}
+
+if ($mode -eq "run") {
+    & $godot @importArguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "Godot asset import failed with exit code $LASTEXITCODE."
+    }
 }
 
 Start-Process -FilePath $godot -ArgumentList $arguments

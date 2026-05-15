@@ -21,6 +21,7 @@ WINGET_GODOT_PATTERNS = [
     "/mnt/c/Users/*/AppData/Local/Microsoft/WinGet/Packages/GodotEngine.GodotEngine_*/Godot*_console.exe",
     "/mnt/c/Users/*/AppData/Local/Microsoft/WinGet/Packages/GodotEngine.GodotEngine_*/Godot*.exe",
 ]
+CAPTURE_TEXT = {"text": True, "encoding": "utf-8", "errors": "replace", "capture_output": True}
 
 
 def windows_path_to_wsl(path: str) -> Path | None:
@@ -77,7 +78,7 @@ def find_godot() -> Path | None:
 
 
 def main() -> None:
-    """输出 Godot 版本，并用 headless 模式验证项目能打开。"""
+    """输出 Godot 版本，并验证项目能导入资产和运行主场景。"""
     godot = find_godot()
     if not godot:
         raise SystemExit("未找到 Godot。请先安装 Godot，或设置 GODOT_EXE 指向 Godot 可执行文件。")
@@ -87,12 +88,17 @@ def main() -> None:
     env = os.environ.copy()
     env["APPDATA"] = str(GODOT_APPDATA_DIR)
 
-    version = subprocess.run([str(godot), "--version"], cwd=PROJECT_ROOT, text=True, capture_output=True, check=True, env=env)
-    project_check = subprocess.run([str(godot), "--headless", "--path", "clients/godot", "--quit", "--verbose"], cwd=PROJECT_ROOT, text=True, capture_output=True, env=env)
+    version = subprocess.run([str(godot), "--version"], cwd=PROJECT_ROOT, check=True, env=env, **CAPTURE_TEXT)
+
+    import_check = subprocess.run([str(godot), "--headless", "--import", "--path", "clients/godot"], cwd=PROJECT_ROOT, env=env, **CAPTURE_TEXT)
+    if import_check.returncode != 0:
+        raise SystemExit(import_check.stderr or import_check.stdout or "Godot 资产导入失败。")
+
+    project_check = subprocess.run([str(godot), "--headless", "--path", "clients/godot", "--quit-after", "5", "--verbose"], cwd=PROJECT_ROOT, env=env, **CAPTURE_TEXT)
     if project_check.returncode != 0:
         raise SystemExit(project_check.stderr or project_check.stdout or "Godot 项目 headless 检查失败。")
     project_output = f"{project_check.stdout}\n{project_check.stderr}"
-    fatal_markers = ["SCRIPT ERROR", "Parse Error", "Failed to load script"]
+    fatal_markers = ["SCRIPT ERROR", "Parse Error", "Failed to load script", "Failed loading resource", "No loader found for resource"]
     for marker in fatal_markers:
         if marker in project_output:
             raise SystemExit(project_output)
