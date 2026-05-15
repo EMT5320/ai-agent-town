@@ -9,7 +9,16 @@ from app.director import DirectorBeat, DirectorQueueManager, DirectorValidator, 
 from app.events.event_store import EventStore
 from app.memory.memory_store import remember
 from app.providers.cloud_api_provider import CloudApiProvider
-from app.providers.context_builder import build_agent_context, build_player_dialogue_context, build_player_dialogue_messages, build_prompt_messages
+from app.providers.context_builder import (
+    build_agent_context,
+    build_event_reaction_context,
+    build_event_reaction_messages,
+    build_night_reflection_context,
+    build_night_reflection_messages,
+    build_player_dialogue_context,
+    build_player_dialogue_messages,
+    build_prompt_messages,
+)
 from app.providers.rule_based_provider import RuleBasedProvider
 from app.runtime.action_executor import execute_action, maybe_population_event
 from app.runtime.action_parser import parse_provider_output
@@ -79,29 +88,25 @@ class AgentRuntime:
             context = build_agent_context(self.world, agent, self.event_store)
             messages = build_prompt_messages(context)
             profile = self.model_config.resolve_profile(agent_id=agent["id"], feature="agent_decision")
-            provider_mode = self.provider_mode if self.provider_mode != "auto" else profile.get("provider", "rule")
-            provider = self.cloud_provider if provider_mode == "cloud" and profile.get("provider") == "cloud" else self.rule_provider
-            try:
-                result = provider.decide(context, messages, profile) if provider is self.cloud_provider else provider.decide(context, messages)
-            except Exception as error:
-                fallback_profile = self.model_config.fallback_profile()
-                result = self.rule_provider.decide(context, messages)
-                self.event_store.append(
-                    "provider.fallback",
-                    {"agentId": agent["id"], "agentName": agent["name"], "profileName": profile.get("profileName"), "error": str(error), "fallbackProfile": fallback_profile.get("profileName")},
-                )
+            result, fallback_reason = self._call_profile_provider(
+                feature="agent_decision",
+                agent=agent,
+                context=context,
+                messages=messages,
+                profile=profile,
+                rule_call=lambda: self.rule_provider.decide(context, messages),
+            )
             parsed = parse_provider_output(result)
             executed = execute_action(self.world, agent, parsed, self.event_store)
-            debug = {
-                "tick": self.world["clock"]["tick"],
-                "provider": result["provider"],
-                "profile": self._debug_profile(profile),
-                "messages": messages,
-                "rawText": result["rawText"],
-                "parsed": parsed,
-                "executed": executed["payload"],
-                "usage": result.get("usage", {}),
-            }
+            debug = self._build_provider_debug(
+                feature="agent_decision",
+                profile=profile,
+                messages=messages,
+                result=result,
+                parsed=parsed,
+                fallback_reason=fallback_reason,
+                executed=executed["payload"],
+            )
             agent.setdefault("decisionHistory", []).append(debug)
             agent["decisionHistory"] = agent["decisionHistory"][-10:]
             self.event_store.append("debug.decision", {"agentId": agent["id"], "agentName": agent["name"], "debug": debug})
@@ -298,7 +303,7 @@ class AgentRuntime:
 
         context = build_player_dialogue_context(self.world, target, payload, self.event_store)
         messages = build_player_dialogue_messages(context)
-        provider_result, profile = self._decide_player_dialogue(target, payload, context, messages)
+        provider_result, profile, fallback_reason = self._decide_player_dialogue(target, payload, context, messages)
         parsed = parse_provider_output(provider_result)
         speech = str(parsed.get("speech") or provider_result.get("rawText") or f"{target['name']}向你点点头。")
         memory_text = str(parsed.get("memory_to_save") or f"我和新来的农场主聊了 {topic}。")
@@ -311,19 +316,21 @@ class AgentRuntime:
             {"agentId": target["id"], "agentName": target["name"], "targetId": "player", "speech": speech, "topic": topic},
         )
 
-        debug = {
-            "turnId": dialogue_event["id"],
-            "actorId": target["id"],
-            "feature": "player_dialogue",
-            "profile": self._debug_profile(profile),
-            "messages": messages,
-            "rawText": provider_result.get("rawText", ""),
-            "parsed": parsed,
-            "executed": {"speech": speech},
-            "memoryWrites": [memory_payload],
-            "relationshipDeltas": [relationship_payload],
-            "usage": provider_result.get("usage", {}),
-        }
+        debug = self._build_provider_debug(
+            feature="dialogue",
+            profile=profile,
+            messages=messages,
+            result=provider_result,
+            parsed=parsed,
+            fallback_reason=fallback_reason,
+            executed={"speech": speech},
+            extra={
+                "turnId": dialogue_event["id"],
+                "actorId": target["id"],
+                "memoryWrites": [memory_payload],
+                "relationshipDeltas": [relationship_payload],
+            },
+        )
         target.setdefault("decisionHistory", []).append(debug)
         target["decisionHistory"] = target["decisionHistory"][-10:]
         debug_event = self.event_store.append("debug.turn_recorded", {"agentId": target["id"], "agentName": target["name"], "debug": debug})
@@ -442,8 +449,8 @@ class AgentRuntime:
                 relationship_events.append(self.event_store.append("relationship.changed", payload_delta))
 
         memory_payloads, memory_events = self._write_starlight_memories(choice, outcome)
-        dialogue_payloads, dialogue_events = self._write_starlight_dialogue(choice, outcome)
-        reflection_payloads, reflection_events = self._write_starlight_reflections(choice, outcome)
+        dialogue_payloads, dialogue_events = self._write_starlight_dialogue(event, choice, outcome)
+        reflection_payloads, reflection_events = self._write_starlight_reflections(event, choice, outcome)
 
         event["status"] = "resolved"
         event["resolution"] = {"choice": choice, "summary": outcome["summary"], "resolvedTick": self.world["clock"]["tick"]}
@@ -570,8 +577,137 @@ class AgentRuntime:
             events.append(self.event_store.append("npc.memory_created", payload))
         return payloads, events
 
-    def _write_starlight_dialogue(self, choice: str, outcome: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-        """生成事件结算时玩家能看到的关键 NPC 台词。"""
+    def _write_starlight_dialogue(self, event: dict[str, Any], choice: str, outcome: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        """按 event_reaction profile 生成事件结算时玩家能看到的关键 NPC 台词。"""
+        context = build_event_reaction_context(self.world, event, outcome, choice, self.event_store)
+        messages = build_event_reaction_messages(context)
+        profile = self.model_config.resolve_profile(feature="event_reaction")
+        rule_result = self._rule_event_reaction(choice, outcome)
+        provider_result, fallback_reason = self._call_profile_provider(
+            feature="event_reaction",
+            agent=None,
+            context=context,
+            messages=messages,
+            profile=profile,
+            rule_call=lambda: rule_result,
+        )
+        parsed = parse_provider_output(provider_result, fallback=rule_result["parsed"])
+        payloads = self._normalise_dialogue_payloads(parsed, rule_result["parsed"]["dialogue"])
+        if not any(item.get("speakerId") == "system" and item.get("text") == outcome["summary"] for item in payloads):
+            payloads.append({"speakerId": "system", "speakerName": "旁白", "text": outcome["summary"]})
+
+        events: list[dict[str, Any]] = []
+        for payload in payloads:
+            agent_id = payload.get("speakerId")
+            if agent_id in self.world["agents"]:
+                agent = self.world["agents"][str(agent_id)]
+                events.append(
+                    self.event_store.append(
+                        "npc.dialogue",
+                        {"agentId": agent_id, "agentName": agent["name"], "targetId": "player", "speech": payload["text"], "topic": "starlight_shortage"},
+                    )
+                )
+
+        debug = self._build_provider_debug(
+            feature="event_reaction",
+            profile=profile,
+            messages=messages,
+            result=provider_result,
+            parsed=parsed,
+            fallback_reason=fallback_reason,
+            executed={"dialogue": payloads},
+            extra={"eventId": event.get("id"), "choice": choice},
+        )
+        events.append(self.event_store.append("debug.turn_recorded", {"agentId": "system", "agentName": event.get("title", "事件"), "debug": debug}))
+        return payloads, events
+
+    def _write_starlight_reflections(self, event: dict[str, Any], choice: str, outcome: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        """按 night_reflection profile 生成夜间反思摘要，失败时保留规则反思。"""
+        context = build_night_reflection_context(self.world, event, outcome, choice, self.event_store)
+        messages = build_night_reflection_messages(context)
+        profile = self.model_config.resolve_profile(feature="night_reflection")
+        rule_result = self._rule_night_reflection(choice, outcome)
+        provider_result, fallback_reason = self._call_profile_provider(
+            feature="night_reflection",
+            agent=None,
+            context=context,
+            messages=messages,
+            profile=profile,
+            rule_call=lambda: rule_result,
+        )
+        parsed = parse_provider_output(provider_result, fallback=rule_result["parsed"])
+        payloads = self._normalise_reflection_payloads(parsed, rule_result["parsed"]["reflections"], choice)
+
+        events: list[dict[str, Any]] = []
+        for payload in payloads:
+            agent = self.world["agents"][payload["agentId"]]
+            remember(agent, payload["text"], tick=self.world["clock"]["tick"], importance=0.86, tags=payload["tags"])
+            self.world.setdefault("nightReflections", []).append(payload)
+            events.append(self.event_store.append("npc.night_reflection", payload))
+
+        debug = self._build_provider_debug(
+            feature="night_reflection",
+            profile=profile,
+            messages=messages,
+            result=provider_result,
+            parsed=parsed,
+            fallback_reason=fallback_reason,
+            executed={"reflections": payloads},
+            extra={"eventId": event.get("id"), "choice": choice},
+        )
+        events.append(self.event_store.append("debug.turn_recorded", {"agentId": "system", "agentName": event.get("title", "事件"), "debug": debug}))
+        return payloads, events
+
+    def _decide_player_dialogue(self, target: dict[str, Any], payload: dict[str, Any], context: dict[str, Any], messages: list[dict[str, str]]) -> tuple[dict[str, Any], dict[str, Any], str | None]:
+        """按 dialogue profile 生成玩家对话回复，失败时退回规则回复。"""
+        profile = self.model_config.resolve_profile(agent_id=target["id"], feature="dialogue")
+        provider_result, fallback_reason = self._call_profile_provider(
+            feature="dialogue",
+            agent=target,
+            context=context,
+            messages=messages,
+            profile=profile,
+            rule_call=lambda: self._rule_player_dialogue(target, payload),
+        )
+        return provider_result, profile, fallback_reason
+
+    def _call_profile_provider(
+        self,
+        *,
+        feature: str,
+        agent: dict[str, Any] | None,
+        context: dict[str, Any],
+        messages: list[dict[str, str]],
+        profile: dict[str, Any],
+        rule_call: Any,
+    ) -> tuple[dict[str, Any], str | None]:
+        """统一按 profile 调用云端或规则 Provider，并记录云端失败原因。"""
+        provider_mode = self._effective_provider_mode(profile)
+        if provider_mode == "cloud" and profile.get("provider") == "cloud":
+            try:
+                return self.cloud_provider.decide(context, messages, profile), None
+            except Exception as error:
+                fallback_profile = self.model_config.fallback_profile()
+                fallback_reason = self._safe_error_message(error)
+                self.event_store.append(
+                    "provider.fallback",
+                    {
+                        "agentId": agent.get("id") if agent else None,
+                        "agentName": agent.get("name") if agent else None,
+                        "feature": feature,
+                        "providerMode": provider_mode,
+                        "profileName": profile.get("profileName"),
+                        "error": fallback_reason,
+                        "fallbackProfile": fallback_profile.get("profileName"),
+                    },
+                )
+                return rule_call(), fallback_reason
+        if provider_mode == "cloud" and profile.get("provider") != "cloud":
+            return rule_call(), "profile_provider_rule"
+        return rule_call(), None
+
+    def _rule_event_reaction(self, choice: str, outcome: dict[str, Any]) -> dict[str, Any]:
+        """生成离线可用的事件反应 JSON，供 event_reaction fallback 使用。"""
         lines_by_choice = {
             "donate_crop": [
                 ("kai", "你真的把农场作物拿来了？今晚的星灯不会暗下去了，谢谢你！"),
@@ -594,49 +730,125 @@ class AgentRuntime:
                 ("lena", "先不急着介入也可以，但今晚需要有人继续照看大家的情绪。"),
             ],
         }
-        payloads: list[dict[str, Any]] = []
-        events: list[dict[str, Any]] = []
-        for agent_id, speech in lines_by_choice[choice]:
-            agent = self.world["agents"][agent_id]
-            payload = {"speakerId": agent_id, "speakerName": agent["name"], "text": speech}
-            payloads.append(payload)
-            events.append(self.event_store.append("npc.dialogue", {"agentId": agent_id, "agentName": agent["name"], "targetId": "player", "speech": speech, "topic": "starlight_shortage"}))
-        payloads.append({"speakerId": "system", "speakerName": "旁白", "text": outcome["summary"]})
-        return payloads, events
+        dialogue = [{"agentId": agent_id, "speech": speech} for agent_id, speech in lines_by_choice[choice]]
+        response = {"dialogue": dialogue, "memory_to_save": f"事件结算：{outcome['summary']}"}
+        return {"provider": "RuleEventReactionProvider", "rawText": json.dumps(response, ensure_ascii=False), "parsed": response, "usage": {"tokens": 0, "cost": 0, "latencyMs": 1}}
 
-    def _write_starlight_reflections(self, choice: str, outcome: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-        """生成首版夜间反思摘要，后续可替换为 LLM night_reflection profile。"""
-        reflections = [
-            ("kai", f"如果不是玩家选择“{outcome['choiceLabel']}”，我可能会把节日压力全推给别人。明天要认真面对欠账。"),
-            ("bram", "这个新来的农场主没有把供应当成理所当然。无论是否站在我这边，至少看见了农场人的压力。"),
-            ("lena", "今晚的冲突证明节日压力会影响健康和关系。玩家的选择值得继续观察。"),
-        ]
-        payloads: list[dict[str, Any]] = []
-        events: list[dict[str, Any]] = []
-        for agent_id, text in reflections:
-            agent = self.world["agents"][agent_id]
-            remember(agent, text, tick=self.world["clock"]["tick"], importance=0.86, tags=["night_reflection", "starlight_shortage", choice])
-            payload = {"agentId": agent_id, "agentName": agent["name"], "text": text, "tags": ["night_reflection", "starlight_shortage", choice]}
-            self.world.setdefault("nightReflections", []).append(payload)
-            payloads.append(payload)
-            events.append(self.event_store.append("npc.night_reflection", payload))
-        return payloads, events
+    def _rule_night_reflection(self, choice: str, outcome: dict[str, Any]) -> dict[str, Any]:
+        """生成离线可用的夜间反思 JSON，供 night_reflection fallback 使用。"""
+        response = {
+            "reflections": [
+                {"agentId": "kai", "text": f"如果不是玩家选择“{outcome['choiceLabel']}”，我可能会把节日压力全推给别人。明天要认真面对欠账。"},
+                {"agentId": "bram", "text": "这个新来的农场主没有把供应当成理所当然。无论是否站在我这边，至少看见了农场人的压力。"},
+                {"agentId": "lena", "text": "今晚的冲突证明节日压力会影响健康和关系。玩家的选择值得继续观察。"},
+            ]
+        }
+        return {"provider": "RuleNightReflectionProvider", "rawText": json.dumps(response, ensure_ascii=False), "parsed": response, "usage": {"tokens": 0, "cost": 0, "latencyMs": 1}}
 
-    def _decide_player_dialogue(self, target: dict[str, Any], payload: dict[str, Any], context: dict[str, Any], messages: list[dict[str, str]]) -> tuple[dict[str, Any], dict[str, Any]]:
-        """按模型配置生成玩家对话回复，失败时退回规则回复。"""
-        profile = self.model_config.resolve_profile(agent_id=target["id"], feature="dialogue")
-        provider_mode = self.provider_mode if self.provider_mode != "auto" else profile.get("provider", "rule")
-        if provider_mode == "cloud" and profile.get("provider") == "cloud":
-            try:
-                return self.cloud_provider.decide(context, messages, profile), profile
-            except Exception as error:
-                fallback_profile = self.model_config.fallback_profile()
-                self.event_store.append(
-                    "provider.fallback",
-                    {"agentId": target["id"], "agentName": target["name"], "feature": "player_dialogue", "profileName": profile.get("profileName"), "error": str(error), "fallbackProfile": fallback_profile.get("profileName")},
-                )
-                profile = fallback_profile
-        return self._rule_player_dialogue(target, payload), profile
+    def _normalise_dialogue_payloads(self, parsed: dict[str, Any], fallback_dialogue: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """把模型输出统一整理成前端可消费的 dialogue payload。"""
+        if parsed.get("naturalLanguageFallback") and parsed.get("speech"):
+            items = [{"agentId": "system", "speech": parsed["speech"]}]
+        else:
+            items = parsed.get("dialogue")
+        if isinstance(items, str):
+            items = [{"agentId": "system", "speech": items}]
+        if not isinstance(items, list) or not items:
+            speech = parsed.get("speech")
+            items = [{"agentId": "system", "speech": speech}] if speech else fallback_dialogue
+
+        payloads: list[dict[str, Any]] = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            speaker_id = str(item.get("agentId") or item.get("speakerId") or "system")
+            text = str(item.get("speech") or item.get("text") or "").strip()
+            if not text:
+                continue
+            if speaker_id in self.world["agents"]:
+                speaker_name = self.world["agents"][speaker_id]["name"]
+            else:
+                speaker_id = "system"
+                speaker_name = str(item.get("speakerName") or "旁白")
+            payloads.append({"speakerId": speaker_id, "speakerName": speaker_name, "text": text})
+        if payloads:
+            return payloads
+        return self._normalise_dialogue_payloads({"dialogue": fallback_dialogue}, [])
+
+    def _normalise_reflection_payloads(self, parsed: dict[str, Any], fallback_reflections: list[dict[str, Any]], choice: str) -> list[dict[str, Any]]:
+        """把模型输出统一整理成 nightReflections 与记忆系统可写入的 payload。"""
+        if parsed.get("naturalLanguageFallback") and parsed.get("speech"):
+            items = [{"agentId": fallback_reflections[0]["agentId"], "text": parsed["speech"]}]
+        else:
+            items = parsed.get("reflections")
+        if isinstance(items, str):
+            items = [{"agentId": fallback_reflections[0]["agentId"], "text": items}]
+        if not isinstance(items, list) or not items:
+            speech = parsed.get("speech")
+            items = [{"agentId": fallback_reflections[0]["agentId"], "text": speech}] if speech else fallback_reflections
+
+        payloads: list[dict[str, Any]] = []
+        tags = ["night_reflection", "starlight_shortage", choice]
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            agent_id = str(item.get("agentId") or "")
+            text = str(item.get("text") or item.get("reflection") or item.get("speech") or "").strip()
+            if agent_id not in self.world["agents"] or not text:
+                continue
+            agent = self.world["agents"][agent_id]
+            payloads.append({"agentId": agent_id, "agentName": agent["name"], "text": text, "tags": tags})
+        if payloads:
+            return payloads
+        return self._normalise_reflection_payloads({"reflections": fallback_reflections}, fallback_reflections, choice)
+
+    def _build_provider_debug(
+        self,
+        *,
+        feature: str,
+        profile: dict[str, Any],
+        messages: list[dict[str, str]],
+        result: dict[str, Any],
+        parsed: dict[str, Any],
+        fallback_reason: str | None,
+        executed: dict[str, Any] | None = None,
+        extra: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """构建三类 LLM 验证共用的 Debug 记录，字段保持扁平可查。"""
+        debug_profile = self._debug_profile(profile)
+        usage = result.get("usage", {}) if isinstance(result.get("usage"), dict) else {}
+        debug = {
+            "tick": self.world["clock"]["tick"],
+            "feature": feature,
+            "provider": result.get("provider"),
+            "providerMode": self._effective_provider_mode(profile),
+            "profileName": debug_profile.get("profileName"),
+            "apiKeyConfigured": bool(debug_profile.get("apiKeyConfigured")),
+            "profile": debug_profile,
+            "messages": messages,
+            "rawText": result.get("rawText", ""),
+            "parsed": parsed,
+            "executed": executed or {},
+            "usage": usage,
+            "latency": usage.get("latencyMs", result.get("latencyMs")),
+            "fallbackReason": fallback_reason,
+        }
+        if extra:
+            debug.update(extra)
+        return debug
+
+    def _effective_provider_mode(self, profile: dict[str, Any]) -> str:
+        """解析当前调用实际采用的 Provider 模式。"""
+        return self.provider_mode if self.provider_mode != "auto" else str(profile.get("provider", "rule"))
+
+    def _safe_error_message(self, error: Exception) -> str:
+        """保留错误摘要，避免把请求头或密钥写入事件流。"""
+        message = str(error)
+        for env_name in ("OPENAI_API_KEY", "DEEPSEEK_API_KEY", "AGENT_TOWN_API_KEY"):
+            secret = os.getenv(env_name)
+            if secret:
+                message = message.replace(secret, "[REDACTED_SECRET]")
+        return message
 
     def _rule_player_dialogue(self, target: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
         """生成离线可用的 NPC 回复，方便没有云端密钥时继续开发游戏流程。"""
@@ -703,7 +915,11 @@ class AgentRuntime:
     def _debug_profile(self, profile: dict[str, Any]) -> dict[str, Any]:
         """Debug 展示模型配置时隐藏实际密钥。"""
         safe_profile = dict(profile)
-        safe_profile.pop("apiKey", None)
+        has_inline_key = bool(safe_profile.pop("apiKey", None))
+        env_configured = False
         if safe_profile.get("apiKeyEnv"):
-            safe_profile["apiKeyConfigured"] = bool(os.getenv(str(safe_profile["apiKeyEnv"])))
+            env_configured = bool(os.getenv(str(safe_profile["apiKeyEnv"])))
+        if safe_profile.get("provider") == "cloud":
+            env_configured = env_configured or bool(os.getenv("OPENAI_API_KEY"))
+        safe_profile["apiKeyConfigured"] = has_inline_key or env_configured
         return safe_profile

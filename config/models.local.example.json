@@ -1,13 +1,19 @@
-﻿{
+{
   "profiles": {
     "default_deepseek": {
       "apiKey": "在这里填你的真实 key，或删除本字段改用 DEEPSEEK_API_KEY 环境变量"
     },
     "cheap_daily": {
-      "apiKey": "可选：不同 profile 可配置不同 key"
+      "apiKey": "可选：日常低成本 profile 可配置不同 key"
     },
-    "creative_dialogue": {
-      "apiKey": "可选：不同 NPC 可走不同 key 或模型"
+    "dialogue_story": {
+      "apiKey": "可选：玩家对话 profile 可配置不同 key"
+    },
+    "event_reaction_fast": {
+      "apiKey": "可选：事件反应 profile 可配置不同 key"
+    },
+    "night_reflection_deep": {
+      "apiKey": "可选：夜间反思 profile 可配置不同 key"
     }
   }
 }

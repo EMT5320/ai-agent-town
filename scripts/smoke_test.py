@@ -1,6 +1,7 @@
 ﻿"""Python 后端 smoke test。"""
 
 from pathlib import Path
+import os
 import sys
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -9,6 +10,48 @@ sys.path.insert(0, str(PROJECT_ROOT / "backend"))
 from app.director import DirectorBeat, WorldDigest  # noqa: E402
 from app.main import create_town_app  # noqa: E402
 from app.skills import STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID  # noqa: E402
+
+REQUIRED_DEBUG_FIELDS = {
+    "providerMode",
+    "profileName",
+    "apiKeyConfigured",
+    "messages",
+    "rawText",
+    "parsed",
+    "usage",
+    "latency",
+    "fallbackReason",
+}
+
+
+def assert_feature_debug(state: dict, feature: str) -> dict:
+    """确认指定 feature 生成了本轮 LLM 验证要求的 Debug 字段。"""
+    debug_events = [
+        event
+        for event in state["recentEvents"]
+        if event["type"] == "debug.turn_recorded" and event["payload"].get("debug", {}).get("feature") == feature
+    ]
+    if not debug_events:
+        raise RuntimeError(f"{feature} 应写入 debug.turn_recorded")
+    debug = debug_events[-1]["payload"]["debug"]
+    missing = sorted(REQUIRED_DEBUG_FIELDS - set(debug))
+    if missing:
+        raise RuntimeError(f"{feature} Debug 缺少字段：{missing}")
+    if not isinstance(debug["messages"], list) or not debug["messages"]:
+        raise RuntimeError(f"{feature} Debug messages 应为非空数组")
+    if not isinstance(debug["parsed"], dict):
+        raise RuntimeError(f"{feature} Debug parsed 应为对象")
+    if not isinstance(debug["usage"], dict):
+        raise RuntimeError(f"{feature} Debug usage 应为对象")
+    return debug
+
+
+def has_real_llm_config() -> bool:
+    """检测是否存在可用于真实 LLM smoke 的本地配置入口。"""
+    return (PROJECT_ROOT / "config" / "models.local.json").exists() or any(
+        os.getenv(name) for name in ("DEEPSEEK_API_KEY", "OPENAI_API_KEY", "AGENT_TOWN_API_KEY")
+    )
+
 
 app = create_town_app(provider_mode="rule")
 initial = app.get_public_state()
@@ -78,6 +121,7 @@ if not talk["result"]["dialogue"]:
     raise RuntimeError("玩家对话后应返回 NPC 回复")
 if not any(event["type"] == "debug.turn_recorded" for event in talk["state"]["recentEvents"]):
     raise RuntimeError("玩家对话后应写入 Debug 决策记录")
+dialogue_debug = assert_feature_debug(talk["state"], "dialogue")
 
 inspect = app.player_action({"type": "inspect", "eventId": "starlight_festival_shortage"})
 if not inspect["ok"]:
@@ -94,6 +138,8 @@ if not event_result["state"]["nightReflections"]:
     raise RuntimeError("星灯祭事件后应生成夜间反思摘要")
 if not any(event["type"] == "town.event_resolved" for event in event_result["state"]["recentEvents"]):
     raise RuntimeError("星灯祭事件后应写入事件结算记录")
+event_reaction_debug = assert_feature_debug(event_result["state"], "event_reaction")
+night_reflection_debug = assert_feature_debug(event_result["state"], "night_reflection")
 
 step = app.step_simulation({"actorId": "smoke-test"})
 state = step["state"]
@@ -102,4 +148,33 @@ if state["clock"]["tick"] != 1:
 if len(state["events"]) < 3:
     raise RuntimeError("推进一轮后事件数量异常")
 
-print("[python-smoke] ok", {"agents": len(state["agents"]), "events": len(state["events"]), "tick": state["clock"]["tick"]})
+print(
+    "[python-smoke] ok",
+    {
+        "agents": len(state["agents"]),
+        "events": len(state["events"]),
+        "tick": state["clock"]["tick"],
+        "dialogueProfile": dialogue_debug["profileName"],
+        "eventReactionProfile": event_reaction_debug["profileName"],
+        "nightReflectionProfile": night_reflection_debug["profileName"],
+    },
+)
+
+if has_real_llm_config():
+    llm_app = create_town_app()
+    llm_talk = llm_app.player_action({"type": "talk", "targetId": "orren", "locationId": "plaza", "topic": "llm_smoke", "message": "能和我聊聊今晚的小镇吗？"})
+    llm_debug = assert_feature_debug(llm_talk["state"], "dialogue")
+    print(
+        "[llm-smoke]",
+        {
+            "providerMode": llm_debug["providerMode"],
+            "provider": llm_debug.get("provider"),
+            "profileName": llm_debug["profileName"],
+            "apiKeyConfigured": llm_debug["apiKeyConfigured"],
+            "latency": llm_debug["latency"],
+            "fallbackReason": llm_debug["fallbackReason"],
+            "dialoguePreview": llm_talk["result"]["dialogue"][0]["text"][:80],
+        },
+    )
+else:
+    print("[llm-smoke] skipped: 未检测到 config/models.local.json 或 API key 环境变量；请参考 docs/model_profile_template_guide.md 配置后重跑。")

@@ -4,7 +4,7 @@ import json
 import os
 import time
 import urllib.request
-from typing import Any
+from typing import Any, Callable
 
 
 class CloudApiProvider:
@@ -12,7 +12,13 @@ class CloudApiProvider:
 
     name = "CloudApiProvider"
 
-    def decide(self, _context: dict[str, Any], messages: list[dict[str, str]], profile: dict[str, Any] | None = None) -> dict[str, Any]:
+    def decide(
+        self,
+        _context: dict[str, Any],
+        messages: list[dict[str, str]],
+        profile: dict[str, Any] | None = None,
+        output_parser: Callable[[str], dict[str, Any] | None] | None = None,
+    ) -> dict[str, Any]:
         """使用传入 Profile 调用模型，支持不同 NPC 或功能使用不同模型。"""
         profile = profile or {}
         api_key_env = profile.get("apiKeyEnv") or "DEEPSEEK_API_KEY"
@@ -43,14 +49,19 @@ class CloudApiProvider:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             data = json.loads(response.read().decode("utf-8"))
         raw_text = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+        latency_ms = int((time.time() - started) * 1000)
+        usage_data = data.get("usage", {})
+        parsed = output_parser(raw_text) if output_parser else None
         return {
             "provider": self.name,
             "rawText": raw_text,
-            "parsed": None,
+            "parsed": parsed,
             "usage": {
-                "tokens": data.get("usage", {}).get("total_tokens", 0),
+                "tokens": usage_data.get("total_tokens", 0),
+                "promptTokens": usage_data.get("prompt_tokens", 0),
+                "completionTokens": usage_data.get("completion_tokens", 0),
                 "cost": 0,
-                "latencyMs": int((time.time() - started) * 1000),
+                "latencyMs": latency_ms,
                 "model": model,
                 "profileName": profile.get("profileName"),
             },

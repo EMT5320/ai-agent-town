@@ -98,7 +98,10 @@ class ModelConfigStore:
         for profile in config.get("profiles", {}).values():
             has_inline_key = bool(profile.pop("apiKey", None))
             env_name = profile.get("apiKeyEnv")
-            profile["apiKeyConfigured"] = has_inline_key or bool(os.getenv(env_name)) if env_name else has_inline_key
+            env_configured = bool(os.getenv(env_name)) if env_name else False
+            if profile.get("provider") == "cloud":
+                env_configured = env_configured or bool(os.getenv("OPENAI_API_KEY"))
+            profile["apiKeyConfigured"] = has_inline_key or env_configured
         return config
 
     def _apply_env_overrides(self, profile: dict[str, Any]) -> dict[str, Any]:
