@@ -4,6 +4,19 @@ const ApiClientScript := preload("res://scripts/api_client.gd")
 const AssetRegistryScript := preload("res://scripts/asset_registry.gd")
 const WorldSyncScript := preload("res://scripts/world_sync.gd")
 
+const DESIGN_VIEWPORT_HEIGHT := 1080.0
+const UI_SCALE_MIN := 0.85
+const UI_SCALE_MAX := 2.1
+const UI_CREAM := Color(0.98, 0.94, 0.84, 0.96)
+const UI_CREAM_SOFT := Color(1.0, 0.97, 0.89, 0.94)
+const UI_GREEN := Color(0.22, 0.32, 0.19, 0.98)
+const UI_GREEN_SOFT := Color(0.45, 0.55, 0.30, 1.0)
+const UI_GOLD := Color(0.92, 0.60, 0.20, 1.0)
+const UI_GOLD_LIGHT := Color(1.0, 0.83, 0.36, 1.0)
+const UI_BROWN := Color(0.34, 0.22, 0.12, 1.0)
+const UI_TEXT := Color(0.24, 0.19, 0.12, 1.0)
+const UI_TEXT_MUTED := Color(0.42, 0.33, 0.22, 1.0)
+
 const MAP_NODE_SIZE := Vector2(112, 138)
 const MAP_SPRITE_SIZE := 64.0
 const MAP_SPRITE_SCALE := 1.35
@@ -39,9 +52,15 @@ var selected_npc_id := "orren"
 var selected_expression := "neutral"
 var selected_event_id := ""
 var selected_event_location_id := ""
+var ui_scale := 1.0
+var layout_viewport_size := Vector2.ZERO
 
 
 func _ready() -> void:
+	ui_scale = _compute_ui_scale()
+	layout_viewport_size = get_viewport_rect().size
+	theme = _make_scaled_theme()
+	print("[AgentValleyClient] VN visual refresh active · project=", ProjectSettings.globalize_path("res://"), " · ui_scale=", ui_scale, " · viewport=", get_viewport_rect().size)
 	api_client = ApiClientScript.new()
 	asset_registry = AssetRegistryScript.new()
 	world_sync = WorldSyncScript.new()
@@ -51,6 +70,47 @@ func _ready() -> void:
 	_build_layout()
 	await _refresh_world()
 	_show_selected_npc_hint()
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_RESIZED:
+		_refresh_scale_for_viewport()
+
+
+func _refresh_scale_for_viewport() -> void:
+	if not is_inside_tree() or background_rect == null:
+		return
+	var viewport_size: Vector2 = get_viewport_rect().size
+	var next_scale: float = _compute_ui_scale()
+	var scale_changed: bool = abs(next_scale - ui_scale) >= 0.04
+	var size_changed: bool = viewport_size.distance_to(layout_viewport_size) >= 12.0
+	if not scale_changed and not size_changed:
+		return
+	ui_scale = next_scale
+	layout_viewport_size = viewport_size
+	theme = _make_scaled_theme()
+	_rebuild_visual_layers()
+
+
+func _rebuild_visual_layers() -> void:
+	# 视口变化时只重建展示节点；后端状态、选中项和 API 连接保持原样。
+	var previous_status := status_label.text if status_label != null else "等待同步..."
+	var previous_speaker := speaker_label.text if speaker_label != null else ""
+	var previous_dialogue := dialogue_label.text if dialogue_label != null else ""
+	for child in get_children():
+		if child == api_client or child == asset_registry or child == world_sync:
+			continue
+		remove_child(child)
+		child.queue_free()
+	_build_layout()
+	if world_sync != null and not world_sync.get_player().is_empty():
+		_render_world()
+	if status_label != null:
+		status_label.text = previous_status
+	if speaker_label != null and not previous_speaker.is_empty():
+		speaker_label.text = previous_speaker
+	if dialogue_label != null and not previous_dialogue.is_empty():
+		dialogue_label.text = previous_dialogue
 
 
 func _build_layout() -> void:
@@ -81,102 +141,116 @@ func _build_map_character_layer() -> void:
 func _build_top_layer() -> void:
 	var margin := MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	margin.add_theme_constant_override("margin_left", 24)
-	margin.add_theme_constant_override("margin_right", 24)
-	margin.add_theme_constant_override("margin_top", 18)
-	margin.add_theme_constant_override("margin_bottom", 260)
+	margin.add_theme_constant_override("margin_left", _scaled_int(28))
+	margin.add_theme_constant_override("margin_right", _scaled_int(28))
+	margin.add_theme_constant_override("margin_top", _scaled_int(22))
+	margin.add_theme_constant_override("margin_bottom", _top_layer_reserved_bottom())
 	add_child(margin)
 
 	var columns := HBoxContainer.new()
 	columns.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	columns.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	columns.add_theme_constant_override("separation", 18)
+	columns.add_theme_constant_override("separation", _scaled_int(22))
 	margin.add_child(columns)
 
-	var left_panel := _create_panel(columns, Vector2(300, 0))
-	var title := Label.new()
-	title.text = "Agent Valley"
-	title.add_theme_font_size_override("font_size", 30)
-	left_panel.add_child(title)
+	var left_panel_frame := _create_panel(columns, Vector2(330, 0), "✦ Agent Valley · VN UI")
+	var left_panel := _create_scroll_body(left_panel_frame)
 
 	status_label = Label.new()
 	status_label.text = "等待同步..."
 	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_style_body_label(status_label)
 	left_panel.add_child(status_label)
 
 	player_label = Label.new()
 	player_label.text = "玩家状态等待同步..."
 	player_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_style_body_label(player_label)
 	left_panel.add_child(player_label)
 
 	var refresh_button := Button.new()
 	refresh_button.text = "刷新世界状态"
+	_style_button(refresh_button)
 	refresh_button.pressed.connect(_on_refresh_pressed)
 	left_panel.add_child(refresh_button)
 
 	var location_title := Label.new()
 	location_title.text = "地点"
-	location_title.add_theme_font_size_override("font_size", 18)
+	_style_section_label(location_title)
 	left_panel.add_child(location_title)
 
 	location_list = VBoxContainer.new()
 	location_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	location_list.add_theme_constant_override("separation", _scaled_int(7))
 	left_panel.add_child(location_list)
 
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	columns.add_child(spacer)
 
-	var right_panel := _create_panel(columns, Vector2(330, 0))
+	var right_panel_frame := _create_panel(columns, Vector2(360, 0), "✦ 小镇观察")
+	var right_panel := _create_scroll_body(right_panel_frame)
 	var npc_title := Label.new()
 	npc_title.text = "首发居民"
-	npc_title.add_theme_font_size_override("font_size", 18)
+	_style_section_label(npc_title)
 	right_panel.add_child(npc_title)
 
 	npc_list = VBoxContainer.new()
 	npc_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	npc_list.add_theme_constant_override("separation", _scaled_int(7))
 	right_panel.add_child(npc_list)
 
 	var event_title := Label.new()
 	event_title.text = "进行中事件"
-	event_title.add_theme_font_size_override("font_size", 18)
+	_style_section_label(event_title)
 	right_panel.add_child(event_title)
 
 	event_list = VBoxContainer.new()
 	event_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	event_list.add_theme_constant_override("separation", _scaled_int(8))
 	right_panel.add_child(event_list)
 
 
 func _build_dialogue_layer() -> void:
 	var dialogue_panel := PanelContainer.new()
+	var bottom_margin := _dialogue_panel_bottom_margin()
+	var panel_height := _dialogue_panel_height()
 	dialogue_panel.anchor_left = 0.0
 	dialogue_panel.anchor_top = 1.0
 	dialogue_panel.anchor_right = 1.0
 	dialogue_panel.anchor_bottom = 1.0
-	dialogue_panel.offset_left = 24
-	dialogue_panel.offset_top = -238
-	dialogue_panel.offset_right = -24
-	dialogue_panel.offset_bottom = -18
-	dialogue_panel.add_theme_stylebox_override("panel", _make_panel_style(Color(0.05, 0.06, 0.08, 0.82)))
+	dialogue_panel.offset_left = _scaled_int(30)
+	dialogue_panel.offset_top = -int(panel_height + bottom_margin)
+	dialogue_panel.offset_right = -_scaled_int(30)
+	dialogue_panel.offset_bottom = -bottom_margin
+	dialogue_panel.add_theme_stylebox_override("panel", _make_panel_style(UI_CREAM, UI_GOLD, _scaled_int(20), _scaled_int(3), _scaled_int(20)))
 	add_child(dialogue_panel)
 
+	var outer := VBoxContainer.new()
+	outer.add_theme_constant_override("separation", _scaled_int(12))
+	dialogue_panel.add_child(outer)
+
+	var title_bar := _create_title_bar("✦ 星灯通讯 · 后端回执 ✦")
+	outer.add_child(title_bar)
+
 	var content := HBoxContainer.new()
-	content.add_theme_constant_override("separation", 20)
-	dialogue_panel.add_child(content)
+	content.add_theme_constant_override("separation", _scaled_int(24))
+	outer.add_child(content)
 
 	portrait_rect = TextureRect.new()
-	portrait_rect.custom_minimum_size = Vector2(220, 220)
+	portrait_rect.custom_minimum_size = _portrait_box_size()
 	portrait_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	portrait_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	content.add_child(portrait_rect)
 
 	var text_box := VBoxContainer.new()
 	text_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	text_box.add_theme_constant_override("separation", _scaled_int(8))
 	content.add_child(text_box)
 
 	speaker_label = Label.new()
 	speaker_label.text = "等待选择居民"
-	speaker_label.add_theme_font_size_override("font_size", 22)
+	_style_section_label(speaker_label, 24)
 	text_box.add_child(speaker_label)
 
 	dialogue_scroll = ScrollContainer.new()
@@ -187,80 +261,242 @@ func _build_dialogue_layer() -> void:
 	dialogue_label.text = "选择一个居民后，这里会显示对应立绘和后端返回的对话。"
 	dialogue_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	dialogue_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_style_body_label(dialogue_label, 17)
 	dialogue_scroll.add_child(dialogue_label)
 
 	var actions := HBoxContainer.new()
-	actions.add_theme_constant_override("separation", 10)
+	actions.add_theme_constant_override("separation", _scaled_int(12))
 	text_box.add_child(actions)
 
 	var talk_button := Button.new()
 	talk_button.text = "聊天"
+	_style_button(talk_button, 86)
 	talk_button.pressed.connect(_on_talk_pressed)
 	actions.add_child(talk_button)
 
 	var gift_button := Button.new()
 	gift_button.text = "送礼"
+	_style_button(gift_button, 86)
 	gift_button.pressed.connect(_on_gift_pressed)
 	actions.add_child(gift_button)
 
 	var farm_button := Button.new()
 	farm_button.text = "回农场"
+	_style_button(farm_button, 96)
 	farm_button.pressed.connect(_on_location_pressed.bind("farm"))
 	actions.add_child(farm_button)
 
 	var plaza_button := Button.new()
 	plaza_button.text = "去广场"
+	_style_button(plaza_button, 96)
 	plaza_button.pressed.connect(_on_location_pressed.bind("plaza"))
 	actions.add_child(plaza_button)
 
 	var tavern_button := Button.new()
 	tavern_button.text = "去酒馆"
+	_style_button(tavern_button, 96)
 	tavern_button.pressed.connect(_on_location_pressed.bind("tavern"))
 	actions.add_child(tavern_button)
 
 	var choice_title := Label.new()
 	choice_title.text = "事件选项"
-	choice_title.add_theme_font_size_override("font_size", 18)
+	_style_section_label(choice_title)
 	text_box.add_child(choice_title)
 
 	event_choice_list = VBoxContainer.new()
-	event_choice_list.add_theme_constant_override("separation", 6)
+	event_choice_list.add_theme_constant_override("separation", _scaled_int(7))
 	text_box.add_child(event_choice_list)
 	_render_event_choice_buttons([])
 
 
-func _create_panel(parent: Control, minimum_size: Vector2) -> VBoxContainer:
+func _create_panel(parent: Control, minimum_size: Vector2, title_text: String = "") -> VBoxContainer:
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = minimum_size
+	panel.custom_minimum_size = _scaled_vector(minimum_size)
 	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	panel.add_theme_stylebox_override("panel", _make_panel_style(Color(0.03, 0.04, 0.06, 0.72)))
+	panel.clip_contents = true
+	panel.add_theme_stylebox_override("panel", _make_panel_style(UI_CREAM, UI_GOLD, _scaled_int(18), _scaled_int(2), _scaled_int(14)))
 	parent.add_child(panel)
 
 	var box := VBoxContainer.new()
 	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	box.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	box.add_theme_constant_override("separation", 8)
+	box.add_theme_constant_override("separation", _scaled_int(9))
 	panel.add_child(box)
+	if not title_text.is_empty():
+		box.add_child(_create_title_bar(title_text))
 	return box
 
 
-func _make_panel_style(color: Color) -> StyleBoxFlat:
+func _create_scroll_body(parent: VBoxContainer) -> VBoxContainer:
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.clip_contents = true
+	parent.add_child(scroll)
+
+	var body := VBoxContainer.new()
+	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	body.add_theme_constant_override("separation", _scaled_int(9))
+	scroll.add_child(body)
+	return body
+
+
+func _create_title_bar(text: String) -> PanelContainer:
+	var bar := PanelContainer.new()
+	bar.custom_minimum_size = Vector2(0, _scaled(42))
+	bar.add_theme_stylebox_override("panel", _make_panel_style(UI_GREEN, UI_GOLD_LIGHT, _scaled_int(15), _scaled_int(2), _scaled_int(10)))
+
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", _scaled_int(7))
+	bar.add_child(row)
+
+	var left_star := _create_decor_label("✦", 22, UI_GOLD_LIGHT)
+	row.add_child(left_star)
+
+	var title := Label.new()
+	title.text = text
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title.add_theme_font_size_override("font_size", _font_size(18))
+	title.add_theme_color_override("font_color", Color(1.0, 0.95, 0.75, 1.0))
+	title.add_theme_color_override("font_shadow_color", Color(0.07, 0.11, 0.06, 0.85))
+	title.add_theme_constant_override("shadow_offset_x", _scaled_int(1))
+	title.add_theme_constant_override("shadow_offset_y", _scaled_int(1))
+	row.add_child(title)
+
+	# 叶片与星灯用轻量符号实现，避免引入客户端运行时切图依赖。
+	row.add_child(_create_decor_label("❧", 18, UI_GREEN_SOFT))
+	row.add_child(_create_decor_label("✧", 20, UI_GOLD_LIGHT))
+	return bar
+
+
+func _create_decor_label(text: String, font_size: int, color: Color) -> Label:
+	var label := Label.new()
+	label.text = text
+	label.add_theme_font_size_override("font_size", _font_size(font_size))
+	label.add_theme_color_override("font_color", color)
+	label.add_theme_color_override("font_shadow_color", Color(0.31, 0.18, 0.08, 0.42))
+	label.add_theme_constant_override("shadow_offset_x", _scaled_int(1))
+	label.add_theme_constant_override("shadow_offset_y", _scaled_int(1))
+	return label
+
+
+func _make_panel_style(color: Color, border_color: Color = UI_GOLD, radius: int = 10, border_width: int = 1, margin_size: int = 12) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
 	style.bg_color = color
-	style.border_color = Color(1.0, 0.85, 0.45, 0.25)
-	style.border_width_left = 1
-	style.border_width_top = 1
-	style.border_width_right = 1
-	style.border_width_bottom = 1
-	style.corner_radius_top_left = 8
-	style.corner_radius_top_right = 8
-	style.corner_radius_bottom_left = 8
-	style.corner_radius_bottom_right = 8
-	style.content_margin_left = 14
-	style.content_margin_top = 12
-	style.content_margin_right = 14
-	style.content_margin_bottom = 12
+	style.border_color = border_color
+	style.border_width_left = border_width
+	style.border_width_top = border_width
+	style.border_width_right = border_width
+	style.border_width_bottom = border_width
+	style.corner_radius_top_left = radius
+	style.corner_radius_top_right = radius
+	style.corner_radius_bottom_left = radius
+	style.corner_radius_bottom_right = radius
+	style.content_margin_left = margin_size
+	style.content_margin_top = margin_size
+	style.content_margin_right = margin_size
+	style.content_margin_bottom = margin_size
 	return style
+
+
+func _make_button_style(color: Color, border_color: Color) -> StyleBoxFlat:
+	var style := _make_panel_style(color, border_color, _scaled_int(15), _scaled_int(2), _scaled_int(10))
+	style.shadow_color = Color(0.36, 0.21, 0.08, 0.20)
+	style.shadow_size = _scaled_int(2)
+	return style
+
+
+func _make_scaled_theme() -> Theme:
+	var scaled_theme := Theme.new()
+	scaled_theme.set_color("font_color", "Label", UI_TEXT)
+	scaled_theme.set_color("font_shadow_color", "Label", Color(1.0, 0.98, 0.90, 0.35))
+	scaled_theme.set_constant("shadow_offset_x", "Label", _scaled_int(1))
+	scaled_theme.set_constant("shadow_offset_y", "Label", _scaled_int(1))
+	scaled_theme.set_font_size("font_size", "Label", _font_size(16))
+	scaled_theme.set_font_size("font_size", "Button", _font_size(16))
+	scaled_theme.set_color("font_color", "Button", UI_BROWN)
+	scaled_theme.set_color("font_hover_color", "Button", UI_BROWN)
+	scaled_theme.set_color("font_pressed_color", "Button", UI_BROWN)
+	scaled_theme.set_color("font_disabled_color", "Button", Color(UI_TEXT_MUTED.r, UI_TEXT_MUTED.g, UI_TEXT_MUTED.b, 0.55))
+	scaled_theme.set_stylebox("normal", "Button", _make_button_style(UI_CREAM_SOFT, UI_GOLD))
+	scaled_theme.set_stylebox("hover", "Button", _make_button_style(Color(1.0, 0.91, 0.57, 0.98), UI_GOLD_LIGHT))
+	scaled_theme.set_stylebox("pressed", "Button", _make_button_style(Color(0.93, 0.72, 0.32, 0.98), UI_GOLD))
+	scaled_theme.set_stylebox("disabled", "Button", _make_button_style(Color(0.75, 0.72, 0.62, 0.55), Color(0.55, 0.49, 0.36, 0.50)))
+	scaled_theme.set_stylebox("focus", "Button", StyleBoxEmpty.new())
+	return scaled_theme
+
+
+func _style_body_label(label: Label, base_font_size: int = 16) -> void:
+	label.add_theme_font_size_override("font_size", _font_size(base_font_size))
+	label.add_theme_color_override("font_color", UI_TEXT)
+	label.add_theme_color_override("font_shadow_color", Color(1.0, 0.98, 0.90, 0.35))
+	label.add_theme_constant_override("shadow_offset_x", _scaled_int(1))
+	label.add_theme_constant_override("shadow_offset_y", _scaled_int(1))
+
+
+func _style_section_label(label: Label, base_font_size: int = 18) -> void:
+	label.add_theme_font_size_override("font_size", _font_size(base_font_size))
+	label.add_theme_color_override("font_color", UI_GREEN)
+	label.add_theme_color_override("font_shadow_color", Color(1.0, 0.89, 0.45, 0.38))
+	label.add_theme_constant_override("shadow_offset_x", _scaled_int(1))
+	label.add_theme_constant_override("shadow_offset_y", _scaled_int(1))
+
+
+func _style_button(button: Button, min_width: float = 0.0) -> void:
+	button.custom_minimum_size = Vector2(_scaled(min_width), _scaled(42))
+	button.add_theme_font_size_override("font_size", _font_size(16))
+
+
+func _top_layer_reserved_bottom() -> int:
+	# 顶部侧栏明确避让底部 VN 框，侧栏内容过长时由内部滚动容器承接。
+	return int(_dialogue_panel_height() + _dialogue_panel_bottom_margin() + _scaled(16))
+
+
+func _dialogue_panel_bottom_margin() -> int:
+	return _scaled_int(22)
+
+
+func _dialogue_panel_height() -> float:
+	var viewport_height := get_viewport_rect().size.y
+	if viewport_height <= 0:
+		viewport_height = DESIGN_VIEWPORT_HEIGHT
+	return clamp(viewport_height * 0.30, _scaled(300), _scaled(420))
+
+
+func _dialogue_content_height() -> float:
+	return max(_scaled(180), _dialogue_panel_height() - _scaled(20 * 2 + 42 + 12))
+
+
+func _portrait_box_size() -> Vector2:
+	var content_height := _dialogue_content_height()
+	return Vector2(min(_scaled(280), content_height * 0.86), content_height)
+
+
+func _compute_ui_scale() -> float:
+	var viewport_height := get_viewport_rect().size.y
+	if viewport_height <= 0:
+		viewport_height = DESIGN_VIEWPORT_HEIGHT
+	return clamp(viewport_height / DESIGN_VIEWPORT_HEIGHT, UI_SCALE_MIN, UI_SCALE_MAX)
+
+
+func _scaled(value: float) -> float:
+	return round(value * ui_scale)
+
+
+func _scaled_int(value: float) -> int:
+	return int(_scaled(value))
+
+
+func _scaled_vector(value: Vector2) -> Vector2:
+	return Vector2(_scaled(value.x), _scaled(value.y))
+
+
+func _font_size(base_size: int) -> int:
+	return max(1, int(round(float(base_size) * ui_scale)))
+
+
+func _map_node_size() -> Vector2:
+	return MAP_NODE_SIZE * ui_scale
 
 
 func _on_refresh_pressed() -> void:
@@ -500,12 +736,13 @@ func _render_map_event_markers(bounds: Rect2) -> void:
 			continue
 		var event_location := str(event_data.get("locationId", selected_location_id))
 		var event_title := str(event_data.get("title", event_id))
-		var anchor := _map_position_for_location(event_location, bounds) + Vector2(0, -118)
+		var anchor := _map_position_for_location(event_location, bounds) + Vector2(0, -_scaled(118))
+		var event_marker_scale := MAP_EVENT_MARKER_SCALE * ui_scale
 		var marker := TextureButton.new()
 		marker.name = "MapEvent_%s" % event_id
 		marker.texture_normal = asset_registry.get_interaction_marker("event")
-		marker.scale = Vector2(MAP_EVENT_MARKER_SCALE, MAP_EVENT_MARKER_SCALE)
-		marker.position = anchor - Vector2(MAP_SPRITE_SIZE * MAP_EVENT_MARKER_SCALE * 0.5, MAP_SPRITE_SIZE * MAP_EVENT_MARKER_SCALE * 0.5)
+		marker.scale = Vector2(event_marker_scale, event_marker_scale)
+		marker.position = anchor - Vector2(MAP_SPRITE_SIZE * event_marker_scale * 0.5, MAP_SPRITE_SIZE * event_marker_scale * 0.5)
 		marker.tooltip_text = "查看事件：%s" % event_title
 		marker.set_meta("eventId", event_id)
 		marker.set_meta("locationId", event_location)
@@ -516,7 +753,7 @@ func _render_map_event_markers(bounds: Rect2) -> void:
 		map_character_layer.add_child(marker)
 
 		var label := _create_map_label(event_title, 160, 14)
-		label.position = marker.position + Vector2(-58, 44)
+		label.position = marker.position + Vector2(-_scaled(58), _scaled(44))
 		map_character_layer.add_child(label)
 
 
@@ -530,24 +767,26 @@ func _add_map_actor(owner_id: String, display_name: String, location_id: String,
 
 func _create_map_actor_node(owner_id: String, display_name: String, location_id: String, is_player: bool, anchor: Vector2) -> Control:
 	var actor := Control.new()
+	var node_size := _map_node_size()
+	var sprite_scale := MAP_SPRITE_SCALE * ui_scale
 	actor.name = "MapActor_%s" % owner_id
-	actor.position = anchor - Vector2(MAP_NODE_SIZE.x * 0.5, MAP_NODE_SIZE.y)
-	actor.size = MAP_NODE_SIZE
+	actor.position = anchor - Vector2(node_size.x * 0.5, node_size.y)
+	actor.size = node_size
 	actor.set_meta("agentId", owner_id)
 	actor.set_meta("locationId", location_id)
 	actor.set_meta("interactable", not is_player)
 
 	var halo := ColorRect.new()
-	halo.position = Vector2(12, 34)
-	halo.size = Vector2(88, 88)
+	halo.position = _scaled_vector(Vector2(12, 34))
+	halo.size = _scaled_vector(Vector2(88, 88))
 	halo.color = Color(1.0, 0.86, 0.38, 0.22 if owner_id == selected_npc_id else 0.08)
 	actor.add_child(halo)
 
 	var sprite_button := TextureButton.new()
 	sprite_button.name = "Sprite"
 	sprite_button.texture_normal = asset_registry.get_map_sprite(owner_id)
-	sprite_button.scale = Vector2(MAP_SPRITE_SCALE, MAP_SPRITE_SCALE)
-	sprite_button.position = Vector2((MAP_NODE_SIZE.x - MAP_SPRITE_SIZE * MAP_SPRITE_SCALE) * 0.5, 38)
+	sprite_button.scale = Vector2(sprite_scale, sprite_scale)
+	sprite_button.position = Vector2((node_size.x - MAP_SPRITE_SIZE * sprite_scale) * 0.5, _scaled(38))
 	sprite_button.disabled = is_player
 	sprite_button.tooltip_text = "%s · %s" % [display_name, _get_location_name(location_id)]
 	if not is_player:
@@ -556,7 +795,7 @@ func _create_map_actor_node(owner_id: String, display_name: String, location_id:
 
 	if is_player:
 		var player_marker := _create_map_label("玩家", 52, 13)
-		player_marker.position = Vector2(30, 9)
+		player_marker.position = _scaled_vector(Vector2(30, 9))
 		actor.add_child(player_marker)
 	else:
 		var talk_interaction: Dictionary = world_sync.find_interaction("talk", "npc", owner_id)
@@ -566,17 +805,17 @@ func _create_map_actor_node(owner_id: String, display_name: String, location_id:
 		actor.set_meta("interactable", talk_enabled or gift_enabled)
 
 		var talk_marker := _create_actor_marker("talk", "聊天：%s" % display_name, talk_enabled)
-		talk_marker.position = Vector2(6, 8)
+		talk_marker.position = _scaled_vector(Vector2(6, 8))
 		talk_marker.pressed.connect(_on_map_talk_marker_pressed.bind(owner_id))
 		actor.add_child(talk_marker)
 
 		var gift_marker := _create_actor_marker("gift", "送礼：%s" % display_name, gift_enabled)
-		gift_marker.position = Vector2(78, 8)
+		gift_marker.position = _scaled_vector(Vector2(78, 8))
 		gift_marker.pressed.connect(_on_map_gift_marker_pressed.bind(owner_id))
 		actor.add_child(gift_marker)
 
 	var name_label := _create_map_label(display_name, int(MAP_NODE_SIZE.x), 14)
-	name_label.position = Vector2(0, 116)
+	name_label.position = Vector2(0, _scaled(116))
 	actor.add_child(name_label)
 	return actor
 
@@ -584,7 +823,8 @@ func _create_map_actor_node(owner_id: String, display_name: String, location_id:
 func _create_actor_marker(marker_id: String, tooltip: String, enabled: bool) -> TextureButton:
 	var marker := TextureButton.new()
 	marker.texture_normal = asset_registry.get_interaction_marker(marker_id)
-	marker.scale = Vector2(MAP_MARKER_SCALE, MAP_MARKER_SCALE)
+	var marker_scale := MAP_MARKER_SCALE * ui_scale
+	marker.scale = Vector2(marker_scale, marker_scale)
 	marker.tooltip_text = tooltip
 	marker.disabled = not enabled
 	if not enabled:
@@ -595,22 +835,22 @@ func _create_actor_marker(marker_id: String, tooltip: String, enabled: bool) -> 
 func _create_map_label(text: String, width: int, font_size: int) -> Label:
 	var label := Label.new()
 	label.text = text
-	label.size = Vector2(width, 24)
+	label.size = Vector2(_scaled(width), _scaled(26))
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	label.add_theme_font_size_override("font_size", font_size)
+	label.add_theme_font_size_override("font_size", _font_size(font_size))
 	label.add_theme_color_override("font_color", Color(1, 0.96, 0.84, 1))
 	label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
-	label.add_theme_constant_override("shadow_offset_x", 1)
-	label.add_theme_constant_override("shadow_offset_y", 1)
+	label.add_theme_constant_override("shadow_offset_x", _scaled_int(1))
+	label.add_theme_constant_override("shadow_offset_y", _scaled_int(1))
 	return label
 
 
 func _map_bounds() -> Rect2:
 	var viewport_size := get_viewport_rect().size
-	var left := 360.0
-	var right = max(left + 420.0, viewport_size.x - 350.0)
-	var top := 84.0
-	var bottom = max(top + 270.0, viewport_size.y - 270.0)
+	var left := _scaled(385)
+	var right = max(left + _scaled(420), viewport_size.x - _scaled(385))
+	var top := _scaled(92)
+	var bottom = max(top + _scaled(270), viewport_size.y - _top_layer_reserved_bottom() - _scaled(8))
 	return Rect2(left, top, right - left, bottom - top)
 
 
@@ -623,8 +863,8 @@ func _map_position_for_location(location_id: String, bounds: Rect2) -> Vector2:
 
 func _cluster_offset(index: int) -> Vector2:
 	if index < MAP_CLUSTER_OFFSETS.size():
-		return MAP_CLUSTER_OFFSETS[index]
-	return Vector2((index % 4 - 1.5) * 58.0, 118.0 + int(index / 4) * 44.0)
+		return MAP_CLUSTER_OFFSETS[index] * ui_scale
+	return Vector2((index % 4 - 1.5) * _scaled(58), _scaled(118) + int(index / 4) * _scaled(44))
 
 
 func _render_locations() -> void:
@@ -638,6 +878,7 @@ func _render_locations() -> void:
 		button.text = "%s%s\n%s" % [location_name, current_marker, location_id]
 		button.disabled = not has_visual or location_id == selected_location_id
 		button.tooltip_text = ("移动到 %s" % location_name) if has_visual else "首版暂未接入该地点背景"
+		_style_button(button)
 		button.pressed.connect(_on_location_pressed.bind(location_id))
 		location_list.add_child(button)
 
@@ -656,6 +897,7 @@ func _render_npcs() -> void:
 			npc.get("job", "居民"),
 			_get_location_name(str(npc.get("locationId", "unknown")))
 		]
+		_style_button(button)
 		button.pressed.connect(_on_npc_pressed.bind(npc_id))
 		npc_list.add_child(button)
 
@@ -666,6 +908,7 @@ func _render_events() -> void:
 	if active_events.is_empty():
 		var empty_item := Label.new()
 		empty_item.text = "当前无进行中事件"
+		_style_body_label(empty_item)
 		event_list.add_child(empty_item)
 	else:
 		for event_data in active_events:
@@ -674,28 +917,31 @@ func _render_events() -> void:
 			var event_title := str(event_data.get("title", event_id))
 			var event_status := str(event_data.get("status", "unknown"))
 			var event_box := VBoxContainer.new()
-			event_box.add_theme_constant_override("separation", 4)
+			event_box.add_theme_constant_override("separation", _scaled_int(5))
 			event_list.add_child(event_box)
 
 			var header := Label.new()
 			header.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			header.text = "%s（%s）" % [event_title, event_status]
+			_style_section_label(header, 16)
 			event_box.add_child(header)
 
 			var summary := Label.new()
 			summary.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			summary.text = str(event_data.get("summary", ""))
+			_style_body_label(summary, 14)
 			event_box.add_child(summary)
 
 			var inspect_button := Button.new()
 			inspect_button.text = "查看事件"
 			inspect_button.disabled = event_id.is_empty()
+			_style_button(inspect_button)
 			inspect_button.pressed.connect(_on_inspect_event_pressed.bind(event_id, event_location))
 			event_box.add_child(inspect_button)
 
 	var history_title := Label.new()
 	history_title.text = "最近事件日志"
-	history_title.add_theme_font_size_override("font_size", 16)
+	_style_section_label(history_title, 16)
 	event_list.add_child(history_title)
 
 	var history: Array = world_sync.get_recent_events().duplicate()
@@ -704,6 +950,7 @@ func _render_events() -> void:
 	if history.is_empty():
 		var history_empty := Label.new()
 		history_empty.text = "暂无日志"
+		_style_body_label(history_empty, 14)
 		event_list.add_child(history_empty)
 		return
 	for event in history:
@@ -711,6 +958,7 @@ func _render_events() -> void:
 		item.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		var payload: Dictionary = event.get("payload", {})
 		item.text = "%s\n%s" % [event.get("type", "event"), payload.get("summary", payload.get("message", payload.get("speech", "")))]
+		_style_body_label(item, 14)
 		event_list.add_child(item)
 
 
@@ -747,6 +995,7 @@ func _render_event_choice_buttons(choices: Array) -> void:
 	if selected_event_id.is_empty() or choices.is_empty():
 		var empty_hint := Label.new()
 		empty_hint.text = "当前事件没有可提交选项。"
+		_style_body_label(empty_hint, 14)
 		event_choice_list.add_child(empty_hint)
 		return
 	for choice_data in choices:
@@ -756,6 +1005,7 @@ func _render_event_choice_buttons(choices: Array) -> void:
 		var button := Button.new()
 		button.text = choice_label
 		button.disabled = choice_id.is_empty() or (not interaction.is_empty() and not _is_interaction_enabled(interaction))
+		_style_button(button)
 		button.pressed.connect(_on_attend_event_choice_pressed.bind(selected_event_id, selected_event_location_id, choice_id))
 		event_choice_list.add_child(button)
 
