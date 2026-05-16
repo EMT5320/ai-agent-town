@@ -55,7 +55,7 @@ scope: new-session entrypoint, boundaries, commands, and next steps
 - 已有按 NPC / feature 选择 profile 的配置路径：`config/models.example.json` 为提交模板，`config/models.json` 和 `config/models.local.json` 为本机忽略配置；当前本机 `model:check` 显示 `activeProvider=cloud`、6 个 profiles、`localConfigLoaded=False`。
 - Web 观察台已有 LLM 配置卡片，可查看 profile、路由、key 状态，支持热重载与一次对话 smoke。
 - Debug 记录已包含 `providerMode`、`profileName`、`apiKeyConfigured`、`messages`、`rawText`、`parsed`、`executed`、`usage`、`latency`、`fallbackReason`。
-- 前序验收已有一次 `CloudApiProvider` 真实 smoke 记录；本轮普通 `npm.cmd run check` 在当前沙箱触发 socket 权限 fallback，并通过 `[llm-smoke] fallback` 明示原因；提交态不包含密钥，fresh env 或无 key 沙箱会按规则跳过真实 LLM 调用。
+- 2026-05-16 已用当前本机 `config/models.json` 跑通真实 `CloudApiProvider` smoke：dialogue / event_reaction / night_reflection 均调用 `deepseek-v4-flash`，`fallbackReason=None`；提交态不包含密钥，fresh env 或无 key 沙箱会按规则跳过真实 LLM 调用。
 
 ### Godot 客户端
 
@@ -65,7 +65,8 @@ scope: new-session entrypoint, boundaries, commands, and next steps
 - 已支持地点按钮、背景切换、NPC 选择、VN 风格底部对话面板、聊天动作提交。
 - 已新增事件区：展示 `activeEvents`、调用 `inspect` 查看星灯祭事件、渲染 choices、调用 `attend_event` 并展示 NPC 台词、关系变化、记忆写入和夜间反思摘要。
 - 已接入地图角色层：玩家和 6 个首发 NPC 的 `map_idle` 小人、talk / gift / event 交互 marker、NPC 点击入口均已进入主场景。
-- 已新增本地地图移动与靠近反馈：方向键微移、点击地图设置落点、靠近 NPC / 事件后交互高亮；该坐标只用于客户端表现，不改变后端权威状态。
+- 已新增本地地图移动与靠近反馈：按住方向键可持续移动、点击地图设置落点、靠近 NPC / 事件后交互高亮；该坐标只用于客户端表现，不改变后端权威状态。
+- 角色小人的淡黄色矩形背景已移除，靠近反馈改用 sprite tint 与 marker 状态表达。
 - `npm.cmd run client:env` 和 `npm.cmd run client:run:check` 已通过；2026-05-16 主人已完成真实窗口人工验收，基本可用，未报告阻断问题。
 
 ### 资产与文档治理
@@ -121,8 +122,8 @@ git diff --check
 
 1. 固定离线基线：运行 `npm.cmd run context:check`、`npm.cmd run check`、`npm.cmd run smoke`、`npm.cmd run asset:check`、`npm.cmd run client:env`、`npm.cmd run client:run:check`。
 2. 当前 checkpoint：真实 Godot 窗口已由主人验收，文档已把主要卡点切到玩法深度和内容驱动。
-3. Godot 玩法线：本地移动和靠近反馈已落地，下一步推进服务端锚点契约、行动反馈卡和日程可视化。
+3. Godot 玩法线：持续按键移动、点击落点和靠近反馈已落地，下一步人工复验手感，再推进服务端锚点契约、行动反馈卡和日程可视化。
 4. 内容线：`monologueSeeds` 已接入夜间反思/RAG，下一步可把 `gossipHooks` 接入谣言传播原型。
 5. 后端线：星灯祭画像证据与事件反应记忆模板已迁入 Skill，下一步继续迁移更多结算模板、asset hints 和复用测试。
-6. LLM / Debug 线：如切换模型、key 或 profile，重新跑真实 dialogue / event_reaction / night_reflection smoke，并记录延迟、fallback、成本估计。
+6. LLM / Debug 线：真实 smoke 已跑通；如切换模型、key 或 profile，再重新记录 dialogue / event_reaction / night_reflection 延迟、fallback 和成本估计。
 7. 资产线：优先完成 batch 1b 的 `happy` / `troubled` 表情差分、UI 组件和玩法反馈图标。
