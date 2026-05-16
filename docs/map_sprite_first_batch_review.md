@@ -1,6 +1,6 @@
-﻿# 第一批地图小人 64x64 / 32x32 对比检查
+# 第一批地图小人 64x64 / 32x32 对比检查
 
-日期：2026-05-16  
+日期：2026-05-16
 范围：仅 `player_farmer_map_idle`、`npc_mira_map_idle`、`npc_tomas_map_idle` 三张静态 `idle_front` 地图小人。
 
 ## 输出文件
