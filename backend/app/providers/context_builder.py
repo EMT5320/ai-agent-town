@@ -79,7 +79,11 @@ def build_player_dialogue_context(world: dict[str, Any], npc: dict[str, Any], pl
         "location": location,
         "relationshipWithPlayer": get_relation(world, "player", npc["id"]),
         "recentEvents": event_store.list()[-8:],
-        "expectedOutput": {"speech": "NPC 对玩家说的话", "memory_to_save": "NPC 应写入的一句话主观记忆"},
+        "expectedOutput": {
+            "speech": "NPC 对玩家说的话",
+            "memory_to_save": "NPC 应写入的一句话主观记忆",
+            "memory_evidence_used": "可选；如果引用了 memoryEvidence，请返回被引用的来源、文本摘要和标签",
+        },
     }
 
 
@@ -91,6 +95,7 @@ def build_player_dialogue_messages(context: dict[str, Any]) -> list[dict[str, st
         extra_rules=[
             "speech 需像 NPC 当下直接说的话，长度控制在 1-3 句。",
             "memory_to_save 需是 NPC 第一人称主观记忆，长度控制在 1 句。",
+            "如果使用了 memoryEvidence，请额外返回 memory_evidence_used，便于客户端展示 NPC 记忆影响。",
         ],
     )
     return [{"role": "system", "content": system_prompt}, {"role": "user", "content": json.dumps(context, ensure_ascii=False, indent=2)}]

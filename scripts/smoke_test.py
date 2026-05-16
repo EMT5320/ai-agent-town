@@ -272,6 +272,12 @@ if not follow_up["ok"]:
 follow_up_text = follow_up["result"]["dialogue"][0]["text"]
 if "记得" not in follow_up_text and "星灯祭" not in follow_up_text:
     raise RuntimeError("第二次对话应引用既有记忆或星灯祭上下文")
+if not follow_up["result"].get("memoryEvidenceUsed"):
+    raise RuntimeError("第二次对话结果应直出已使用的记忆证据，方便 Godot 展示 NPC 记忆影响")
+if follow_up["result"]["memoryEvidenceUsed"].get("source") not in {"rag_lite", "memory_summary"}:
+    raise RuntimeError("第二次对话结果应标明记忆证据来源")
+if not follow_up["result"].get("memoryEvidence", {}).get("ragHits"):
+    raise RuntimeError("第二次对话结果应直出 RAG-lite 候选命中")
 follow_up_debug = assert_feature_debug(follow_up["state"], "dialogue")
 if not follow_up_debug.get("memoryEvidenceUsed"):
     raise RuntimeError("第二次对话 Debug 应记录实际使用的记忆证据")

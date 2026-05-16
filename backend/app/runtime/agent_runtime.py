@@ -819,6 +819,8 @@ class AgentRuntime:
         parsed = parse_provider_output(provider_result)
         speech = str(parsed.get("speech") or provider_result.get("rawText") or f"{target['name']}向你点点头。")
         memory_text = str(parsed.get("memory_to_save") or f"我和新来的农场主聊了 {topic}。")
+        memory_evidence = context["memoryEvidence"]
+        memory_evidence_used = parsed.get("memory_evidence_used")
 
         remember(target, memory_text, tick=self.world["clock"]["tick"], importance=0.68, tags=["player_talk", topic])
         memory_payload = {"agentId": target["id"], "agentName": target["name"], "text": memory_text, "tags": ["player_talk", topic]}
@@ -842,8 +844,8 @@ class AgentRuntime:
                 "memoryWrites": [memory_payload],
                 "relationshipDeltas": [relationship_payload],
                 "playerProfile": self._player_profile_payload(),
-                "memoryEvidence": context["memoryEvidence"],
-                "memoryEvidenceUsed": parsed.get("memory_evidence_used"),
+                "memoryEvidence": memory_evidence,
+                "memoryEvidenceUsed": memory_evidence_used,
             },
         )
         target.setdefault("decisionHistory", []).append(debug)
@@ -857,6 +859,8 @@ class AgentRuntime:
             "relationshipDeltas": [relationship_payload],
             "memoryWrites": [profile_payload, memory_payload],
             "playerProfile": self._player_profile_payload(),
+            "memoryEvidence": memory_evidence,
+            "memoryEvidenceUsed": memory_evidence_used,
             "eventIds": event_ids,
         }
 
