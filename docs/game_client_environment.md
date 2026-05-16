@@ -1,3 +1,12 @@
+---
+status: active
+owner_lane: godot-client
+last_verified: 2026-05-16
+startup_load: on-demand
+source_of_truth: true
+scope: Godot client setup, launch commands, and environment checks
+---
+
 # 游戏客户端开发环境入门
 
 > 本文面向第一次接触 Godot / 游戏客户端开发的本机环境。当前项目使用 Godot 标准版 + GDScript，不使用 C# / Mono 版。

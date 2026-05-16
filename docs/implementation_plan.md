@@ -1,3 +1,12 @@
+---
+status: snapshot
+owner_lane: planning
+last_verified: 2026-05-15
+startup_load: on-demand
+source_of_truth: false
+scope: initial vertical-slice implementation plan and historical phase plan
+---
+
 # 初版实施计划
 
 本计划面向 `Agent Valley` 第一版可玩垂直切片。目标是在当前仓库原地演进，用 Godot 承担玩家体验，用 Python Agent Server 承担世界状态、LLM NPC、记忆、事件和 Debug 数据。

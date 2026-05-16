@@ -1,3 +1,12 @@
+---
+status: active
+owner_lane: llm-debug
+last_verified: 2026-05-16
+startup_load: on-demand
+source_of_truth: true
+scope: model profile templates, local overrides, and configuration checks
+---
+
 # 模型 Profile 配置与 LLM 验证说明
 
 本文记录当前 LLM 接入验证的 profile 约定，覆盖玩家对话、事件反应和夜间反思三条路径。
@@ -131,9 +140,18 @@ npm.cmd run smoke
 有真实 key 时：
 
 1. 设置环境变量、`config/models.local.json` 或本机 gitignored 的 `config/models.json`。
-2. 运行 `npm.cmd run smoke`，脚本会强制 `provider_mode="cloud"` 依次触发 `dialogue`、`event_reaction` 和 `night_reflection`。
-3. 观察 `[llm-smoke]` 摘要：只展示 profile、model、tokens、latency、cost、fallbackReason、rawTextLength 和 messageCount。
-4. 启动服务并打开 Web 观察台。
-5. 在 **LLM 配置** 卡片点“重载配置”，确认 `localConfigLoaded` 和 `apiKeyConfigured`。
-6. 点“对话 Smoke”或执行一次事件结算，记录 debug 中的 `providerMode`、`profileName`、`apiKeyConfigured`、`usage`、`latency` 与 `fallbackReason`。
-7. 输出证据时只展示 `apiKeyConfigured: true`，不展示真实 key。
+2. 运行 `npm.cmd run smoke`，脚本会尝试用 `provider_mode="cloud"` 触发 `dialogue`、`event_reaction` 和 `night_reflection`。
+3. 普通 smoke 如果遇到网络、鉴权或供应商异常，会打印 `[llm-smoke] fallback` 并保留规则 fallback 结果，避免离线环境阻塞基础检查。
+4. 需要强制真实云端 smoke 成功时，使用：
+
+   ```powershell
+   $env:AGENT_TOWN_REQUIRE_REAL_LLM_SMOKE = "1"
+   npm.cmd run smoke
+   Remove-Item Env:\AGENT_TOWN_REQUIRE_REAL_LLM_SMOKE
+   ```
+
+5. 观察 `[llm-smoke]` 摘要：只展示 profile、model、tokens、latency、cost、fallbackReason、rawTextLength 和 messageCount。
+6. 启动服务并打开 Web 观察台。
+7. 在 **LLM 配置** 卡片点“重载配置”，确认 `localConfigLoaded` 和 `apiKeyConfigured`。
+8. 点“对话 Smoke”或执行一次事件结算，记录 debug 中的 `providerMode`、`profileName`、`apiKeyConfigured`、`usage`、`latency` 与 `fallbackReason`。
+9. 输出证据时只展示 `apiKeyConfigured: true`，不展示真实 key。

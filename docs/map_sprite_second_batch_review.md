@@ -1,3 +1,12 @@
+---
+status: snapshot
+owner_lane: asset-pipeline
+last_verified: 2026-05-16
+startup_load: on-demand
+source_of_truth: false
+scope: second map-sprite review snapshot and promotion notes
+---
+
 # 地图小人闭环重画最终检查
 
 日期：2026-05-16

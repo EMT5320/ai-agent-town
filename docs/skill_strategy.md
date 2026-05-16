@@ -1,3 +1,12 @@
+---
+status: active
+owner_lane: context-governance
+last_verified: 2026-05-16
+startup_load: on-demand
+source_of_truth: false
+scope: project skill structure draft and future implementation notes
+---
+
 # Agent Valley 项目 Skill 策略草案
 
 > 更新时间：2026-05-15

@@ -1,3 +1,12 @@
+---
+status: snapshot
+owner_lane: asset-pipeline
+last_verified: 2026-05-16
+startup_load: on-demand
+source_of_truth: false
+scope: first map-sprite review snapshot
+---
+
 # 第一批地图小人 64x64 / 32x32 对比检查
 
 日期：2026-05-16

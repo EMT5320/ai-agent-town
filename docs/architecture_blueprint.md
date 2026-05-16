@@ -1,3 +1,12 @@
+---
+status: active
+owner_lane: architecture
+last_verified: 2026-05-16
+startup_load: on-demand
+source_of_truth: true
+scope: system architecture, module boundaries, and client-server data flow
+---
+
 # 架构蓝图
 
 ## 总体结构

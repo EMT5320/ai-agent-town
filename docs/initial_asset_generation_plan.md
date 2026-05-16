@@ -1,3 +1,12 @@
+---
+status: snapshot
+owner_lane: asset-pipeline
+last_verified: 2026-05-15
+startup_load: on-demand
+source_of_truth: false
+scope: initial asset generation batches and historical asset sequencing
+---
+
 # 初版游戏资产生成执行计划
 
 > 状态更新时间：2026-05-15

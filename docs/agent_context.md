@@ -1,3 +1,12 @@
+---
+status: active
+owner_lane: context-governance
+last_verified: 2026-05-16
+startup_load: first-read
+source_of_truth: true
+scope: new-session entrypoint, boundaries, commands, and next steps
+---
+
 # Agent Valley 新对话入口
 
 > 更新时间：2026-05-16
@@ -41,10 +50,10 @@
 ### LLM / Debug
 
 - 已有 `RuleBasedProvider` 和 OpenAI-compatible `CloudApiProvider`。
-- 已有按 NPC / feature 选择 profile 的配置路径：`config/models.example.json` 为提交模板，`config/models.json` 和 `config/models.local.json` 为本机忽略配置。
+- 已有按 NPC / feature 选择 profile 的配置路径：`config/models.example.json` 为提交模板，`config/models.json` 和 `config/models.local.json` 为本机忽略配置；当前本机 `model:check` 显示 `activeProvider=cloud`、6 个 profiles、`localConfigLoaded=False`。
 - Web 观察台已有 LLM 配置卡片，可查看 profile、路由、key 状态，支持热重载与一次对话 smoke。
 - Debug 记录已包含 `providerMode`、`profileName`、`apiKeyConfigured`、`messages`、`rawText`、`parsed`、`executed`、`usage`、`latency`、`fallbackReason`。
-- 当前本机未检测到 `config/models.local.json` 或 API key 时，真实 LLM smoke 会跳过。
+- 前序验收已有一次 `CloudApiProvider` 真实 smoke 记录；本轮普通 `npm.cmd run check` 在当前沙箱触发 socket 权限 fallback，并通过 `[llm-smoke] fallback` 明示原因；提交态不包含密钥，fresh env 或无 key 沙箱会按规则跳过真实 LLM 调用。
 
 ### Godot 客户端
 
@@ -57,11 +66,11 @@
 
 ### 资产与文档治理
 
-- `assets/manifests/asset_manifest.json` 当前登记 21 条已筛选资产。
-- 已同步到 Godot 的资产包括 3 张地点背景、星灯祭事件 CG、玩家 + 6 个首发 NPC 的 `neutral` 立绘。
+- `assets/manifests/asset_manifest.json` 当前登记 31 条资产：21 条 `source_selected`、3 条 `style_anchor_candidate`、7 条 `pending_review`。
+- 已同步到 Godot 的资产包括 3 张地点背景、星灯祭事件 CG、玩家 + 6 个首发 NPC 的 `neutral` 立绘、7 张地图小人和 3 张交互标记。
 - `AssetRegistry` 已支持 `happy` / `troubled` 表情键兜底，缺图时回退 `neutral`。
-- 资产线本轮没有新增 `happy` / `troubled`、地图小人、道具图标或 UI 组件 manifest 条目。
-- `docs/agent_context.md`、`docs/goal_board.md`、`docs/current_status.md`、`docs/open_questions.md` 是当前治理入口。
+- 表情差分、道具图标和拆分 UI 组件尚未进入 manifest 或 Godot registry。
+- `AGENTS.md`、`CLAUDE.md`、`docs/README.md`、`docs/agent_context.md`、`docs/goal_board.md`、`docs/current_status.md`、`docs/open_questions.md` 是当前治理入口。
 
 ## 4. 当前边界
 
@@ -69,12 +78,14 @@
 - LLM 只生成文本、结构化建议或工具意图；世界状态变更必须经过 Runtime 规则和校验。
 - 密钥只放 `config/models.local.json` 或环境变量，不写入仓库。
 - 资产入库必须登记来源、提示词引用、用途、状态、授权备注和 Godot 引用。
-- 未真实验证的云端 LLM、真实窗口体验、地图小人和表情差分只能记录为待验证项。
+- 未在当前轮次复验的云端 LLM、真实窗口体验、地图小人和表情差分只能记录为待验证项。
 - `frontend/` 继续作为迁移期 Debug 观察台；正式 Web Debug 后续再收敛到 `web-admin/`。
 
 ## 5. 常用命令
 
 ```powershell
+npm.cmd run context:check
+npm.cmd run context:brief
 npm.cmd run check
 npm.cmd run content:check
 npm.cmd run smoke
@@ -92,9 +103,11 @@ git diff --check
 
 说明：
 
+- `npm.cmd run context:check` 校验 `AGENTS.md` / `CLAUDE.md`、核心文档元信息、任务线路由路径和明显状态冲突。
+- `npm.cmd run context:brief` 生成下一轮新对话 brief。
 - `npm.cmd run check` 覆盖 Python 编译、前端 JS、后端 smoke、资产 manifest、Godot 项目结构。
 - `npm.cmd run content:check` 校验 6 份 NPC 深度卡、关系阶段、送礼反应、独白种子和资产引用。
-- `npm.cmd run smoke` 重点验证后端 Runtime、Director v0、Event Skill、Debug 字段和 LLM smoke 跳过/执行状态。
+- `npm.cmd run smoke` 重点验证后端 Runtime、Director v0、Event Skill、Debug 字段和 LLM smoke 跳过/执行/fallback 状态；强制真实云端通过时设置 `AGENT_TOWN_REQUIRE_REAL_LLM_SMOKE=1`。
 - `npm.cmd run asset:check` 校验资产路径、prompt 引用、PNG 尺寸和 Godot 引用。
 - `npm.cmd run client:env` 会用 Godot headless 打开项目，能捕获一部分脚本加载问题。
 - `npm.cmd run client:run:check` 只检查 Godot 运行入口，不打开真实游戏窗口。
@@ -102,10 +115,10 @@ git diff --check
 
 ## 6. 下一轮最短开发入口
 
-1. 固定离线基线：运行 `npm.cmd run check`、`npm.cmd run smoke`、`npm.cmd run asset:check`、`npm.cmd run client:env`、`npm.cmd run client:run:check`。
+1. 固定离线基线：运行 `npm.cmd run context:check`、`npm.cmd run check`、`npm.cmd run smoke`、`npm.cmd run asset:check`、`npm.cmd run client:env`、`npm.cmd run client:run:check`。
 2. 人工验收 Godot：用 `npm.cmd run start` + `npm.cmd run client:run` 确认地点切换、NPC 选择、talk、事件查看、choices、事件结算展示。
 3. Godot 线：根据人工验收结果修体验问题，再推进基础地图节点、角色站位、交互区域。
 4. 内容线：NPC 深度卡首批已入库，下一步可把 `monologueSeeds` 接入夜间反思/RAG，或把 `gossipHooks` 接入谣言传播原型。
 5. 后端线：把星灯祭事件的结算表、记忆模板和对话 fallback 继续收进 Event Skill 数据层，减少 Runtime 硬编码。
-6. LLM 线：配置本地 `models.local.json` 或 `DEEPSEEK_API_KEY` 后跑 1 次真实 dialogue / event_reaction / night_reflection smoke，并记录延迟、fallback、成本估计。
+6. LLM 线：如切换模型、key 或 profile，重新跑 1 次真实 dialogue / event_reaction / night_reflection smoke，并记录延迟、fallback、成本估计。
 7. 资产线：优先完成 batch 1b 的 `happy` / `troubled` 表情差分，再做地图小人和 UI 组件。

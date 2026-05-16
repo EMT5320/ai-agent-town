@@ -1,3 +1,12 @@
+---
+status: active
+owner_lane: asset-pipeline
+last_verified: 2026-05-16
+startup_load: on-demand
+source_of_truth: true
+scope: art style, asset generation order, acceptance rules, and visual consistency
+---
+
 ﻿# 美术风格与资产生成指南：二次元轻幻想轻异世界田园风
 
 > 本文用于指导 `Agent Valley` 首版视觉资产生成、筛选、命名、导入和后续扩展。后续调用生图能力前，优先参考本文，再结合 `vertical_slice_spec.md` 的资产清单执行。可直接复制的首版提示词见 [`asset_generation_prompts.md`](./asset_generation_prompts.md)；地图小人的细粒度返工规范见 [`map_sprite_style_guide.md`](./map_sprite_style_guide.md)。

@@ -1,18 +1,20 @@
-﻿# AI Agent 小镇实验室
+# AI Agent 小镇实验室
 
 > 用游戏小镇作为可视化沙盒，观察多个 AI Agent 的决策、协作、冲突、记忆和工具调用过程。
+
+> Agent 助手启动入口请先读 [`AGENTS.md`](AGENTS.md) 与 [`docs/agent_context.md`](docs/agent_context.md)。本文件保留项目演进背景和早期观察台口径，当前事实以 [`docs/current_status.md`](docs/current_status.md) 为准。
 
 ## 2026-05-14 方向更新：Agent Valley
 
 项目当前已从“多 Agent 观察台”升级为 `Agent Valley`：一个由 LLM NPC 驱动的生活模拟 RPG 垂直切片。
 
-最新推进口径以 [`docs/project_vision.md`](docs/project_vision.md)、[`docs/implementation_plan.md`](docs/implementation_plan.md) 和 [`docs/open_questions.md`](docs/open_questions.md) 为准：
+最新推进口径以 [`docs/agent_context.md`](docs/agent_context.md)、[`docs/current_status.md`](docs/current_status.md)、[`docs/goal_board.md`](docs/goal_board.md)、[`docs/project_vision.md`](docs/project_vision.md) 和 [`docs/open_questions.md`](docs/open_questions.md) 为准：
 
 - 主游戏客户端确定使用 Godot。
 - 首版聚焦 6 个 NPC、3 个地点、1 个完整游戏日和 1 个小镇事件。
 - 玩家身份是新搬来的农场主，Debug / 研究控制台保留研究院视角。
 - 首版直接接入 LLM 测试，DeepSeek V4 Flash 作为低成本优先模型，规则 Provider 作为 fallback。
-- 视觉风格采用温暖绘本风，像素风暂作地图小人占位或后续专项方向。
+- 视觉风格采用二次元轻幻想轻异世界田园风，像素风暂作地图小人占位或后续专项方向。
 - 当前项目与论文无关，运行数据主要服务于调试、回放和作品集讲解。
 
 ## 早期项目定位（观察台阶段）

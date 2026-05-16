@@ -1,3 +1,12 @@
+---
+status: active
+owner_lane: vision
+last_verified: 2026-05-16
+startup_load: on-demand
+source_of_truth: true
+scope: long-term product vision, boundaries, and success criteria
+---
+
 # 项目整体愿景：Agent Valley
 
 > 本文是项目后续推进的核心依据。后续设计、实现、取舍和阶段验收都优先对齐这里定义的方向。

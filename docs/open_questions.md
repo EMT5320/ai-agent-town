@@ -1,3 +1,12 @@
+---
+status: active
+owner_lane: decisions
+last_verified: 2026-05-16
+startup_load: on-demand
+source_of_truth: true
+scope: confirmed decisions, unresolved questions, and validation points
+---
+
 # 决策记录与剩余问题
 
 本文记录主人已经拍板的边界，以及后续仍需要在实现中验证的问题。当前信息已经足够启动初版垂直切片。
@@ -87,10 +96,11 @@
 
 ### LLM 接入验证
 
-- DeepSeek V4 Flash 的 OpenAI-compatible 调用参数、模型名和上下文长度需要以真实配置为准。
+- DeepSeek V4 Flash 的 OpenAI-compatible 调用参数、模型名和上下文长度以当前本机 profile 和真实 smoke 记录为准。
 - 首版 Prompt 是否能稳定输出可解析行动。
 - 对话质量、延迟和成本是否适合现场演示。
 - 失败时是否能自动 fallback 到规则或缓存回复。
+- 前序已有一次真实 smoke 记录；切换模型、key、profile 或 Prompt 后需要刷新延迟、成本、失败率和 fallback 证据。
 
 ### Director / Agent 系统验证
 
@@ -150,7 +160,7 @@
 - Godot 事件 UI 如何展示 `inspect`、`attend_event`、事件选择结果和关系/记忆变化。
 - 星灯祭 Event Skill 的选项、后果、记忆模板、fallback 台词和 asset hints 是否能继续从 Runtime 硬编码迁入数据层。
 - 单个 Event Skill 的结构是否足以复用到后续节日、委托、危机和恋爱铺垫事件。
-- 配置真实 API key 后，dialogue、event_reaction、night_reflection 三条 LLM profile 的延迟、成本、失败率和 fallback 表现。
+- 切换模型、key、profile 或 Prompt 后，dialogue、event_reaction、night_reflection 三条 LLM profile 的延迟、成本、失败率和 fallback 表现。
 - 表情差分、地图小人、UI 组件入库后，角色一致性和 Godot registry 维护方式是否稳定。
 
 ## 2026-05-16 Godot 事件 UI 后仍需实现中验证

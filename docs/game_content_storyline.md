@@ -1,3 +1,12 @@
+---
+status: active
+owner_lane: content-codex
+last_verified: 2026-05-16
+startup_load: on-demand
+source_of_truth: true
+scope: storyline, first-day content, NPC roles, and narrative system plan
+---
+
 # 游戏内容剧本线工作台
 
 > 更新时间：2026-05-16  

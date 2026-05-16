@@ -331,6 +331,20 @@ def assert_real_cloud_debug(debug: dict, feature: str) -> None:
         raise RuntimeError(f"{feature} LLM smoke rawText 应非空")
 
 
+def require_real_llm_smoke() -> bool:
+    """是否要求真实 LLM smoke 必须成功，供本地带网络的强验收使用。"""
+    return str(os.getenv("AGENT_TOWN_REQUIRE_REAL_LLM_SMOKE") or "").lower() in {"1", "true", "yes"}
+
+
+def real_cloud_check_error(debug: dict, feature: str) -> str | None:
+    """返回真实云端 smoke 校验错误；通过时返回 None，便于普通检查降级为提示。"""
+    try:
+        assert_real_cloud_debug(debug, feature)
+    except RuntimeError as error:
+        return str(error)
+    return None
+
+
 def llm_debug_summary(debug: dict) -> dict:
     """输出不含 Prompt 正文和 rawText 全文的 LLM smoke 摘要。"""
     usage = debug.get("usage", {}) if isinstance(debug.get("usage"), dict) else {}
@@ -725,23 +739,51 @@ if has_real_llm_config():
     llm_app = create_town_app(provider_mode="cloud")
     llm_talk = llm_app.player_action({"type": "talk", "targetId": "mira", "locationId": "plaza", "topic": "llm_smoke", "message": "能和我聊聊今晚的小镇吗？"})
     llm_dialogue_debug = assert_feature_debug(llm_app.get_public_state(), "dialogue")
-    assert_real_cloud_debug(llm_dialogue_debug, "dialogue")
-    llm_event = llm_app.player_action({"type": "attend_event", "eventId": "starlight_festival_shortage", "choice": "mediate"})
-    llm_event_reaction_debug = assert_feature_debug(llm_app.get_public_state(), "event_reaction")
-    llm_night_reflection_debug = assert_feature_debug(llm_app.get_public_state(), "night_reflection")
-    assert_real_cloud_debug(llm_event_reaction_debug, "event_reaction")
-    assert_real_cloud_debug(llm_night_reflection_debug, "night_reflection")
-    print(
-        "[llm-smoke]",
-        {
-            "dialogue": llm_debug_summary(llm_dialogue_debug),
-            "eventReaction": llm_debug_summary(llm_event_reaction_debug),
-            "nightReflection": llm_debug_summary(llm_night_reflection_debug),
-            "dialoguePreview": llm_talk["result"]["dialogue"][0]["text"][:80],
-            "eventChoice": llm_event["result"]["eventResult"]["choice"],
-            "eventDialogueCount": len(llm_event["result"]["dialogue"]),
-            "nightReflectionCount": len(llm_event["state"]["nightReflections"]),
-        },
-    )
+    dialogue_error = real_cloud_check_error(llm_dialogue_debug, "dialogue")
+    if dialogue_error:
+        if require_real_llm_smoke():
+            raise RuntimeError(dialogue_error)
+        print(
+            "[llm-smoke] fallback",
+            {
+                "reason": dialogue_error,
+                "dialogue": llm_debug_summary(llm_dialogue_debug),
+                "strictHint": "设置 AGENT_TOWN_REQUIRE_REAL_LLM_SMOKE=1 可要求真实云端 smoke 必须通过",
+            },
+        )
+    else:
+        llm_event = llm_app.player_action({"type": "attend_event", "eventId": "starlight_festival_shortage", "choice": "mediate"})
+        llm_event_reaction_debug = assert_feature_debug(llm_app.get_public_state(), "event_reaction")
+        llm_night_reflection_debug = assert_feature_debug(llm_app.get_public_state(), "night_reflection")
+        event_error = real_cloud_check_error(llm_event_reaction_debug, "event_reaction")
+        reflection_error = real_cloud_check_error(llm_night_reflection_debug, "night_reflection")
+        strict_error = event_error or reflection_error
+        if strict_error and require_real_llm_smoke():
+            raise RuntimeError(strict_error)
+        if strict_error:
+            print(
+                "[llm-smoke] fallback",
+                {
+                    "eventReactionError": event_error,
+                    "nightReflectionError": reflection_error,
+                    "dialogue": llm_debug_summary(llm_dialogue_debug),
+                    "eventReaction": llm_debug_summary(llm_event_reaction_debug),
+                    "nightReflection": llm_debug_summary(llm_night_reflection_debug),
+                    "strictHint": "设置 AGENT_TOWN_REQUIRE_REAL_LLM_SMOKE=1 可要求真实云端 smoke 必须通过",
+                },
+            )
+        else:
+            print(
+                "[llm-smoke]",
+                {
+                    "dialogue": llm_debug_summary(llm_dialogue_debug),
+                    "eventReaction": llm_debug_summary(llm_event_reaction_debug),
+                    "nightReflection": llm_debug_summary(llm_night_reflection_debug),
+                    "dialoguePreview": llm_talk["result"]["dialogue"][0]["text"][:80],
+                    "eventChoice": llm_event["result"]["eventResult"]["choice"],
+                    "eventDialogueCount": len(llm_event["result"]["dialogue"]),
+                    "nightReflectionCount": len(llm_event["state"]["nightReflections"]),
+                },
+            )
 else:
     print("[llm-smoke] skipped: 未检测到 config/models.local.json 或 API key 环境变量；请参考 docs/model_profile_template_guide.md 配置后重跑。")

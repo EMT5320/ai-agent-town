@@ -1,3 +1,12 @@
+---
+status: active
+owner_lane: content-codex
+last_verified: 2026-05-16
+startup_load: on-demand
+source_of_truth: true
+scope: NPC deep-card schema, writing rules, and validation contract
+---
+
 # NPC 深度卡数据契约
 
 > 起草时间：2026-05-16

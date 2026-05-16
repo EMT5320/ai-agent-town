@@ -1,3 +1,12 @@
+---
+status: active
+owner_lane: planning
+last_verified: 2026-05-16
+startup_load: after-agent-context
+source_of_truth: true
+scope: lane board, write boundaries, and handoff format
+---
+
 # Agent Valley 目标看板
 
 > 更新时间：2026-05-16
@@ -12,13 +21,14 @@
 
 ## 2. 本轮验收证据
 
-- `npm.cmd run check`：通过，包含 `[python-smoke] ok`、真实 `[llm-smoke]`、`[asset-manifest-check] ok`、`[npc-codex-check] ok (6 cards)`、`[godot-check] ok`；`llm-smoke` 调用 `CloudApiProvider`，三个 feature 均无 fallback。
+- `npm.cmd run check`：通过，包含 `[python-smoke] ok`、`[llm-smoke] fallback`、`[asset-manifest-check] ok`、`[npc-codex-check] ok (6 cards)`、`[godot-check] ok`；当前沙箱云端调用触发 socket 权限 fallback，普通检查不把 fallback 写成真实云端通过。
 - `npm.cmd run content:check`：通过，6 份 NPC 深度卡结构、关系阶段、unlock 引用与资产引用 warning 检查通过。
-- `llm-smoke` 实测概要：dialogue 2074 tokens / 5311ms / 0.00023069 USD；event_reaction 6530 tokens / 8507ms / 0.00086177 USD；night_reflection 15242 tokens / 12698ms / 0.00209229 USD。
+- 前序真实 `llm-smoke` 实测概要：dialogue 2074 tokens / 5311ms / 0.00023069 USD；event_reaction 6530 tokens / 8507ms / 0.00086177 USD；night_reflection 15242 tokens / 12698ms / 0.00209229 USD。
 - `npm.cmd run client:env`：通过，Godot 4.6.2 headless 项目打开检查通过。
 - `npm.cmd run client:run:check`：通过 DryRun，只验证运行入口和 Godot 参数。
 - `npm.cmd run asset:check`：通过。
-- `git diff --check`：通过；当前仅有 CRLF/LF 提示，不阻塞。
+- `npm.cmd run context:check`：通过，校验共享代理入口、核心文档元信息和任务线路由路径。
+- `git diff --check`：通过。
 - 白天后端 agent 线已合并到 `main`：`a61a16c merge: integrate day backend agent line`。
 - 白天美术资产线已合并到 `main`：`6e77406 merge: integrate day art asset line`。
 - Godot 新 sprite `.import` 元数据已提交：`1de91f6 chore: import Godot map sprite metadata`。
@@ -39,6 +49,7 @@
 - 7 张地图小人和 3 张交互标记已进入 manifest、资产目录和 Godot 资源镜像。
 - 首发 6 名 NPC 深度卡已入库：`kai`、`bram`、`mira`、`tomas`、`orren`、`lena`。
 - NPC 内容工作流已落地：`.windsurf/workflows/author-npc-deep-card.md`。
+- 多助手共享入口已落地：`AGENTS.md` 与导入它的 `CLAUDE.md`。
 
 ### 部分完成
 
@@ -46,12 +57,12 @@
 - Godot 事件交互已通过代码检查、headless 检查和 dry-run，真实窗口体验仍待主人手动验收。
 - Godot 地图层仍是背景 + 按钮层，地图小人资源已就绪，尚未升级为正式地图小人/节点交互。
 - Event Skill 仍只有星灯祭单技能，结算逻辑仍有 Runtime 硬编码。
-- LLM profile 可配置，Web 观察台已追加配置查看、热重载和对话 smoke 入口；真实云端 smoke 尚未执行。
+- LLM profile 可配置，Web 观察台已追加配置查看、热重载和对话 smoke 入口；前序已有一次真实云端 smoke 记录，切换模型、key 或 profile 后需要刷新。
 - 资产批次完成到首批背景、事件 CG、neutral 立绘、地图小人候选和交互标记；batch 1b 表情差分尚未入库。
 
 ### 阻塞项
 
-- 真实 LLM 验证需要本地 `config/models.local.json` 或环境变量 API key。
+- 刷新真实 LLM 验证需要本地 `config/models.local.json`、`config/models.json` 或环境变量 API key。
 - 真实 Godot 窗口体验需要人工运行 `npm.cmd run start` + `npm.cmd run client:run`。
 - 表情差分、UI 组件需要继续生成和人工筛选；地图小人需要 Godot 实机确认。
 
@@ -63,9 +74,9 @@
 | Content Codex / NPC 深度卡 | partial | 把 `monologueSeeds` 接入夜间反思/RAG，或把 `gossipHooks` 做成第一版谣言传播数据源；后续再启动 `/author-event-skill` | `backend/app/content/`、`scripts/check_npc_codex.py`、`backend/app/providers/context_builder.py`、必要 runtime glue、相关 docs | 不写固定剧情节点；不让内容卡直接改世界状态；不伪造资产 id | `npm.cmd run content:check`、`npm.cmd run smoke`、`npm.cmd run check` |
 | 后端 Director / Event Skill | partial | 将星灯祭结算表、记忆模板和 fallback 台词继续迁入 Event Skill 数据；补 Skill 复用测试 | `backend/app/director/`、`backend/app/skills/`、`backend/app/runtime/agent_runtime.py`、相关测试 | 不让 LLM 直接改世界状态；不破坏旧 `/api/state` 与 Debug 观察台 | `npm.cmd run smoke`、`npm.cmd run check` |
 | 资产管线 | partial | 等 Godot 实机确认地图小人后再晋级或修正；随后完成 batch 1b 表情差分与 UI 组件 | `assets/source/`、`assets/processed/`、`assets/manifests/`、`clients/godot/assets/` | 不覆盖原图；不提交来源不清的资产；不把未人工确认的小人标成 `source_selected` | `npm.cmd run asset:check`、`npm.cmd run check` |
-| LLM / Debug | partial | 配置本地 key 后执行真实 dialogue / event_reaction / night_reflection smoke；记录延迟、成本、fallback；必要时补 profile 文档 | `backend/app/providers/`、`backend/app/providers/context_builder.py`、Debug 记录结构、迁移期 `frontend/`、相关 docs | 不提交密钥；不隐藏 token、延迟、错误；不把跳过的 live smoke 写成通过 | `npm.cmd run model:check`、`npm.cmd run smoke`、真实 LLM 手动记录 |
+| LLM / Debug | partial | 切换模型、key 或 profile 后用 `AGENT_TOWN_REQUIRE_REAL_LLM_SMOKE=1` 刷新真实 dialogue / event_reaction / night_reflection smoke；记录延迟、成本、fallback；必要时补 profile 文档 | `backend/app/providers/`、`backend/app/providers/context_builder.py`、Debug 记录结构、迁移期 `frontend/`、相关 docs | 不提交密钥；不隐藏 token、延迟、错误；不把跳过或 fallback 的 live smoke 写成通过 | `npm.cmd run model:check`、`npm.cmd run smoke`、真实 LLM 手动记录 |
 | Web Debug Console | watch | 等事件 UI 和 Skill 链路更稳定后展示 Director 队列、Skill、fallback、成本 | 迁移期 `frontend/`，后续 `web-admin/` | 不阻塞 Godot 主体验；不泄漏玩家叙事视角 | `npm.cmd run check` |
-| 文档与治理 | done | 每轮结束只更新入口、状态、下一步和仍需验证问题 | `docs/agent_context.md`、`docs/goal_board.md`、`docs/current_status.md`、`docs/open_questions.md` | 不复制源设计长文；不把未验证能力写成完成 | `npm.cmd run check`、`git diff --check` |
+| 文档与治理 | done | 每轮结束只更新入口、状态、下一步和仍需验证问题 | `AGENTS.md`、`CLAUDE.md`、`docs/README.md`、`docs/agent_context.md`、`docs/goal_board.md`、`docs/current_status.md`、`docs/open_questions.md`、`scripts/build_agent_context.py` | 不复制源设计长文；不把未验证能力写成完成 | `npm.cmd run context:check`、`npm.cmd run check`、`git diff --check` |
 
 ## 5. 人工验收清单
 
@@ -111,7 +122,7 @@ npm.cmd run client:run
 1. 主人先做 Godot 真实窗口人工验收。
 2. Godot 客户端：先把地图小人放入基础地图节点并打通点击交互。
 3. Content Codex：优先选择 `monologueSeeds -> 夜间反思/RAG` 或 `gossipHooks -> 谣言传播` 的最小闭环。
-4. LLM / Debug：配置本地 key 后完成一次真实 smoke，并记录延迟、fallback 和输出质量。
+4. LLM / Debug：如切换模型、key 或 profile，刷新一次真实 smoke，并记录延迟、fallback 和输出质量。
 5. 资产：按 Godot 实机效果修正地图小人，再推进 batch 1b 表情差分。
 6. 后端：星灯祭 Skill 数据化第二步，减少 Runtime 硬编码。
 

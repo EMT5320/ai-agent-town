@@ -1,3 +1,12 @@
+---
+status: active
+owner_lane: backend-director
+last_verified: 2026-05-16
+startup_load: on-demand
+source_of_truth: true
+scope: multi-layer agent design, director system, event skills, memory, and model routing
+---
+
 # 多层 Agent 游戏系统设计
 
 > 状态更新时间：2026-05-15

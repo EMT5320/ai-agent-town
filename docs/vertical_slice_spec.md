@@ -1,3 +1,12 @@
+---
+status: active
+owner_lane: architecture
+last_verified: 2026-05-16
+startup_load: on-demand
+source_of_truth: true
+scope: first playable vertical slice, data contracts, and acceptance criteria
+---
+
 # 第一版可玩垂直切片规格
 
 > 本文定义 `Agent Valley` 第一版可玩切片的内容、数据契约和验收边界。该切片按正式游戏的第一章骨架推进，后续章节、系统和资产应能在同一结构上扩展。

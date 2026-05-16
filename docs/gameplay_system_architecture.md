@@ -1,3 +1,12 @@
+---
+status: active
+owner_lane: godot-client
+last_verified: 2026-05-16
+startup_load: on-demand
+source_of_truth: true
+scope: gameplay loop, map interactions, soft schedules, and Godot/backend boundaries
+---
+
 # 游戏本体架构定调：涌现式田园生活模拟
 
 > 状态更新时间：2026-05-16
