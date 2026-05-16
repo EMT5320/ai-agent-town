@@ -90,9 +90,9 @@ scope: confirmed decisions, unresolved questions, and validation points
 
 ### Godot Spike 验证
 
-- Godot 与 Python 后端 HTTP 通信是否稳定。
-- Windows 桌面 Demo 的本地启动步骤是否足够简单。
-- Godot 中地图、NPC、对话 UI 和后端状态同步的最小结构是否顺手。
+- 2026-05-16 主人已完成真实 Godot 窗口人工验收，基础通信、地点切换、NPC 选择、对话和事件展示基本可用。
+- 下一轮验证重点：可移动地图、靠近交互、行动反馈和日程可视化是否能把体验从静态展示推进到可玩的生活模拟。
+- Godot 与后端状态同步在新增坐标、交互半径、行动冷却和日程状态后是否仍顺手。
 
 ### LLM 接入验证
 
@@ -163,10 +163,11 @@ scope: confirmed decisions, unresolved questions, and validation points
 - 切换模型、key、profile 或 Prompt 后，dialogue、event_reaction、night_reflection 三条 LLM profile 的延迟、成本、失败率和 fallback 表现。
 - 表情差分、地图小人、UI 组件入库后，角色一致性和 Godot registry 维护方式是否稳定。
 
-## 2026-05-16 Godot 事件 UI 后仍需实现中验证
+## 2026-05-16 Godot 窗口验收后仍需实现中验证
 
-- Godot 真实窗口中，`activeEvents` 事件区、`inspect` 查看、choices 渲染和 `attend_event` 选择是否在视觉布局上足够清晰。
+- 主人已确认真实窗口基础体验基本可用；后续重点转向玩法深度、内容节奏和长期扩展性。
+- 当前 Godot 体验仍偏静态背景、小人展示和简单 UI 点击；需要验证可移动地图、靠近交互、行动反馈和日程可视化的最小结构。
 - VN 结果面板同时展示 NPC 台词、关系变化、即时记忆和夜间反思时，是否需要拆成分页、卡片或可滚动详情。
 - 星灯祭事件 CG 与角色立绘共用当前 `portrait_rect` 是否适合演示，后续是否需要独立 CG 层。
 - `happy` / `troubled` 表情差分补齐后，Godot 表情选择策略应由后端返回字段驱动，还是由客户端根据事件结果做轻量映射。
-- 地图层从按钮列表升级为角色节点和交互区域时，当前 `move` / `inspect` / `attend_event` API 是否需要补充坐标、交互半径或场景状态字段。
+- 地图层引入移动、靠近和交互区域时，当前 `move` / `inspect` / `attend_event` API 是否需要补充坐标、交互半径或场景状态字段。
