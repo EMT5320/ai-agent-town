@@ -67,6 +67,25 @@ _STARLIGHT_COMMON_REFLECTION_SEEDS = (
     ),
 )
 
+_STARLIGHT_COMMON_FALLBACK_DIALOGUE = (
+    EventDialogueFallback(
+        agent_id="mira",
+        speech_template="今晚账本上的数字终于没有继续失控。玩家选了“{choiceLabel}”，至少让大家能坐下来把话说完。",
+    ),
+    EventDialogueFallback(
+        agent_id="lena",
+        speech_template="冲突还没完全结束，但玩家用“{choiceLabel}”把最危险的情绪先降了下来。",
+    ),
+    EventDialogueFallback(
+        agent_id="orren",
+        speech_template="节日从来要靠人一起守住。玩家今晚的“{choiceLabel}”给了小镇一点信心。",
+    ),
+    EventDialogueFallback(
+        agent_id="tomas",
+        speech_template="我在旁边修灯架都看见了，玩家这次“{choiceLabel}”确实稳住了场面。",
+    ),
+)
+
 _STARLIGHT_SKILL_DEBUG_FIELDS = (
     EventSkillDebugField(field_id="skillId", label="事件 Skill", value_template="{skillId}"),
     EventSkillDebugField(field_id="eventId", label="事件 ID", value_template="{eventId}"),
@@ -212,6 +231,7 @@ STARLIGHT_FESTIVAL_SHORTAGE_SKILL = EventSkillSchema(
             tags=("choice", "donate", "mediate", "observe"),
         ),
     ),
+    fallback_dialogue_templates=_STARLIGHT_COMMON_FALLBACK_DIALOGUE,
     choice_outcomes=(
         EventChoiceOutcome(
             option_id="donate_crop",

@@ -130,5 +130,6 @@ class EventSkillSchema:
     participants: tuple[str, ...]
     player_options: tuple[EventPlayerOption, ...]
     asset_hints: tuple[EventAssetHint, ...]
+    fallback_dialogue_templates: tuple[EventDialogueFallback, ...] = ()
     choice_outcomes: tuple[EventChoiceOutcome, ...] = ()
     debug_fields: tuple[EventSkillDebugField, ...] = ()

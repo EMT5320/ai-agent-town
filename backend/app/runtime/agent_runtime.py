@@ -32,6 +32,7 @@ from app.runtime.action_executor import execute_action, maybe_population_event
 from app.runtime.action_parser import parse_provider_output
 from app.skills import (
     STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID,
+    EventChoiceOutcome,
     EventPlayerOption,
     EventSkillDebugField,
     EventSkillSchema,
@@ -1933,13 +1934,7 @@ class AgentRuntime:
             }
             for template in outcome_def.memory_templates
         ]
-        fallback_dialogue = [
-            {
-                "agentId": line.agent_id,
-                "speech": self._format_skill_text(line.speech_template, context),
-            }
-            for line in outcome_def.fallback_dialogue
-        ]
+        fallback_dialogue = self._skill_fallback_dialogue_payloads(skill, outcome_def, context)
         reflection_seeds = [
             {
                 "agentId": seed.agent_id,
@@ -1973,6 +1968,37 @@ class AgentRuntime:
                 extra_fields=outcome_def.debug_fields,
             ),
         }
+
+    def _skill_fallback_dialogue_payloads(
+        self,
+        skill: EventSkillSchema,
+        outcome_def: EventChoiceOutcome,
+        context: dict[str, Any],
+    ) -> list[dict[str, str]]:
+        """按 Skill 默认模板 + 选项模板生成离线事件反应台词。"""
+        template_map: dict[str, str] = {
+            line.agent_id: line.speech_template
+            for line in skill.fallback_dialogue_templates
+            if line.agent_id and line.speech_template
+        }
+        for line in outcome_def.fallback_dialogue:
+            if line.agent_id and line.speech_template:
+                template_map[line.agent_id] = line.speech_template
+
+        ordered_agent_ids: list[str] = [
+            agent_id for agent_id in skill.participants if agent_id != "player" and agent_id in template_map
+        ]
+        for agent_id in template_map:
+            if agent_id not in ordered_agent_ids:
+                ordered_agent_ids.append(agent_id)
+
+        return [
+            {
+                "agentId": agent_id,
+                "speech": self._format_skill_text(template_map[agent_id], context),
+            }
+            for agent_id in ordered_agent_ids
+        ]
 
     def _skill_choice_payloads(self, skill: EventSkillSchema) -> list[dict[str, Any]]:
         """把 Skill 选项转换为客户端 inspect 可直接展示的结构。"""

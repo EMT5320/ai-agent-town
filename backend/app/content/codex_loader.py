@@ -53,6 +53,7 @@ _MIN_SECRETS = 2
 _MIN_STAGES = 4
 _MAX_STAGES = 6
 _MIN_FALLBACK_PER_TIER = 2
+_VALID_GOSSIP_VISIBILITY = {"hidden", "town_known"}
 
 
 class CodexValidationError(ValueError):
@@ -229,11 +230,22 @@ def _build_gossip_hook(raw: Any, context: str) -> GossipHook:
     """构造单条谣言钩子。"""
     _require(isinstance(raw, dict), f"{context} 必须是对象")
     _ensure_keys(raw, ("id", "summary", "visibility"), context)
+    hook_id = str(raw["id"]).strip()
+    summary = str(raw["summary"]).strip()
+    visibility = str(raw["visibility"]).strip()
+    _require(hook_id != "", f"{context}.id 不能为空")
+    _require(summary != "", f"{context}.summary 不能为空")
+    _require(
+        visibility in _VALID_GOSSIP_VISIBILITY,
+        f"{context}.visibility 必须是 hidden 或 town_known，当前为 {visibility}",
+    )
+    spread_affinity = _as_str_tuple(raw.get("spreadAffinity", []), f"{context}.spreadAffinity")
+    _require(spread_affinity, f"{context}.spreadAffinity 至少 1 项")
     return GossipHook(
-        hook_id=str(raw["id"]),
-        summary=str(raw["summary"]),
-        visibility=str(raw["visibility"]),
-        spread_affinity=_as_str_tuple(raw.get("spreadAffinity", []), f"{context}.spreadAffinity"),
+        hook_id=hook_id,
+        summary=summary,
+        visibility=visibility,
+        spread_affinity=spread_affinity,
     )
 
 

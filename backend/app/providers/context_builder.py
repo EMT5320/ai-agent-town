@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 from app.memory.memory_store import memory_summary
@@ -15,6 +16,7 @@ _PHASE_TO_MONOLOGUE_TAGS: dict[str, tuple[str, ...]] = {
     "evening": ("evening",),
     "night": ("evening",),
 }
+_GOSSIP_VISIBILITY_SCORES: dict[str, int] = {"town_known": 3, "hidden": 1}
 
 
 def build_agent_context(world: dict[str, Any], agent: dict[str, Any], event_store: Any) -> dict[str, Any]:
@@ -94,6 +96,7 @@ def build_player_dialogue_context(world: dict[str, Any], npc: dict[str, Any], pl
         "clock": world["clock"],
         "location": location,
         "relationshipWithPlayer": get_relation(world, "player", npc["id"]),
+        "gossipEvidence": _select_gossip_evidence(world, npc, player_action),
         "recentEvents": event_store.list()[-8:],
         "expectedOutput": {
             "speech": "NPC 对玩家说的话",
@@ -115,6 +118,83 @@ def build_player_dialogue_messages(context: dict[str, Any]) -> list[dict[str, st
         ],
     )
     return [{"role": "system", "content": system_prompt}, {"role": "user", "content": json.dumps(context, ensure_ascii=False, indent=2)}]
+
+
+def _extract_gossip_keywords(topic: str, message: str) -> set[str]:
+    """从对话 topic / message 中提取轻量关键词，用于匹配 gossipHooks。"""
+    raw = f"{topic} {message}".lower()
+    parts = re.split(r"[^\w\u4e00-\u9fff]+", raw)
+    return {part for part in parts if len(part.strip()) >= 2}
+
+
+def _select_gossip_evidence(
+    world: dict[str, Any],
+    npc: dict[str, Any],
+    player_action: dict[str, Any],
+    *,
+    limit: int = 3,
+) -> dict[str, Any]:
+    """从 NPC 深度卡 gossipHooks 中挑选本轮对话可用的谣言证据。"""
+    deep_card = npc.get("deepCard") if isinstance(npc.get("deepCard"), dict) else {}
+    hooks = deep_card.get("gossipHooks") if isinstance(deep_card.get("gossipHooks"), list) else []
+    topic = str(player_action.get("topic") or "")
+    message = str(player_action.get("message") or "")
+    keywords = _extract_gossip_keywords(topic, message)
+    known_npcs = {
+        str(item)
+        for item in world.get("player", {}).get("knownNpcs", [])
+        if isinstance(item, str)
+    }
+    relation = get_relation(world, "player", str(npc.get("id") or ""))
+    trust = int(relation.get("trust", 0))
+
+    scored: list[tuple[int, dict[str, Any]]] = []
+    for hook in hooks:
+        if not isinstance(hook, dict):
+            continue
+        hook_id = str(hook.get("id") or "").strip()
+        summary = str(hook.get("summary") or "").strip()
+        visibility = str(hook.get("visibility") or "").strip()
+        spread_affinity = {
+            str(agent_id).strip()
+            for agent_id in hook.get("spreadAffinity", [])
+            if str(agent_id).strip()
+        }
+        if not hook_id or not summary:
+            continue
+
+        score = _GOSSIP_VISIBILITY_SCORES.get(visibility, 0)
+        matched_known_npcs = sorted(spread_affinity.intersection(known_npcs))
+        score += min(len(matched_known_npcs), 2)
+        if visibility == "hidden" and trust >= 55:
+            score += 1
+
+        haystack = f"{hook_id} {summary}".lower()
+        keyword_hits = sorted(keyword for keyword in keywords if keyword in haystack)
+        score += min(len(keyword_hits), 3)
+        scored.append(
+            (
+                score,
+                {
+                    "id": hook_id,
+                    "summary": summary,
+                    "visibility": visibility,
+                    "spreadAffinity": sorted(spread_affinity),
+                    "matchedKnownNpcs": matched_known_npcs,
+                    "keywordHits": keyword_hits,
+                    "score": score,
+                },
+            )
+        )
+
+    if not scored:
+        return {"query": " ".join(part for part in (topic, message) if part).strip(), "items": []}
+
+    scored.sort(key=lambda item: (item[0], item[1].get("id", "")), reverse=True)
+    picked = [item for score, item in scored if score > 0][:limit]
+    if not picked:
+        picked = [item for _, item in scored[:limit]]
+    return {"query": " ".join(part for part in (topic, message) if part).strip(), "items": picked}
 
 
 def build_event_reaction_context(

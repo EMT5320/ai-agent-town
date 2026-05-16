@@ -25,8 +25,6 @@ const MAP_EVENT_MARKER_SCALE := 0.68
 const PLAYER_LOCAL_MOVE_SPEED := 520.0
 const PLAYER_LOCAL_STOP_DISTANCE := 3.0
 const PLAYER_LOCAL_INTERACT_RADIUS := 124.0
-const PLAYER_LOCAL_ZONE_RADIUS_X := 156.0
-const PLAYER_LOCAL_ZONE_RADIUS_Y := 126.0
 const MAP_CLUSTER_OFFSETS := [
 	Vector2(-72, -8),
 	Vector2(0, -44),
@@ -65,9 +63,11 @@ var player_local_has_click_target := false
 var player_local_initialized := false
 var player_local_location_id := ""
 var map_hint_label: Label
+var player_target_marker: Label
 
 
 func _ready() -> void:
+	_ensure_local_input_actions()
 	ui_scale = _compute_ui_scale()
 	layout_viewport_size = get_viewport_rect().size
 	theme = _make_scaled_theme()
@@ -83,6 +83,29 @@ func _ready() -> void:
 	_show_selected_npc_hint()
 
 
+func _ensure_local_input_actions() -> void:
+	# 使用独立 WASD 动作，避免方向键焦点被按钮或列表控件抢走。
+	var bindings := {
+		"move_left": KEY_A,
+		"move_right": KEY_D,
+		"move_up": KEY_W,
+		"move_down": KEY_S,
+	}
+	for action_name in bindings:
+		if not InputMap.has_action(action_name):
+			InputMap.add_action(action_name)
+		var keycode: int = int(bindings[action_name])
+		var has_binding := false
+		for event in InputMap.action_get_events(action_name):
+			if event is InputEventKey and (event as InputEventKey).physical_keycode == keycode:
+				has_binding = true
+				break
+		if not has_binding:
+			var key_event := InputEventKey.new()
+			key_event.physical_keycode = keycode
+			InputMap.action_add_event(action_name, key_event)
+
+
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_RESIZED:
 		_refresh_scale_for_viewport()
@@ -93,12 +116,9 @@ func _process(delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	# 本地移动只影响客户端表现层，后端权威状态仍由 action/state 接口返回。
-	if event is InputEventMouseButton:
-		var mouse_event := event as InputEventMouseButton
-		if mouse_event.pressed and mouse_event.button_index == MOUSE_BUTTON_LEFT:
-			_set_local_player_target(mouse_event.position, true)
-		return
+	# 鼠标落点由地图角色层直接处理，避免被全屏背景或 UI 焦点链路吞掉。
+	# 这里暂时保留 Godot 输入回调入口，后续接入快捷键时继续集中管理。
+	pass
 
 
 func _refresh_scale_for_viewport() -> void:
@@ -158,8 +178,18 @@ func _build_map_character_layer() -> void:
 	map_character_layer = Control.new()
 	map_character_layer.name = "MapCharacterLayer"
 	map_character_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
-	map_character_layer.mouse_filter = Control.MOUSE_FILTER_PASS
+	map_character_layer.mouse_filter = Control.MOUSE_FILTER_STOP
+	map_character_layer.gui_input.connect(_on_map_character_layer_gui_input)
 	add_child(map_character_layer)
+
+
+func _on_map_character_layer_gui_input(event: InputEvent) -> void:
+	# 当前还没有正式 tile 地图，空白舞台点击先作为本地落点表现处理。
+	if event is InputEventMouseButton:
+		var mouse_event := event as InputEventMouseButton
+		if mouse_event.pressed and mouse_event.button_index == MOUSE_BUTTON_LEFT:
+			_set_local_player_target(mouse_event.position, true)
+			get_viewport().set_input_as_handled()
 
 
 func _build_top_layer() -> void:
@@ -529,10 +559,11 @@ func _set_local_player_target(world_point: Vector2, from_click: bool) -> void:
 	var bounds := _map_bounds()
 	if not bounds.has_point(world_point):
 		return
-	player_local_target = _clamp_point_to_location_zone(world_point, bounds)
+	player_local_target = _clamp_point_to_walk_area(world_point, bounds)
 	player_local_has_click_target = true
+	_update_player_target_marker()
 	if from_click:
-		_update_map_hint("已设置地图落点，靠近居民或事件后可触发交互")
+		_update_map_hint("已设置当前场景落点，可继续 WASD 移动或靠近交互")
 	_update_map_proximity_feedback()
 
 
@@ -541,15 +572,16 @@ func _tick_local_player_motion(delta: float) -> void:
 	if not player_local_initialized or map_character_layer == null:
 		return
 	var bounds := _map_bounds()
-	var input_axis := Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
+	var input_axis := Input.get_vector("move_left", "move_right", "move_up", "move_down")
 	var moved := false
 	if input_axis.length() > 0.0:
-		player_local_position = _clamp_point_to_location_zone(
+		player_local_position = _clamp_point_to_walk_area(
 			player_local_position + input_axis * _scaled(PLAYER_LOCAL_MOVE_SPEED) * delta,
 			bounds
 		)
 		player_local_target = player_local_position
 		player_local_has_click_target = false
+		_update_player_target_marker()
 		moved = true
 	var stop_distance := _scaled(PLAYER_LOCAL_STOP_DISTANCE)
 	if not moved and player_local_has_click_target and player_local_position.distance_to(player_local_target) > stop_distance:
@@ -558,8 +590,10 @@ func _tick_local_player_motion(delta: float) -> void:
 		moved = true
 	elif player_local_has_click_target:
 		player_local_has_click_target = false
+		_update_player_target_marker()
 	if moved:
 		_apply_local_player_visual()
+		_update_player_target_marker()
 	_update_map_proximity_feedback()
 
 
@@ -583,19 +617,14 @@ func _resolve_player_anchor(player_location: String, bounds: Rect2) -> Vector2:
 		player_local_target = location_anchor
 		player_local_has_click_target = false
 	else:
-		player_local_position = _clamp_point_to_location_zone(player_local_position, bounds)
-		player_local_target = _clamp_point_to_location_zone(player_local_target, bounds)
+		player_local_position = _clamp_point_to_walk_area(player_local_position, bounds)
+		player_local_target = _clamp_point_to_walk_area(player_local_target, bounds)
 	return player_local_position
 
 
-func _clamp_point_to_location_zone(point: Vector2, bounds: Rect2) -> Vector2:
-	var center := _map_position_for_location(selected_location_id, bounds)
-	var zone_half := _scaled_vector(Vector2(PLAYER_LOCAL_ZONE_RADIUS_X, PLAYER_LOCAL_ZONE_RADIUS_Y))
-	var zone_rect := Rect2(center - zone_half, zone_half * 2.0)
-	var clamped := Vector2(
-		clamp(point.x, zone_rect.position.x, zone_rect.end.x),
-		clamp(point.y, zone_rect.position.y, zone_rect.end.y)
-	)
+func _clamp_point_to_walk_area(point: Vector2, bounds: Rect2) -> Vector2:
+	# 当前没有正式 tile 地图，先把可移动区域定义为场景舞台主体，避开 UI 面板。
+	var clamped := point
 	var bounds_margin := _scaled(18)
 	clamped.x = clamp(clamped.x, bounds.position.x + bounds_margin, bounds.end.x - bounds_margin)
 	clamped.y = clamp(clamped.y, bounds.position.y + bounds_margin, bounds.end.y - bounds_margin)
@@ -815,6 +844,7 @@ func _render_map_characters() -> void:
 		return
 	_clear_control_children(map_character_layer)
 	map_hint_label = null
+	player_target_marker = null
 	var bounds := _map_bounds()
 	_ensure_map_hint_label(bounds)
 	_render_map_event_markers(bounds)
@@ -832,7 +862,11 @@ func _render_map_characters() -> void:
 		var npc_id := str(npc.get("id", ""))
 		if npc_id.is_empty() or not asset_registry.has_map_sprite(npc_id):
 			continue
-		_add_map_actor(npc_id, str(npc.get("name", npc_id)), str(npc.get("locationId", selected_location_id)), false, occupancy, bounds)
+		var npc_location := str(npc.get("locationId", selected_location_id))
+		if npc_location != selected_location_id:
+			continue
+		_add_map_actor(npc_id, str(npc.get("name", npc_id)), npc_location, false, occupancy, bounds)
+	_update_player_target_marker()
 	_update_map_proximity_feedback()
 
 
@@ -844,6 +878,8 @@ func _render_map_event_markers(bounds: Rect2) -> void:
 		if event_id.is_empty() or str(event_data.get("status", "available")) == "resolved":
 			continue
 		var event_location := str(event_data.get("locationId", selected_location_id))
+		if event_location != selected_location_id:
+			continue
 		var event_title := str(event_data.get("title", event_id))
 		var anchor := _map_position_for_location(event_location, bounds) + Vector2(0, -_scaled(118))
 		var event_marker_scale := MAP_EVENT_MARKER_SCALE * ui_scale
@@ -989,12 +1025,39 @@ func _ensure_map_hint_label(bounds: Rect2) -> void:
 	map_hint_label.position = Vector2(bounds.position.x + _scaled(8), bounds.position.y + _scaled(6))
 	if map_hint_label.get_parent() != map_character_layer:
 		map_character_layer.add_child(map_hint_label)
-	_update_map_hint("方向键微移或点击地图设置落点，靠近后交互会高亮")
+	_update_map_hint("WASD 连续移动；点击当前场景空地可设置落点")
 
 
 func _update_map_hint(text: String) -> void:
 	if map_hint_label != null:
 		map_hint_label.text = text
+
+
+func _update_player_target_marker() -> void:
+	if map_character_layer == null:
+		return
+	if not player_local_has_click_target:
+		if player_target_marker != null and is_instance_valid(player_target_marker):
+			player_target_marker.visible = false
+		return
+	if player_target_marker == null or not is_instance_valid(player_target_marker):
+		player_target_marker = Label.new()
+		player_target_marker.name = "PlayerMoveTarget"
+		player_target_marker.text = "◎"
+		player_target_marker.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		player_target_marker.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		player_target_marker.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		player_target_marker.size = _scaled_vector(Vector2(34, 34))
+		player_target_marker.add_theme_font_size_override("font_size", _font_size(22))
+		player_target_marker.add_theme_color_override("font_color", Color(0.92, 1.0, 1.0, 0.88))
+		player_target_marker.add_theme_color_override("font_shadow_color", Color(0.05, 0.18, 0.18, 0.95))
+		player_target_marker.add_theme_constant_override("shadow_offset_x", _scaled_int(1))
+		player_target_marker.add_theme_constant_override("shadow_offset_y", _scaled_int(1))
+	if player_target_marker.get_parent() != map_character_layer:
+		map_character_layer.add_child(player_target_marker)
+	player_target_marker.position = player_local_target - player_target_marker.size * 0.5
+	player_target_marker.visible = true
+	map_character_layer.move_child(player_target_marker, map_character_layer.get_child_count() - 1)
 
 
 func _update_map_proximity_feedback() -> void:
@@ -1055,7 +1118,7 @@ func _update_map_proximity_feedback() -> void:
 				var gift_enabled: bool = bool(actor.get_meta("giftEnabled", true))
 				gift_marker.disabled = not (is_near and gift_enabled)
 				gift_marker.modulate = Color(1.0, 1.0, 1.0, 1.0 if is_near and gift_enabled else 0.34)
-	var hint := "方向键微移或点击地图设置落点，靠近后交互会高亮"
+	var hint := "WASD 连续移动；点击当前场景空地可设置落点"
 	if not nearest_event_title.is_empty():
 		hint = "已靠近事件：%s，点击事件标记查看细节" % nearest_event_title
 	elif not nearest_npc_name.is_empty():

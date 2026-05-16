@@ -517,6 +517,10 @@ if starlight_event.get("skillId") != STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID:
     raise RuntimeError("游戏状态中的星灯祭事件应叠加 Event Skill 数据")
 if not all(choice.get("brief") and choice.get("consequences") for choice in starlight_event.get("choices", [])):
     raise RuntimeError("游戏状态中的事件选项应由 Skill 提供 brief 和 consequences")
+asset_hint_ids = {str(item.get("id")) for item in starlight_event.get("assetHints", []) if isinstance(item, dict)}
+for required_hint in ("starlight_shortage_scene", "starlight_shortage_ui_card", "starlight_shortage_choice_icons"):
+    if required_hint not in asset_hint_ids:
+        raise RuntimeError(f"游戏状态中的事件资源提示缺少 {required_hint}")
 interaction_types = {item.get("type") for item in game_state["availableInteractions"]}
 for required_interaction in ("move", "move_to_anchor", "farm_action", "end_phase", "talk", "give_gift", "inspect", "attend_event"):
     if required_interaction not in interaction_types:
@@ -617,6 +621,8 @@ dialogue_debug = assert_feature_debug(app.get_public_state(), "dialogue")
 dialogue_prompt = "\n".join(str(message.get("content", "")) for message in dialogue_debug["messages"])
 if "voiceStyle" not in dialogue_prompt or "speechQuirks" not in dialogue_prompt:
     raise RuntimeError("对话 Prompt 应包含 NPC 深度卡 voiceStyle 和 speechQuirks")
+if "gossipEvidence" not in dialogue_prompt:
+    raise RuntimeError("对话 Prompt 应包含 gossipEvidence，便于谣言传播原型提供上下文素材")
 if not talk["result"].get("playerProfile", {}).get("styleSummary"):
     raise RuntimeError("玩家对话后应更新 Player Profile")
 if not talk["result"].get("relationshipStage", {}).get("stage"):
@@ -644,6 +650,12 @@ if inspect["result"]["inspect"].get("skillId") != STARLIGHT_FESTIVAL_SHORTAGE_SK
     raise RuntimeError("事件查看结果应包含 Skill ID")
 if not inspect["result"]["inspect"].get("debugFields"):
     raise RuntimeError("事件查看结果应包含 Skill Debug 字段")
+inspect_asset_hints = inspect["result"]["inspect"].get("assetHints", [])
+if not inspect_asset_hints or not all(
+    isinstance(item, dict) and item.get("id") and item.get("type") and item.get("brief") and isinstance(item.get("tags"), list)
+    for item in inspect_asset_hints
+):
+    raise RuntimeError("事件查看结果应返回结构完整的 Skill assetHints")
 
 event_result = app.player_action({"type": "attend_event", "eventId": "starlight_festival_shortage", "choice": "donate_crop"})
 assert_player_action_contract(event_result, "attend_event")
@@ -692,6 +704,15 @@ if night_reflection_debug.get("provider") == "RuleNightReflectionProvider":
 event_reaction_memory = str(event_reaction_debug.get("parsed", {}).get("memory_to_save") or "")
 if event_reaction_debug.get("provider") == "RuleEventReactionProvider" and event_reaction_memory != event_result_debug_fields["fallbackMemory"]:
     raise RuntimeError("event_reaction fallback 记忆文案应来自 Event Skill 结算模板")
+if event_reaction_debug.get("provider") == "RuleEventReactionProvider":
+    fallback_dialogue_ids = {
+        str(item.get("agentId"))
+        for item in event_reaction_debug.get("parsed", {}).get("dialogue", [])
+        if isinstance(item, dict) and item.get("agentId")
+    }
+    for required_agent in ("mira", "lena", "orren", "tomas"):
+        if required_agent not in fallback_dialogue_ids:
+            raise RuntimeError(f"event_reaction fallback 台词应包含 Skill 模板角色：{required_agent}")
 
 follow_up = app.player_action({"type": "talk", "targetId": "kai", "locationId": "tavern", "topic": "starlight_follow_up", "message": "昨晚星灯祭之后，你怎么看我的选择？"})
 assert_player_action_contract(follow_up, "follow_up")

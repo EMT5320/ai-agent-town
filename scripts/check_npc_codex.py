@@ -83,6 +83,50 @@ def _check_monologue_seed_readiness(cards: dict) -> None:
             raise SystemExit(f"[npc-codex-check] {npc_id} monologueSeeds 需同时覆盖 high_mood 和 low_mood")
 
 
+def _check_gossip_hook_readiness(cards: dict) -> None:
+    """确保每位 NPC 的 gossipHooks 可作为首版谣言传播素材直接消费。"""
+    seed_ids = {agent["id"] for agent in AGENTS}
+    valid_visibility = {"hidden", "town_known"}
+    for npc_id, card in cards.items():
+        hooks = list(getattr(card, "gossip_hooks", ()))
+        if not hooks:
+            raise SystemExit(f"[npc-codex-check] {npc_id} 缺少 gossipHooks，谣言传播无素材可用")
+
+        seen_hook_ids: set[str] = set()
+        has_town_known = False
+        for hook in hooks:
+            hook_id = str(getattr(hook, "hook_id", "")).strip()
+            summary = str(getattr(hook, "summary", "")).strip()
+            visibility = str(getattr(hook, "visibility", "")).strip()
+            spread_affinity = {str(agent_id).strip() for agent_id in getattr(hook, "spread_affinity", ()) if str(agent_id).strip()}
+
+            if not hook_id:
+                raise SystemExit(f"[npc-codex-check] {npc_id} 存在空 gossipHooks.id")
+            if hook_id in seen_hook_ids:
+                raise SystemExit(f"[npc-codex-check] {npc_id} gossipHooks.id 重复：{hook_id}")
+            seen_hook_ids.add(hook_id)
+
+            if not summary:
+                raise SystemExit(f"[npc-codex-check] {npc_id}.{hook_id} gossipHooks.summary 不能为空")
+            if visibility not in valid_visibility:
+                raise SystemExit(f"[npc-codex-check] {npc_id}.{hook_id} gossipHooks.visibility 非法：{visibility}")
+            if visibility == "town_known":
+                has_town_known = True
+
+            if not spread_affinity:
+                raise SystemExit(f"[npc-codex-check] {npc_id}.{hook_id} gossipHooks.spreadAffinity 至少 1 项")
+            unknown_affinity = sorted(spread_affinity - seed_ids)
+            if unknown_affinity:
+                raise SystemExit(
+                    f"[npc-codex-check] {npc_id}.{hook_id} gossipHooks.spreadAffinity 包含未知 NPC：{', '.join(unknown_affinity)}"
+                )
+            if npc_id in spread_affinity:
+                raise SystemExit(f"[npc-codex-check] {npc_id}.{hook_id} gossipHooks.spreadAffinity 不应包含自己")
+
+        if not has_town_known:
+            raise SystemExit(f"[npc-codex-check] {npc_id} gossipHooks 至少需要 1 条 town_known 话题")
+
+
 def main() -> None:
     """串联结构校验、seed 一致性、资产引用 warning。"""
     if not NPC_CODEX_PATH.exists():
@@ -100,6 +144,7 @@ def main() -> None:
 
     _check_seed_membership(set(cards))
     _check_monologue_seed_readiness(cards)
+    _check_gossip_hook_readiness(cards)
 
     manifest_ids = _load_manifest_ids()
     warnings: list[str] = []
