@@ -1,14 +1,18 @@
 ﻿"""Python 后端 smoke test。"""
 
 from pathlib import Path
+from http.server import ThreadingHTTPServer
 import os
 import sys
+from threading import Thread
+from urllib.parse import urlencode
+from urllib.request import urlopen
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "backend"))
 
 from app.director import DirectorBeat, WorldDigest  # noqa: E402
-from app.main import create_town_app  # noqa: E402
+from app.main import create_handler, create_town_app  # noqa: E402
 from app.skills import STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID  # noqa: E402
 
 REQUIRED_DEBUG_FIELDS = {
@@ -51,6 +55,37 @@ def has_real_llm_config() -> bool:
     return (PROJECT_ROOT / "config" / "models.local.json").exists() or any(
         os.getenv(name) for name in ("DEEPSEEK_API_KEY", "OPENAI_API_KEY", "AGENT_TOWN_API_KEY")
     )
+
+
+def assert_http_debug_endpoints(api_app) -> dict:
+    """启动临时 HTTP 服务，确认 Debug / Memory 查询接口能走真实路由。"""
+    server = ThreadingHTTPServer(("127.0.0.1", 0), create_handler(api_app, PROJECT_ROOT))
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+
+    def fetch(path: str, query: dict[str, str] | None = None) -> dict:
+        suffix = f"?{urlencode(query)}" if query else ""
+        with urlopen(f"http://127.0.0.1:{server.server_port}{path}{suffix}", timeout=5) as response:  # noqa: S310 - 本地 smoke 服务
+            import json
+
+            return json.loads(response.read().decode("utf-8"))
+
+    try:
+        debug = fetch("/api/debug", {"skillId": STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID, "limit": "20"})
+        skill = fetch("/api/debug/skill", {"skillId": STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID})
+        memory = fetch("/api/memory/search", {"query": "玩家", "tags": "night_reflection", "limit": "5"})
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+    if not debug.get("skills", {}).get("items"):
+        raise RuntimeError("/api/debug 应返回 Skill 快照")
+    if "attend_event" not in skill.get("actions", {}):
+        raise RuntimeError("/api/debug/skill 应解释 attend_event")
+    if not memory.get("items"):
+        raise RuntimeError("/api/memory/search 应返回 RAG-lite 命中")
+    return {"debugSkills": len(debug["skills"]["items"]), "memoryHits": len(memory["items"])}
 
 
 app = create_town_app(provider_mode="rule")
@@ -160,6 +195,26 @@ if event_reaction_debug.get("skillId") != STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID o
 if night_reflection_debug.get("skillId") != STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID or not night_reflection_debug.get("skillDebugFields"):
     raise RuntimeError("night_reflection Debug 应记录 Skill 字段")
 
+skill_debug = app.debug_skill_explain({"skillId": STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID})
+for action_name in ("inspect", "attend_event", "event_reaction", "night_reflection"):
+    if action_name not in skill_debug["actions"]:
+        raise RuntimeError(f"Skill 解释接口应覆盖 {action_name}")
+skill_lifecycle_stages = {item["stage"] for item in app.debug_skills({"skillId": STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID})["items"][0]["lifecycle"]}
+for required_stage in ("registered", "inspect", "attend_event", "event_reaction_debug", "night_reflection_debug"):
+    if required_stage not in skill_lifecycle_stages:
+        raise RuntimeError(f"Skill 生命周期快照缺少阶段：{required_stage}")
+
+debug_turns = app.debug_turns({"feature": "event_reaction", "skillId": STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID, "limit": "5"})
+if not debug_turns["items"] or not debug_turns["items"][-1]["summary"]:
+    raise RuntimeError("Debug turns 查询应能解释 event_reaction")
+memory_summary = app.memory_summary({"agentId": "kai", "limit": "4"})
+if not memory_summary["items"] or "星灯祭" not in memory_summary["items"][0]["summary"]:
+    raise RuntimeError("Memory Summary 应包含星灯祭记忆")
+memory_search = app.memory_search({"query": "玩家", "tags": "night_reflection", "limit": "5"})
+if not memory_search["items"]:
+    raise RuntimeError("RAG-lite 检索应能召回 night_reflection 记忆")
+http_debug_summary = assert_http_debug_endpoints(app)
+
 step = app.step_simulation({"actorId": "smoke-test"})
 state = step["state"]
 if state["clock"]["tick"] != 1:
@@ -176,6 +231,8 @@ print(
         "dialogueProfile": dialogue_debug["profileName"],
         "eventReactionProfile": event_reaction_debug["profileName"],
         "nightReflectionProfile": night_reflection_debug["profileName"],
+        "debugSkills": http_debug_summary["debugSkills"],
+        "memoryHits": http_debug_summary["memoryHits"],
     },
 )
 

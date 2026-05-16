@@ -7,6 +7,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qs, urlparse
 
 from app.developer.developer_commands import apply_developer_command
 from app.runtime.agent_runtime import AgentRuntime
@@ -33,6 +34,34 @@ class TownApplication:
     def player_action(self, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         return self.runtime.handle_player_action(payload or {})
 
+    def debug_snapshot(self, query: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Debug Console 总览查询入口。"""
+        return self.runtime.get_debug_snapshot(query or {})
+
+    def debug_director(self, query: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Director Beat 生命周期查询入口。"""
+        return self.runtime.get_director_debug_snapshot(query or {})
+
+    def debug_skills(self, query: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Event Skill 生命周期查询入口。"""
+        return self.runtime.get_skill_lifecycle_snapshot(query or {})
+
+    def debug_turns(self, query: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Provider Debug 记录查询入口。"""
+        return self.runtime.get_debug_turns(query or {})
+
+    def debug_skill_explain(self, query: dict[str, Any] | None = None) -> dict[str, Any]:
+        """单个 Event Skill 可解释说明入口。"""
+        return self.runtime.explain_event_skill(query or {})
+
+    def memory_summary(self, query: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Memory Summary 查询入口。"""
+        return self.runtime.get_memory_debug(query or {})["summaries"]
+
+    def memory_search(self, query: dict[str, Any] | None = None) -> dict[str, Any]:
+        """RAG-lite 检索查询入口。"""
+        return self.runtime.get_memory_debug(query or {})["retrieval"]
+
 
 def create_town_app(provider_mode: str | None = None) -> TownApplication:
     """供测试和 HTTP 服务复用的应用工厂。"""
@@ -46,15 +75,32 @@ def create_handler(app: TownApplication, project_root: Path):
         """轻量 HTTP 适配器，保持和前端一致的 REST/SSE API。"""
 
         def do_GET(self) -> None:  # noqa: N802 - http.server 约定方法名
-            route = self.path.split("?", 1)[0]
-            if route == "/api/state":
-                return self.write_json(app.get_public_state())
-            if route == "/api/world/state":
-                return self.write_json(app.get_game_state())
-            if route == "/api/model-config":
-                return self.write_json(app.runtime.model_config.public_config())
-            if route == "/api/events":
-                return self.stream_events(app)
+            route, query = self.route_and_query()
+            try:
+                if route == "/api/state":
+                    return self.write_json(app.get_public_state())
+                if route == "/api/world/state":
+                    return self.write_json(app.get_game_state())
+                if route == "/api/model-config":
+                    return self.write_json(app.runtime.model_config.public_config())
+                if route == "/api/debug":
+                    return self.write_json(app.debug_snapshot(query))
+                if route == "/api/debug/director":
+                    return self.write_json(app.debug_director(query))
+                if route == "/api/debug/skills":
+                    return self.write_json(app.debug_skills(query))
+                if route == "/api/debug/turns":
+                    return self.write_json(app.debug_turns(query))
+                if route == "/api/debug/skill":
+                    return self.write_json(app.debug_skill_explain(query))
+                if route == "/api/memory/summary":
+                    return self.write_json(app.memory_summary(query))
+                if route == "/api/memory/search":
+                    return self.write_json(app.memory_search(query))
+                if route == "/api/events":
+                    return self.stream_events(app)
+            except (KeyError, ValueError) as error:
+                return self.write_json({"ok": False, "error": str(error)}, HTTPStatus.BAD_REQUEST)
             return self.serve_static(frontend_root)
 
         def do_POST(self) -> None:  # noqa: N802 - http.server 约定方法名
@@ -70,6 +116,12 @@ def create_handler(app: TownApplication, project_root: Path):
             if route == "/api/developer":
                 return self.write_json(app.command(payload))
             return self.write_json({"error": "unknown endpoint"}, HTTPStatus.NOT_FOUND)
+
+        def route_and_query(self) -> tuple[str, dict[str, str]]:
+            """解析路径和查询参数，供 Debug / Memory API 复用。"""
+            parsed = urlparse(self.path)
+            query = {key: values[-1] for key, values in parse_qs(parsed.query, keep_blank_values=True).items()}
+            return parsed.path, query
 
         def read_json(self) -> dict[str, Any]:
             length = int(self.headers.get("content-length", "0"))

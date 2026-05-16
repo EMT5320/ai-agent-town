@@ -7,7 +7,7 @@ from typing import Any
 from app.config.model_config import ModelConfigStore
 from app.director import DirectorBeat, DirectorQueueManager, DirectorValidator, SkillRouter, TensionDetector, WorldDigest
 from app.events.event_store import EventStore
-from app.memory.memory_store import remember
+from app.memory.memory_store import rag_lite_search, remember, world_memory_summaries
 from app.providers.cloud_api_provider import CloudApiProvider
 from app.providers.context_builder import (
     build_agent_context,
@@ -77,6 +77,133 @@ class AgentRuntime:
         state = public_game_world(self.world, self.event_store.list())
         state["activeEvents"] = self._skill_enriched_events(state.get("activeEvents", []))
         return state
+
+    def get_debug_snapshot(self, filters: dict[str, Any] | None = None) -> dict[str, Any]:
+        """输出 Debug Console 查询用总览快照。"""
+        filters = filters or {}
+        return {
+            "clock": dict(self.world["clock"]),
+            "providerMode": self.provider_mode,
+            "director": self.get_director_debug_snapshot(filters),
+            "skills": self.get_skill_lifecycle_snapshot(filters),
+            "debugTurns": self.get_debug_turns(filters),
+            "memory": self.get_memory_debug(filters),
+        }
+
+    def get_director_debug_snapshot(self, filters: dict[str, Any] | None = None) -> dict[str, Any]:
+        """输出 Director Digest、Beat 队列和生命周期事件。"""
+        filters = filters or {}
+        limit = self._int_filter(filters, "limit", 30)
+        digest = WorldDigest.from_world(self.world)
+        director_state = self.world.setdefault("directorState", {"activatedEventSkills": [], "consumedBeatIds": []})
+        beat_events = [
+            self._director_beat_event_payload(event)
+            for event in self.event_store.list()
+            if str(event.get("type", "")).startswith("director.")
+        ]
+        return {
+            "digest": self._director_digest_payload(digest),
+            "state": {
+                "activatedEventSkills": list(director_state.get("activatedEventSkills", [])),
+                "consumedBeatIds": list(director_state.get("consumedBeatIds", [])),
+                "activeFocus": self.world.get("activeFocus"),
+            },
+            "queue": {
+                "pendingCount": len(self.director_queue.pending),
+                "pending": [beat.to_dict() for beat in self.director_queue.pending],
+            },
+            "lifecycle": beat_events[-limit:],
+        }
+
+    def get_skill_lifecycle_snapshot(self, filters: dict[str, Any] | None = None) -> dict[str, Any]:
+        """输出 Event Skill 注册、激活、查看、结算与 Debug 生命周期。"""
+        filters = filters or {}
+        skill_filter = self._str_filter(filters, "skillId") or self._str_filter(filters, "skill_id")
+        items = []
+        for skill in list_event_skills():
+            if skill_filter and skill.skill_id != skill_filter:
+                continue
+            items.append(self._event_skill_snapshot(skill))
+        return {"skillId": skill_filter, "items": items}
+
+    def get_debug_turns(self, filters: dict[str, Any] | None = None) -> dict[str, Any]:
+        """按 feature / skillId 查询 Provider Debug 记录。"""
+        filters = filters or {}
+        feature = self._str_filter(filters, "feature")
+        skill_id = self._str_filter(filters, "skillId") or self._str_filter(filters, "skill_id")
+        limit = self._int_filter(filters, "limit", 20)
+        turns: list[dict[str, Any]] = []
+        for event in self.event_store.list():
+            debug = event.get("payload", {}).get("debug")
+            if not isinstance(debug, dict):
+                continue
+            if feature and debug.get("feature") != feature:
+                continue
+            if skill_id and not self._debug_matches_skill(debug, skill_id):
+                continue
+            turns.append(self._debug_turn_payload(event, debug))
+        return {"feature": feature, "skillId": skill_id, "limit": limit, "items": turns[-limit:]}
+
+    def get_memory_debug(self, filters: dict[str, Any] | None = None) -> dict[str, Any]:
+        """输出 Memory Summary 和 RAG-lite 检索结果。"""
+        filters = filters or {}
+        agent_id = self._str_filter(filters, "agentId") or self._str_filter(filters, "agent_id")
+        query = self._str_filter(filters, "q") or self._str_filter(filters, "query") or ""
+        tags = self._str_filter(filters, "tags")
+        limit = self._int_filter(filters, "limit", 8)
+        return {
+            "summaries": world_memory_summaries(self.world, agent_id=agent_id, limit=min(limit, 12)),
+            "retrieval": rag_lite_search(self.world, query=query, agent_id=agent_id, tags=tags, limit=limit),
+        }
+
+    def explain_event_skill(self, filters: dict[str, Any] | None = None) -> dict[str, Any]:
+        """解释单个 Event Skill 在 API / Debug Console 中如何被追踪。"""
+        filters = filters or {}
+        skill_id = self._str_filter(filters, "skillId") or self._str_filter(filters, "skill_id") or STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID
+        skill = get_event_skill(skill_id)
+        outcome_previews = []
+        for option in skill.player_options:
+            outcome = self._resolve_event_skill_outcome(skill, option, None)
+            outcome_previews.append(
+                {
+                    "choice": option.option_id,
+                    "choiceLabel": outcome["choiceLabel"],
+                    "summary": outcome["summary"],
+                    "consequenceTypes": outcome["consequenceTypes"],
+                    "relationDeltas": outcome["relationDeltas"],
+                    "memoryTemplateCount": len(outcome["memoryTemplates"]),
+                    "reflectionSeedCount": len(outcome["reflectionSeeds"]),
+                    "debugFields": outcome["debugFields"],
+                }
+            )
+        return {
+            "skill": self._event_skill_manifest_payload(skill),
+            "actions": {
+                "inspect": {
+                    "api": "POST /api/player/action",
+                    "payload": {"type": "inspect", "eventId": skill.event_id},
+                    "debugFields": self._skill_debug_payload(skill, None, choice="inspect"),
+                },
+                "attend_event": {
+                    "api": "POST /api/player/action",
+                    "payloadExample": {"type": "attend_event", "eventId": skill.event_id, "choice": skill.player_options[0].option_id},
+                    "outcomes": outcome_previews,
+                },
+                "event_reaction": {
+                    "debugQuery": f"/api/debug/turns?feature=event_reaction&skillId={skill.skill_id}",
+                    "latest": self.get_debug_turns({"feature": "event_reaction", "skillId": skill.skill_id, "limit": 1})["items"],
+                },
+                "night_reflection": {
+                    "debugQuery": f"/api/debug/turns?feature=night_reflection&skillId={skill.skill_id}",
+                    "latest": self.get_debug_turns({"feature": "night_reflection", "skillId": skill.skill_id, "limit": 1})["items"],
+                },
+            },
+            "lifecycle": self._event_skill_lifecycle(skill),
+            "memoryRetrieval": {
+                "summaryEndpoint": "/api/memory/summary",
+                "searchEndpoint": f"/api/memory/search?q={skill.event_id}&tags={skill.event_id}",
+            },
+        }
 
     def handle_player_action(self, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         """处理玩家动作入口，所有结果都写入事件流和玩家行动历史。"""
@@ -186,6 +313,183 @@ class AgentRuntime:
             "activeEventCount": digest.active_event_count,
             "avgStress": digest.avg_stress,
         }
+
+    def _director_beat_event_payload(self, event: dict[str, Any]) -> dict[str, Any]:
+        """把 Director 事件压缩成可读生命周期条目。"""
+        payload = event.get("payload", {})
+        beat = payload.get("beat") if isinstance(payload.get("beat"), dict) else payload
+        beat_payload = beat.get("payload", {}) if isinstance(beat.get("payload"), dict) else {}
+        return {
+            "eventId": event.get("id"),
+            "eventType": event.get("type"),
+            "createdAt": event.get("createdAt"),
+            "beatId": beat.get("beatId") or payload.get("beatId"),
+            "beatType": beat.get("beatType") or payload.get("beatType"),
+            "skillId": beat_payload.get("skillId") or payload.get("skillId"),
+            "eventSkillEventId": beat_payload.get("eventId") or payload.get("eventId"),
+            "ok": payload.get("ok"),
+            "reason": payload.get("reason"),
+            "detail": payload.get("detail") or payload.get("errors"),
+            "beat": beat if isinstance(beat, dict) else {},
+        }
+
+    def _event_skill_manifest_payload(self, skill: EventSkillSchema) -> dict[str, Any]:
+        """把 Skill manifest 转为 Debug 友好的只读结构。"""
+        return {
+            "skillId": skill.skill_id,
+            "eventId": skill.event_id,
+            "title": skill.title,
+            "brief": skill.brief,
+            "trigger": {
+                "phase": skill.trigger.phase,
+                "locationId": skill.trigger.location_id,
+                "requiredStatus": skill.trigger.required_status,
+                "requiredActiveEventId": skill.trigger.required_active_event_id,
+            },
+            "participants": list(skill.participants),
+            "playerOptions": self._skill_choice_payloads(skill),
+            "assetHints": self._skill_asset_hint_payloads(skill),
+            "debugFields": self._skill_debug_field_templates(skill.debug_fields),
+        }
+
+    def _event_skill_snapshot(self, skill: EventSkillSchema) -> dict[str, Any]:
+        """生成单个 Skill 的当前状态与生命周期快照。"""
+        active_event = next((event for event in self.world.get("activeEvents", []) if event.get("id") == skill.event_id), None)
+        completed_event = next((event for event in self.world.get("completedEvents", []) if event.get("id") == skill.event_id), None)
+        director_state = self.world.setdefault("directorState", {"activatedEventSkills": [], "consumedBeatIds": []})
+        status = "registered"
+        if active_event:
+            status = str(active_event.get("status") or "available")
+        if skill.skill_id in director_state.get("activatedEventSkills", []):
+            status = "activated"
+        if completed_event or (active_event and active_event.get("status") == "resolved"):
+            status = "resolved"
+        return {
+            **self._event_skill_manifest_payload(skill),
+            "status": status,
+            "activeEvent": active_event,
+            "completedEvent": completed_event,
+            "lifecycle": self._event_skill_lifecycle(skill),
+        }
+
+    def _event_skill_lifecycle(self, skill: EventSkillSchema) -> list[dict[str, Any]]:
+        """收集 Skill 从注册到结算的 Debug 可解释阶段。"""
+        lifecycle: list[dict[str, Any]] = [
+            {"stage": "registered", "source": "skill_registry", "skillId": skill.skill_id, "eventId": skill.event_id}
+        ]
+        for event in self.world.get("activeEvents", []):
+            if event.get("id") == skill.event_id:
+                lifecycle.append(
+                    {
+                        "stage": "available",
+                        "source": "world.activeEvents",
+                        "eventId": event.get("id"),
+                        "status": event.get("status"),
+                        "locationId": event.get("locationId"),
+                    }
+                )
+
+        for event in self.event_store.list():
+            event_type = str(event.get("type", ""))
+            payload = event.get("payload", {})
+            stage = self._skill_event_stage(skill, event_type, payload)
+            if not stage:
+                continue
+            lifecycle.append(
+                {
+                    "stage": stage,
+                    "source": event_type,
+                    "eventStoreId": event.get("id"),
+                    "createdAt": event.get("createdAt"),
+                    "summary": payload.get("summary") or payload.get("debug", {}).get("feature"),
+                    "payload": payload,
+                }
+            )
+        return lifecycle
+
+    def _skill_event_stage(self, skill: EventSkillSchema, event_type: str, payload: dict[str, Any]) -> str | None:
+        """识别某条事件是否属于指定 Skill 生命周期。"""
+        if event_type.startswith("director."):
+            beat = payload.get("beat") if isinstance(payload.get("beat"), dict) else payload
+            beat_payload = beat.get("payload", {}) if isinstance(beat.get("payload"), dict) else {}
+            if beat_payload.get("skillId") == skill.skill_id:
+                return event_type.replace("director.beat_", "director_beat_").replace("director.", "director_")
+
+        if payload.get("skillId") == skill.skill_id:
+            mapping = {
+                "player.inspected": "inspect",
+                "player.event_choice": "attend_event",
+                "town.event_resolved": "resolved",
+                "npc.memory_created": "memory_write",
+                "npc.night_reflection": "night_reflection_write",
+            }
+            return mapping.get(event_type, event_type)
+
+        debug = payload.get("debug")
+        if isinstance(debug, dict) and self._debug_matches_skill(debug, skill.skill_id):
+            feature = str(debug.get("feature") or "debug")
+            return f"{feature}_debug"
+        return None
+
+    def _debug_turn_payload(self, event: dict[str, Any], debug: dict[str, Any]) -> dict[str, Any]:
+        """压缩 Provider Debug 记录，保留原始 debug 供深挖。"""
+        return {
+            "eventId": event.get("id"),
+            "eventType": event.get("type"),
+            "createdAt": event.get("createdAt"),
+            "agentId": event.get("payload", {}).get("agentId"),
+            "agentName": event.get("payload", {}).get("agentName"),
+            "feature": debug.get("feature"),
+            "skillId": debug.get("skillId"),
+            "providerMode": debug.get("providerMode"),
+            "provider": debug.get("provider"),
+            "profileName": debug.get("profileName"),
+            "fallbackReason": debug.get("fallbackReason"),
+            "latency": debug.get("latency"),
+            "summary": self._debug_summary(debug),
+            "debug": debug,
+        }
+
+    def _debug_summary(self, debug: dict[str, Any]) -> str:
+        """从 executed / parsed 中提取一行可读摘要。"""
+        executed = debug.get("executed") if isinstance(debug.get("executed"), dict) else {}
+        if executed.get("speech"):
+            return str(executed["speech"])
+        if executed.get("dialogue"):
+            return " / ".join(str(item.get("text", "")) for item in executed["dialogue"][:2] if isinstance(item, dict))
+        if executed.get("reflections"):
+            return " / ".join(str(item.get("text", "")) for item in executed["reflections"][:2] if isinstance(item, dict))
+        parsed = debug.get("parsed") if isinstance(debug.get("parsed"), dict) else {}
+        return str(parsed.get("speech") or parsed.get("memory_to_save") or debug.get("feature") or "")
+
+    def _debug_matches_skill(self, debug: dict[str, Any], skill_id: str) -> bool:
+        """检查 Debug 记录是否指向某个 Skill。"""
+        if debug.get("skillId") == skill_id:
+            return True
+        fields = debug.get("skillDebugFields")
+        if isinstance(fields, list):
+            return any(isinstance(field, dict) and field.get("id") == "skillId" and field.get("value") == skill_id for field in fields)
+        return False
+
+    def _str_filter(self, filters: dict[str, Any], key: str) -> str | None:
+        """读取查询参数中的字符串值。"""
+        value = filters.get(key)
+        if isinstance(value, list):
+            value = value[-1] if value else None
+        if value is None:
+            return None
+        text = str(value).strip()
+        return text or None
+
+    def _int_filter(self, filters: dict[str, Any], key: str, default: int) -> int:
+        """读取查询参数中的正整数值，并限制 Debug 返回量。"""
+        text = self._str_filter(filters, key)
+        if text is None:
+            return default
+        try:
+            return max(1, min(int(text), 100))
+        except ValueError:
+            return default
 
     def _should_activate_event_skill(self, skill: EventSkillSchema) -> bool:
         """检测事件技能候选，避免同一个事件技能重复激活。"""
