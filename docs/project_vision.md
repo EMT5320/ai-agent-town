@@ -58,7 +58,17 @@
 - **Player State Agent**：只总结玩家风格与历史选择，帮助世界理解玩家形象，不替玩家操作。
 - **Debug / Explainability Layer**：记录导演、Skill、NPC、工具、记忆和关系变化的完整链路。
 
-设计师负责提供土壤、舞台、规则和压力源；LLM Agent 负责在边界内做主观判断、表达、记忆和关系演化。详细架构见 [`agentic_game_design.md`](./agentic_game_design.md)。
+设计师负责提供土壤、舞台、规则和压力源；LLM Agent 负责在边界内做主观判断、表达、记忆和关系演化。多层 Agent 架构见 [`agentic_game_design.md`](./agentic_game_design.md)，游戏本体架构见 [`gameplay_system_architecture.md`](./gameplay_system_architecture.md)。
+
+### 0.1 涌现式田园生活模拟本体
+
+首版游戏本体要从临时 UI demo 收束为地图主循环：
+
+- 玩家在地图中移动、靠近 NPC 或物体并触发交互。
+- 种田、背包、送礼、关系、事件和记忆形成可感知闭环。
+- NPC 具备生活习惯、职业倾向和地点偏好，但具体出现位置和行动由软日程权重、世界约束、导演层节奏、Event Skill 和 NPC 自主判断共同生成。
+- 导演层负责阶段节奏、舞台焦点、事件压力和 NPC 聚散密度，避免居民长期堆在同一画面。
+- Godot 主界面优先服务沉浸式地图和 VN 演出，Debug / 研究信息默认收纳到调试层。
 
 ### 1. LLM 驱动的 NPC 社会
 

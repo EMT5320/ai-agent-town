@@ -6,20 +6,22 @@
 
 1. [`project_vision.md`](./project_vision.md)：最高优先级推进依据，定义项目愿景、边界、成功标准和完整游戏推进原则。
 2. [`agentic_game_design.md`](./agentic_game_design.md)：多层 Agent 游戏系统定调，定义 Director System、Event Skill、异步 Director Beat、记忆/RAG 和模型分工。
-3. [`current_status.md`](./current_status.md)：当前代码状态、可复用模块、主要缺口、开发前约束。
-4. [`daytime_integration_handoff.md`](./daytime_integration_handoff.md)：2026-05-16 白天整合结果、验收证据和晚上客户端 / LLM 线开工目标。
-5. [`vertical_slice_spec.md`](./vertical_slice_spec.md)：第一版可玩切片规格、数据契约、验收边界和扩展性要求。
-6. [`art_direction.md`](./art_direction.md)：二次元轻幻想轻异世界美术风格、角色设定、资产清单和生图顺序。
-7. [`asset_generation_prompts.md`](./asset_generation_prompts.md)：首版生图提示词包，方便直接产出对接资产。
-8. [`initial_asset_generation_plan.md`](./initial_asset_generation_plan.md)：正式资产生成批次、优先级和 Godot 接入路线。
-9. [`architecture_blueprint.md`](./architecture_blueprint.md)：整体架构、模块职责、数据流、客户端与后端协作方式。
-10. [`implementation_plan.md`](./implementation_plan.md)：初版垂直切片执行方案、批次任务、验收标准。
-11. [`open_questions.md`](./open_questions.md)：已确认决策、剩余验证点、下一轮讨论入口。
+3. [`gameplay_system_architecture.md`](./gameplay_system_architecture.md)：游戏本体架构定调，定义地图主循环、软日程 NPC、玩法系统闭环和 Godot / 后端边界。
+4. [`current_status.md`](./current_status.md)：当前代码状态、可复用模块、主要缺口、开发前约束。
+5. [`daytime_integration_handoff.md`](./daytime_integration_handoff.md)：2026-05-16 白天整合结果、验收证据和晚上客户端 / LLM 线开工目标。
+6. [`vertical_slice_spec.md`](./vertical_slice_spec.md)：第一版可玩切片规格、数据契约、验收边界和扩展性要求。
+7. [`art_direction.md`](./art_direction.md)：二次元轻幻想轻异世界美术风格、角色设定、资产清单和生图顺序。
+8. [`asset_generation_prompts.md`](./asset_generation_prompts.md)：首版生图提示词包，方便直接产出对接资产。
+9. [`initial_asset_generation_plan.md`](./initial_asset_generation_plan.md)：正式资产生成批次、优先级和 Godot 接入路线。
+10. [`architecture_blueprint.md`](./architecture_blueprint.md)：整体架构、模块职责、数据流、客户端与后端协作方式。
+11. [`implementation_plan.md`](./implementation_plan.md)：初版垂直切片执行方案、批次任务、验收标准。
+12. [`open_questions.md`](./open_questions.md)：已确认决策、剩余验证点、下一轮讨论入口。
 
 ## 当前决策摘要
 
 - 项目方向升级为“LLM 驱动 NPC 的二次元轻幻想轻异世界田园生活模拟 RPG 垂直切片”。
 - 核心系统定调为“多层 Agent 游戏系统”：World / Simulation 层持有权威状态，Director System 低频规划节奏和事件 Skill，NPC Agents 在自身记忆与 brief 内自主行动。
+- 游戏本体定调为“涌现式田园生活模拟”：玩家主要在地图上移动、靠近对象并触发交互；NPC 出现和行动由软日程权重、世界约束、导演层节奏、Event Skill 和 NPC 自主判断共同生成。
 - 项目按正式游戏骨架推进，重要节点需要考虑后续 NPC、地点、事件、资产、系统玩法和 Debug 能力扩展。
 - Python Agent Runtime 继续承担世界、Agent、记忆、事件、Provider 与调试记录。
 - 事件按 Skill 渐进式加载：平时只暴露触发条件，满足条件后加载完整事件 brief、工具、约束、后果类型和资产提示。
