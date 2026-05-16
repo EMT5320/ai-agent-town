@@ -5,6 +5,12 @@ import os
 from typing import Any
 
 from app.config.model_config import ModelConfigStore
+from app.content.codex_loader import (
+    NpcDeepCard,
+    compute_relationship_stage,
+    load_all_npc_deep_cards,
+    match_gift_reaction_tier,
+)
 from app.director import DirectorBeat, DirectorQueueManager, DirectorValidator, SkillRouter, TensionDetector, WorldDigest
 from app.events.event_store import EventStore
 from app.memory.memory_store import memory_summary_payload, rag_lite_search, remember, world_memory_summaries
@@ -35,7 +41,21 @@ from app.skills import (
     list_event_skills,
 )
 from app.world.seed_data import DAY1_EVENT_ID, DAY1_LOCATION_IDS, DAY1_NPC_IDS
-from app.world.world_state import advance_clock, adjust_relation, create_initial_world, get_relation, living_agents, public_game_world, public_world
+from app.world.world_state import (
+    action_budget_for_phase,
+    advance_clock,
+    advance_phase,
+    adjust_relation,
+    build_npc_presence,
+    create_initial_world,
+    default_anchor_for_location,
+    get_relation,
+    living_agents,
+    public_game_world,
+    public_world,
+    sync_agents_from_presence,
+    sync_farm_interactables,
+)
 
 
 CLIENT_CONTEXT_FIELDS = ("memoryEvidence", "relationshipEvidence", "playerProfile", "currentObjective", "availableInteractions")
@@ -53,6 +73,7 @@ class AgentRuntime:
 
     def __init__(self, provider_mode: str | None = None, model_config_path: str | None = None) -> None:
         self.world = create_initial_world()
+        self.npc_deep_cards: dict[str, NpcDeepCard] = load_all_npc_deep_cards()
         self.event_store = EventStore()
         self.model_config = ModelConfigStore(model_config_path)
         self.rule_provider = RuleBasedProvider()
@@ -94,6 +115,9 @@ class AgentRuntime:
 
     def get_game_state(self) -> dict[str, Any]:
         """输出游戏客户端状态，后续 Godot 只依赖这个契约。"""
+        sync_farm_interactables(self.world)
+        self.world["npcPresence"] = build_npc_presence(self.world)
+        sync_agents_from_presence(self.world, self.world["npcPresence"])
         state = public_game_world(self.world, self.event_store.list())
         state["recentEvents"] = [self._debug_safe_event(event) for event in state.get("recentEvents", [])]
         state["activeEvents"] = self._skill_enriched_events(state.get("activeEvents", []))
@@ -425,6 +449,21 @@ class AgentRuntime:
                     "payload": {"type": "move", "locationId": location_id},
                 }
             )
+            for anchor in self.world.get("anchors", {}).values():
+                if anchor.get("locationId") != location_id:
+                    continue
+                same_anchor = self.world["player"].get("anchorId") == anchor.get("id")
+                interactions.append(
+                    {
+                        "id": f"move_to_anchor:{anchor['id']}",
+                        "type": "move_to_anchor",
+                        "label": f"移动到{location['name']}：{anchor['kind']}",
+                        "enabled": not same_anchor and self._player_action_budget() > 0,
+                        "reason": "already_here" if same_anchor else ("no_action_budget" if self._player_action_budget() <= 0 else None),
+                        "target": {"kind": "anchor", "id": anchor["id"], "locationId": location_id, "screenPosition": anchor.get("screenPosition")},
+                        "payload": {"type": "move_to_anchor", "locationId": location_id, "anchorId": anchor["id"]},
+                    }
+                )
 
         gift_items = [item for item in self.world["player"].get("inventory", []) if int(item.get("quantity", 0)) > 0 and "gift" in item.get("tags", [])]
         # 首版事件会用到 fresh_turnip，默认送礼优先选择不影响事件选项的物品。
@@ -451,6 +490,37 @@ class AgentRuntime:
                     "reason": None if first_gift else "no_gift_item",
                     "target": {"kind": "npc", "id": npc_id, "name": npc["name"], "locationId": npc.get("locationId")},
                     "payload": {"type": "give_gift", "targetId": npc_id, "locationId": npc.get("locationId"), "itemId": first_gift.get("id") if first_gift else None},
+                    }
+                )
+        for plot in self.world.get("farmPlots", {}).values():
+            farm_action = self._next_farm_action_for_plot(plot)
+            if not farm_action:
+                continue
+            at_plot_anchor = self.world["player"].get("locationId") == plot.get("locationId") and self.world["player"].get("anchorId") == plot.get("anchorId")
+            has_required_item = farm_action != "plant" or self._player_item_quantity(plot.get("seedItemId")) > 0
+            enabled = at_plot_anchor and has_required_item and self._player_action_budget() > 0
+            reason = None
+            if not at_plot_anchor:
+                reason = "not_near_plot"
+            elif not has_required_item:
+                reason = f"missing_item:{plot.get('seedItemId')}"
+            elif self._player_action_budget() <= 0:
+                reason = "no_action_budget"
+            interactions.append(
+                {
+                    "id": f"farm_action:{plot['id']}:{farm_action}",
+                    "type": "farm_action",
+                    "label": self._farm_action_label(farm_action, str(plot["id"])),
+                    "enabled": enabled,
+                    "reason": reason,
+                    "target": {"kind": "farm_plot", "id": plot["id"], "locationId": plot.get("locationId"), "anchorId": plot.get("anchorId")},
+                    "payload": {
+                        "type": "farm_action",
+                        "locationId": plot.get("locationId"),
+                        "interactableId": plot["id"],
+                        "action": farm_action,
+                        "itemId": plot.get("seedItemId") if farm_action == "plant" else None,
+                    },
                 }
             )
 
@@ -484,6 +554,16 @@ class AgentRuntime:
                         "payload": {"type": "attend_event", "eventId": skill.event_id, "choice": option.option_id, "locationId": skill.trigger.location_id},
                     }
                 )
+        interactions.append(
+            {
+                "id": "end_phase",
+                "type": "end_phase",
+                "label": "结束当前时段",
+                "enabled": True,
+                "target": {"kind": "clock", "phase": self.world["clock"].get("phase"), "day": self.world["clock"].get("day")},
+                "payload": {"type": "end_phase"},
+            }
+        )
         return interactions
 
     def _visible_npc_ids(self) -> list[str]:
@@ -498,6 +578,43 @@ class AgentRuntime:
             if item.get("id") == item_id:
                 return int(item.get("quantity", 0))
         return 0
+
+    def _player_action_budget(self) -> int:
+        """读取当前时段剩余玩家行动预算，缺失时按 phase 自动补齐。"""
+        clock = self.world.setdefault("clock", {})
+        if "actionBudget" not in clock:
+            clock["actionBudget"] = action_budget_for_phase(str(clock.get("phase") or "morning"))
+        return int(clock.get("actionBudget", 0))
+
+    def _consume_player_action_budget(self, action_type: str) -> dict[str, int | str]:
+        """消费一个玩家行动预算，预算不足时阻止地图玩法动作。"""
+        before = self._player_action_budget()
+        if before <= 0:
+            raise ValueError(f"{action_type} 需要行动预算，请先结束当前时段")
+        self.world["clock"]["actionBudget"] = before - 1
+        return {"before": before, "after": before - 1, "actionType": action_type}
+
+    def _assert_player_at_anchor(self, location_id: str, anchor_id: str) -> None:
+        """校验玩家是否靠近目标锚点，保证 farm_action 真的来自地图交互。"""
+        player = self.world["player"]
+        if player.get("locationId") != location_id or player.get("anchorId") != anchor_id:
+            raise ValueError(f"玩家需要先移动到锚点 {anchor_id} 才能交互")
+
+    def _next_farm_action_for_plot(self, plot: dict[str, Any]) -> str | None:
+        """根据田块阶段选择客户端下一步可展示的农场动作。"""
+        stage = plot.get("stage")
+        if stage == "empty":
+            return "plant"
+        if stage == "planted":
+            return "water"
+        if stage == "harvestable":
+            return "harvest"
+        return None
+
+    def _farm_action_label(self, action: str, plot_id: str) -> str:
+        """把农场动作转成 Godot 可直接显示的简短文案。"""
+        labels = {"plant": "播种", "water": "浇水", "harvest": "收获"}
+        return f"{labels.get(action, action)} {plot_id}"
 
     def explain_event_skill(self, filters: dict[str, Any] | None = None) -> dict[str, Any]:
         """解释单个 Event Skill 在 API / Debug Console 中如何被追踪。"""
@@ -554,6 +671,12 @@ class AgentRuntime:
         action_type = payload.get("type")
         if action_type == "move":
             result = self._handle_player_move(payload)
+        elif action_type == "move_to_anchor":
+            result = self._handle_player_move_to_anchor(payload)
+        elif action_type == "farm_action":
+            result = self._handle_player_farm_action(payload)
+        elif action_type == "end_phase":
+            result = self._handle_player_end_phase(payload)
         elif action_type == "talk":
             result = self._handle_player_talk(payload)
         elif action_type == "give_gift":
@@ -1148,6 +1271,7 @@ class AgentRuntime:
             "beatId": beat.beatId,
             "skillId": skill_id,
             "eventId": payload.get("eventId"),
+            "eventLocationId": (payload.get("trigger") or {}).get("locationId") if isinstance(payload.get("trigger"), dict) else None,
             "brief": payload.get("brief"),
             "targetAgents": list(beat.targetAgents),
             "validFromTick": beat.validFromTick,
@@ -1163,18 +1287,130 @@ class AgentRuntime:
             raise ValueError(f"未知地点：{location_id}")
         player = self.world["player"]
         previous_location = player["locationId"]
+        previous_anchor = player.get("anchorId")
+        anchor_id = default_anchor_for_location(self.world, location_id)
         player["locationId"] = location_id
+        if anchor_id:
+            player["anchorId"] = anchor_id
         event = self.event_store.append(
             "player.moved",
             {
                 "playerId": player["id"],
                 "fromLocationId": previous_location,
+                "fromAnchorId": previous_anchor,
                 "toLocationId": location_id,
+                "toAnchorId": anchor_id,
                 "summary": f"{player['name']} 前往 {self.world['locations'][location_id]['name']}。",
             },
         )
         self._record_player_history("move", payload, [event["id"]])
         return {"dialogue": [], "relationshipDeltas": [], "memoryWrites": [], "eventIds": [event["id"]]}
+
+    def _handle_player_move_to_anchor(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """把玩家移动到地图锚点，是 Godot 地图主循环的最小合法移动动作。"""
+        anchor_id = str(payload.get("anchorId") or "")
+        anchor = self.world.get("anchors", {}).get(anchor_id)
+        if not anchor:
+            raise ValueError(f"未知锚点：{anchor_id}")
+        location_id = str(payload.get("locationId") or anchor.get("locationId") or "")
+        if location_id != anchor.get("locationId") or location_id not in self.world["locations"]:
+            raise ValueError(f"锚点与地点不匹配：{anchor_id} / {location_id}")
+        budget = self._consume_player_action_budget("move_to_anchor")
+        player = self.world["player"]
+        previous = {"locationId": player.get("locationId"), "anchorId": player.get("anchorId")}
+        player["locationId"] = location_id
+        player["anchorId"] = anchor_id
+        event = self.event_store.append(
+            "player.move_to_anchor",
+            {
+                "playerId": player["id"],
+                "from": previous,
+                "to": {"locationId": location_id, "anchorId": anchor_id},
+                "actionBudget": budget,
+                "summary": f"{player['name']} 移动到 {self.world['locations'][location_id]['name']} 的 {anchor_id}。",
+            },
+        )
+        self._record_player_history("move_to_anchor", payload, [event["id"]])
+        return {
+            "dialogue": [{"speakerId": "system", "speakerName": "旁白", "text": event["payload"]["summary"]}],
+            "relationshipDeltas": [],
+            "memoryWrites": [],
+            "movement": event["payload"],
+            "eventIds": [event["id"]],
+        }
+
+    def _handle_player_farm_action(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """执行播种、浇水、收获的最小农场闭环。"""
+        plot_id = str(payload.get("interactableId") or payload.get("farmPlotId") or "")
+        plot = self.world.get("farmPlots", {}).get(plot_id)
+        if not plot:
+            raise ValueError(f"未知田块：{plot_id}")
+        action = str(payload.get("action") or "")
+        if action not in {"plant", "water", "harvest"}:
+            raise ValueError(f"未知农场动作：{action}")
+        self._assert_player_at_anchor(str(plot.get("locationId")), str(plot.get("anchorId")))
+        budget = self._consume_player_action_budget("farm_action")
+        event_payload: dict[str, Any] = {"playerId": "player", "farmPlotId": plot_id, "action": action, "actionBudget": budget}
+
+        if action == "plant":
+            if plot.get("stage") != "empty":
+                raise ValueError(f"田块不可播种，当前阶段：{plot.get('stage')}")
+            seed_id = str(payload.get("itemId") or plot.get("seedItemId") or "")
+            seed_item = self._take_player_item(seed_id)
+            plot["cropId"] = "starlight_turnip"
+            plot["stage"] = "planted"
+            plot["plantedAt"] = {"day": self.world["clock"].get("day"), "phase": self.world["clock"].get("phase")}
+            event_payload.update({"item": seed_item, "summary": "你把星灯芜菁种子种进了第一块田。"})
+        elif action == "water":
+            if plot.get("stage") != "planted":
+                raise ValueError(f"田块不可浇水，当前阶段：{plot.get('stage')}")
+            plot["stage"] = "watered"
+            plot["wateredAt"] = {"day": self.world["clock"].get("day"), "phase": self.world["clock"].get("phase")}
+            event_payload["summary"] = "你给星灯芜菁浇了水，结束时段后就能确认成熟情况。"
+        else:
+            if plot.get("stage") != "harvestable":
+                raise ValueError(f"田块不可收获，当前阶段：{plot.get('stage')}")
+            output_item = dict(plot.get("outputItem") or {"id": "fresh_turnip", "name": "新鲜芜菁", "tags": ["crop", "gift"]})
+            self._add_player_item(output_item)
+            plot["cropId"] = None
+            plot["stage"] = "empty"
+            plot.pop("plantedAt", None)
+            plot.pop("wateredAt", None)
+            event_payload.update({"item": output_item, "summary": f"你收获了{output_item.get('name', output_item.get('id'))}，作物已进入背包。"})
+
+        sync_farm_interactables(self.world)
+        event_payload["farmPlot"] = dict(plot)
+        event_payload["inventory"] = self.world["player"].get("inventory", [])
+        event = self.event_store.append("player.farm_action", event_payload)
+        self._record_player_history("farm_action", payload, [event["id"]])
+        return {
+            "dialogue": [{"speakerId": "system", "speakerName": "旁白", "text": event_payload["summary"]}],
+            "relationshipDeltas": [],
+            "memoryWrites": [],
+            "farmAction": event_payload,
+            "eventIds": [event["id"]],
+        }
+
+    def _handle_player_end_phase(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """结束当前时段，推进 phase 并刷新该时段的行动预算。"""
+        transition = advance_phase(self.world)
+        event = self.event_store.append(
+            "clock.phase_ended",
+            {
+                "playerId": "player",
+                "transition": transition,
+                "clock": dict(self.world["clock"]),
+                "summary": f"时段从 {transition['fromPhase']} 推进到 {transition['toPhase']}，行动预算刷新为 {transition['actionBudget']}。",
+            },
+        )
+        self._record_player_history("end_phase", payload, [event["id"]])
+        return {
+            "dialogue": [{"speakerId": "system", "speakerName": "旁白", "text": event["payload"]["summary"]}],
+            "relationshipDeltas": [],
+            "memoryWrites": [],
+            "clockTransition": transition,
+            "eventIds": [event["id"]],
+        }
 
     def _handle_player_talk(self, payload: dict[str, Any]) -> dict[str, Any]:
         """处理玩家主动聊天，并让目标 NPC 生成可追踪回复。"""
@@ -1261,16 +1497,29 @@ class AgentRuntime:
             "playerProfile": self._player_profile_payload(),
             "memoryEvidence": memory_evidence,
             "memoryEvidenceUsed": memory_evidence_used,
+            "relationshipStage": self._relationship_stage_payload(target["id"], before_relation, after_relation),
             "eventIds": event_ids,
         }
 
     def _handle_player_gift(self, payload: dict[str, Any]) -> dict[str, Any]:
-        """处理首版送礼动作，先使用规则效果，后续可接入物品喜好表。"""
+        """处理首版送礼动作：基础 delta 之上叠加深度卡 giftReactions 修正。"""
         target = self._get_target_agent(payload)
         item_id = str(payload.get("itemId") or "")
         item = self._take_player_item(item_id)
+        gift_delta = {"affection": 4, "trust": 2, "conflict": -1}
+        tier_name = "neutral"
+        deep_card = self.npc_deep_cards.get(target["id"])
+        fallback_pool: tuple[str, ...] = ()
+        if deep_card is not None:
+            tier_name, tier = match_gift_reaction_tier(deep_card, item)
+            for key, value in tier.delta_modifier.items():
+                if key in gift_delta:
+                    gift_delta[key] = gift_delta[key] + int(value)
+                else:
+                    gift_delta[key] = int(value)
+            fallback_pool = tier.fallback_speech_pool
         before_relation = get_relation(self.world, "player", target["id"])
-        adjust_relation(self.world, "player", target["id"], {"affection": 4, "trust": 2, "conflict": -1})
+        adjust_relation(self.world, "player", target["id"], gift_delta)
         after_relation = get_relation(self.world, "player", target["id"])
         relationship_payload = {
             "sourceId": "player",
@@ -1279,27 +1528,88 @@ class AgentRuntime:
             "delta": self._relation_diff(before_relation, after_relation),
             "after": after_relation,
         }
-        gift_event = self.event_store.append("player.gift_given", {"playerId": "player", "targetId": target["id"], "item": item})
+        gift_event = self.event_store.append(
+            "player.gift_given",
+            {"playerId": "player", "targetId": target["id"], "item": item, "reactionTier": tier_name},
+        )
         profile_payload, profile_event = self._update_player_profile(
             "gift",
             f"把 {item['name']} 送给 {target['name']}，表现出愿意用实际物品照顾居民。",
             tags=["player_profile_memory", "gift", item_id, target["id"]],
         )
         relation_event = self.event_store.append("relationship.changed", relationship_payload)
-        memory_text = f"新来的农场主送给我 {item['name']}，这让我对他多了一点好感。"
-        remember(target, memory_text, tick=self.world["clock"]["tick"], importance=0.72, tags=["player_gift", item_id])
-        memory_payload = {"agentId": target["id"], "agentName": target["name"], "text": memory_text, "tags": ["player_gift", item_id]}
+        memory_text = self._compose_gift_memory_text(target["name"], item["name"], tier_name)
+        memory_tags = ["player_gift", item_id, f"gift_tier:{tier_name}"]
+        remember(target, memory_text, tick=self.world["clock"]["tick"], importance=0.72, tags=memory_tags)
+        memory_payload = {"agentId": target["id"], "agentName": target["name"], "text": memory_text, "tags": memory_tags}
         memory_event = self.event_store.append("npc.memory_created", memory_payload)
-        dialogue_event = self.event_store.append("npc.dialogue", {"agentId": target["id"], "agentName": target["name"], "targetId": "player", "speech": f"谢谢你送来的{item['name']}，我会记住这份心意。", "topic": "gift"})
+        speech_text = self._pick_gift_speech(target["name"], item["name"], tier_name, fallback_pool)
+        dialogue_event = self.event_store.append(
+            "npc.dialogue",
+            {"agentId": target["id"], "agentName": target["name"], "targetId": "player", "speech": speech_text, "topic": "gift", "reactionTier": tier_name},
+        )
         event_ids = [gift_event["id"], profile_event["id"], relation_event["id"], memory_event["id"], dialogue_event["id"]]
         self._mark_known_npc(target["id"])
         self._record_player_history("give_gift", payload, event_ids)
         return {
-            "dialogue": [{"speakerId": target["id"], "speakerName": target["name"], "text": dialogue_event["payload"]["speech"]}],
+            "dialogue": [{"speakerId": target["id"], "speakerName": target["name"], "text": speech_text}],
             "relationshipDeltas": [relationship_payload],
             "memoryWrites": [profile_payload, memory_payload],
             "playerProfile": self._player_profile_payload(),
+            "relationshipStage": self._relationship_stage_payload(target["id"], before_relation, after_relation),
+            "giftReaction": {"tier": tier_name, "itemId": item_id},
             "eventIds": event_ids,
+        }
+
+    def _compose_gift_memory_text(self, target_name: str, item_name: str, tier_name: str) -> str:
+        """根据反应档生成 NPC 主观记忆文本，保留 LLM 在线时再覆盖的空间。"""
+        templates = {
+            "loved": f"新来的农场主送来{item_name}，正中我的喜好，今天心里暖了好久。",
+            "liked": f"新来的农场主送给我{item_name}，这份心意我会记着。",
+            "neutral": f"新来的农场主送给我{item_name}，虽然不是最爱，但收下时也很客气。",
+            "disliked": f"新来的农场主送来{item_name}，我有点不知道该怎么收，气氛一下子有点尴尬。",
+        }
+        return templates.get(tier_name, templates["neutral"])
+
+    def _pick_gift_speech(
+        self,
+        target_name: str,
+        item_name: str,
+        tier_name: str,
+        fallback_pool: tuple[str, ...],
+    ) -> str:
+        """优先使用深度卡 fallbackSpeechPool；缺失时回退到通用礼貌句。"""
+        if fallback_pool:
+            tick = int(self.world.get("clock", {}).get("tick", 0))
+            return fallback_pool[tick % len(fallback_pool)]
+        return f"谢谢你送来的{item_name}，我会记住这份心意。"
+
+    def _relationship_stage_payload(
+        self,
+        npc_id: str,
+        before_relation: dict[str, Any],
+        after_relation: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        """计算玩家与该 NPC 当前阶段及变化方向，缺失深度卡时返回 None。"""
+        card = self.npc_deep_cards.get(npc_id)
+        if card is None:
+            return None
+        before = compute_relationship_stage(card, before_relation)
+        after = compute_relationship_stage(card, after_relation)
+        order = [stage.stage for stage in card.relationship_stages]
+        try:
+            transition = "up" if order.index(after["stage"]) > order.index(before["stage"]) else (
+                "down" if order.index(after["stage"]) < order.index(before["stage"]) else "same"
+            )
+        except ValueError:
+            transition = "same"
+        return {
+            "targetId": npc_id,
+            "stage": after["stage"],
+            "label": after["label"],
+            "previousStage": before["stage"],
+            "transition": transition,
+            "unlocks": after["unlocks"],
         }
 
     def _handle_player_inspect(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -2177,6 +2487,9 @@ class AgentRuntime:
         location_id = payload.get("locationId")
         if location_id and location_id in self.world["locations"]:
             self.world["player"]["locationId"] = str(location_id)
+            anchor_id = payload.get("anchorId") or default_anchor_for_location(self.world, str(location_id))
+            if anchor_id and anchor_id in self.world.get("anchors", {}):
+                self.world["player"]["anchorId"] = str(anchor_id)
 
     def _get_target_agent(self, payload: dict[str, Any]) -> dict[str, Any]:
         """读取玩家动作目标 NPC。"""
@@ -2201,13 +2514,32 @@ class AgentRuntime:
     def _take_player_item(self, item_id: str) -> dict[str, Any]:
         """从玩家背包扣除一个物品。"""
         if not item_id:
-            raise ValueError("送礼动作缺少 itemId")
+            raise ValueError("玩家动作缺少 itemId")
         inventory = self.world["player"].setdefault("inventory", [])
         for item in inventory:
             if item.get("id") == item_id and int(item.get("quantity", 0)) > 0:
                 item["quantity"] = int(item["quantity"]) - 1
                 return {"id": item["id"], "name": item.get("name", item["id"])}
-        raise ValueError(f"玩家背包中没有可送出的物品：{item_id}")
+        raise ValueError(f"玩家背包中没有可用物品：{item_id}")
+
+    def _add_player_item(self, item: dict[str, Any], quantity: int = 1) -> None:
+        """向玩家背包加入物品；同 id 物品叠加数量。"""
+        inventory = self.world["player"].setdefault("inventory", [])
+        item_id = str(item.get("id") or "")
+        if not item_id:
+            raise ValueError("新增背包物品缺少 id")
+        for existing in inventory:
+            if existing.get("id") == item_id:
+                existing["quantity"] = int(existing.get("quantity", 0)) + quantity
+                return
+        inventory.append(
+            {
+                "id": item_id,
+                "name": item.get("name", item_id),
+                "quantity": quantity,
+                "tags": list(item.get("tags", [])) if isinstance(item.get("tags"), list) else [],
+            }
+        )
 
     def _relation_diff(self, before: dict[str, Any], after: dict[str, Any]) -> dict[str, int]:
         """计算关系数值变化，便于 Debug Console 展示。"""

@@ -3,15 +3,120 @@
 DAY1_LOCATION_IDS = ["farm", "plaza", "tavern"]
 DAY1_NPC_IDS = ["mira", "tomas", "orren", "lena", "kai", "bram"]
 DAY1_EVENT_ID = "starlight_festival_shortage"
+NPC_PRESENCE_SOURCES = ["habit", "director_spotlight", "event_skill", "relationship_pull"]
 
 LOCATIONS = [
-    {"id": "farm", "name": "晨露农场", "type": "player_home", "x": 18, "y": 76, "color": "#a7f3d0", "description": "玩家刚搬入的小农场，后续会承载作物、仓库和房屋升级。"},
-    {"id": "home-north", "name": "北街住宅区", "type": "home", "x": 18, "y": 28, "color": "#7dd3fc", "description": "安静的家庭住宅区，适合休息、照顾家人和邻里闲聊。"},
-    {"id": "plaza", "name": "中央广场", "type": "public", "x": 50, "y": 45, "color": "#facc15", "description": "小镇的公共中心，公告、庆典、争执和偶遇都常发生在这里。"},
-    {"id": "shop", "name": "星露杂货铺", "type": "commerce", "x": 74, "y": 36, "color": "#fb7185", "description": "购买食物、药品和生活用品，也是居民交换消息的地方。"},
-    {"id": "clinic", "name": "白桦诊所", "type": "service", "x": 32, "y": 66, "color": "#86efac", "description": "处理疾病、照护老人和人口事件后的心理安抚。"},
-    {"id": "tavern", "name": "月猫酒馆", "type": "social", "x": 70, "y": 72, "color": "#c084fc", "description": "夜间社交地点，适合谈心、冲突调解和形成新关系。"},
+    {
+        "id": "farm",
+        "name": "晨露农场",
+        "type": "player_home",
+        "x": 18,
+        "y": 76,
+        "color": "#a7f3d0",
+        "defaultEntryAnchorId": "farm_house_door",
+        "description": "玩家刚搬入的小农场，后续会承载作物、仓库和房屋升级。",
+    },
+    {
+        "id": "home-north",
+        "name": "北街住宅区",
+        "type": "home",
+        "x": 18,
+        "y": 28,
+        "color": "#7dd3fc",
+        "defaultEntryAnchorId": "home_north_lane",
+        "description": "安静的家庭住宅区，适合休息、照顾家人和邻里闲聊。",
+    },
+    {
+        "id": "plaza",
+        "name": "中央广场",
+        "type": "public",
+        "x": 50,
+        "y": 45,
+        "color": "#facc15",
+        "defaultEntryAnchorId": "plaza_gate",
+        "description": "小镇的公共中心，公告、庆典、争执和偶遇都常发生在这里。",
+    },
+    {
+        "id": "shop",
+        "name": "星露杂货铺",
+        "type": "commerce",
+        "x": 74,
+        "y": 36,
+        "color": "#fb7185",
+        "defaultEntryAnchorId": "shop_counter",
+        "description": "购买食物、药品和生活用品，也是居民交换消息的地方。",
+    },
+    {
+        "id": "clinic",
+        "name": "白桦诊所",
+        "type": "service",
+        "x": 32,
+        "y": 66,
+        "color": "#86efac",
+        "defaultEntryAnchorId": "clinic_front_desk",
+        "description": "处理疾病、照护老人和人口事件后的心理安抚。",
+    },
+    {
+        "id": "tavern",
+        "name": "月猫酒馆",
+        "type": "social",
+        "x": 70,
+        "y": 72,
+        "color": "#c084fc",
+        "defaultEntryAnchorId": "tavern_door",
+        "description": "夜间社交地点，适合谈心、冲突调解和形成新关系。",
+    },
 ]
+
+ANCHORS = [
+    {"id": "farm_house_door", "locationId": "farm", "kind": "entry", "screenPosition": {"x": 0.26, "y": 0.68}, "capacity": 1, "tags": ["home", "rest"]},
+    {"id": "farm_field", "locationId": "farm", "kind": "farm_field", "screenPosition": {"x": 0.58, "y": 0.72}, "capacity": 4, "tags": ["farm", "crop", "tutorial"]},
+    {"id": "plaza_gate", "locationId": "plaza", "kind": "entry", "screenPosition": {"x": 0.18, "y": 0.76}, "capacity": 2, "tags": ["entry", "public"]},
+    {"id": "plaza_fountain", "locationId": "plaza", "kind": "social_spot", "screenPosition": {"x": 0.54, "y": 0.62}, "capacity": 3, "tags": ["chat", "public", "festival_view"]},
+    {"id": "market_stall", "locationId": "plaza", "kind": "market_spot", "screenPosition": {"x": 0.72, "y": 0.58}, "capacity": 2, "tags": ["market", "errand"]},
+    {"id": "tavern_door", "locationId": "tavern", "kind": "entry", "screenPosition": {"x": 0.22, "y": 0.74}, "capacity": 2, "tags": ["entry", "evening"]},
+    {"id": "tavern_stage", "locationId": "tavern", "kind": "event_spot", "screenPosition": {"x": 0.62, "y": 0.56}, "capacity": 3, "tags": ["music", "festival", "event"]},
+    {"id": "home_north_lane", "locationId": "home-north", "kind": "entry", "screenPosition": {"x": 0.48, "y": 0.70}, "capacity": 2, "tags": ["home", "street"]},
+    {"id": "shop_counter", "locationId": "shop", "kind": "service_spot", "screenPosition": {"x": 0.54, "y": 0.60}, "capacity": 2, "tags": ["shop", "trade"]},
+    {"id": "clinic_front_desk", "locationId": "clinic", "kind": "service_spot", "screenPosition": {"x": 0.46, "y": 0.64}, "capacity": 2, "tags": ["clinic", "care"]},
+]
+
+FARM_PLOTS = [
+    {
+        "id": "farm_plot_01",
+        "locationId": "farm",
+        "anchorId": "farm_field",
+        "cropId": None,
+        "stage": "empty",
+        "seedItemId": "starlight_turnip_seed",
+        "outputItem": {"id": "fresh_turnip", "name": "新鲜芜菁", "tags": ["crop", "gift", "event_item"]},
+    },
+    {
+        "id": "farm_plot_02",
+        "locationId": "farm",
+        "anchorId": "farm_field",
+        "cropId": None,
+        "stage": "empty",
+        "seedItemId": "starlight_turnip_seed",
+        "outputItem": {"id": "fresh_turnip", "name": "新鲜芜菁", "tags": ["crop", "gift", "event_item"]},
+    },
+]
+
+INTERACTABLES = [
+    {"id": "farm_plot_01", "locationId": "farm", "anchorId": "farm_field", "kind": "farm_plot", "actions": ["plant", "water", "harvest"], "state": {"farmPlotId": "farm_plot_01", "stage": "empty"}},
+    {"id": "farm_plot_02", "locationId": "farm", "anchorId": "farm_field", "kind": "farm_plot", "actions": ["plant", "water", "harvest"], "state": {"farmPlotId": "farm_plot_02", "stage": "empty"}},
+    {"id": "plaza_notice_board", "locationId": "plaza", "anchorId": "plaza_fountain", "kind": "notice_board", "actions": ["inspect"], "state": {"topic": "town_news"}},
+    {"id": "tavern_event_marker", "locationId": "tavern", "anchorId": "tavern_stage", "kind": "event_marker", "actions": ["inspect", "attend_event"], "state": {"eventId": DAY1_EVENT_ID}},
+]
+
+NPC_SOFT_PRESENCE = {
+    "mira": {"anchorId": "market_stall", "intent": "整理杂货铺临时摊位，并观察星灯祭供应是否还够。"},
+    "tomas": {"anchorId": "plaza_fountain", "intent": "检查广场木制摊架，顺手照看米娅附近的动线。"},
+    "orren": {"anchorId": "plaza_fountain", "intent": "在喷泉旁记录小镇历史，等待年轻人主动来问旧故事。"},
+    "lena": {"anchorId": "plaza_fountain", "intent": "留意广场居民的疲惫状态，准备提供轻量健康建议。"},
+    "kai": {"anchorId": "tavern_stage", "intent": "试着维持月猫酒馆的节日气氛，同时担心食材短缺影响演出。"},
+    "bram": {"anchorId": "farm_field", "intent": "检查农场作物供应，心里仍被酒馆欠账和节日供货拉扯。"},
+}
 
 AGENTS = [
     {"id": "mira", "name": "米娅", "genderIdentity": "female", "age": 31, "lifeStage": "adult", "job": "杂货铺店主", "locationId": "plaza", "homeId": "home-north", "personality": ["务实", "照顾型", "轻微焦虑"], "familyId": "family-mira", "spouseId": "tomas", "childrenIds": ["nina"], "longTermGoals": ["让杂货铺稳定盈利", "照顾刚出生的孩子"], "money": 72, "health": 84},

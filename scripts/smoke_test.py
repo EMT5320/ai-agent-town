@@ -53,6 +53,10 @@ REQUIRED_GAME_STATE_FIELDS = {
     "clock",
     "player",
     "locations",
+    "anchors",
+    "interactables",
+    "npcPresence",
+    "farmPlots",
     "npcs",
     "activeEvents",
     "completedEvents",
@@ -184,17 +188,41 @@ def assert_game_state_contract(state: dict, label: str) -> None:
     if missing:
         raise RuntimeError(f"{label} 缺少状态字段：{missing}")
     assert_client_context_fields(state, label)
-    for field in ("locations", "npcs", "activeEvents", "completedEvents", "nightReflections", "recentEvents"):
+    for field in ("locations", "anchors", "interactables", "npcPresence", "farmPlots", "npcs", "activeEvents", "completedEvents", "nightReflections", "recentEvents"):
         if not isinstance(state[field], list):
             raise RuntimeError(f"{label}.{field} 应为数组")
     for index, event in enumerate(state["recentEvents"]):
         compact_debug = event.get("payload", {}).get("debug")
         if isinstance(compact_debug, dict):
             assert_compact_debug_payload(compact_debug, f"{label}.recentEvents[{index}]")
-    if not isinstance(state["player"], dict) or not state["player"].get("locationId"):
-        raise RuntimeError(f"{label}.player 应包含 locationId")
+    clock = state["clock"]
+    if not clock.get("phase") or "actionBudget" not in clock:
+        raise RuntimeError(f"{label}.clock 应包含 phase 和 actionBudget")
+    if not isinstance(state["player"], dict) or not state["player"].get("locationId") or not state["player"].get("anchorId"):
+        raise RuntimeError(f"{label}.player 应包含 locationId 和 anchorId")
+    if not isinstance(state["player"].get("inventory"), list):
+        raise RuntimeError(f"{label}.player.inventory 应为数组")
     if not isinstance(state["slice"], dict) or not state["slice"].get("npcIds") or not state["slice"].get("locationIds"):
         raise RuntimeError(f"{label}.slice 应包含 npcIds 和 locationIds")
+    supported_sources = set(state["slice"].get("supportedNpcPresenceSources", []))
+    required_sources = {"habit", "director_spotlight", "event_skill", "relationship_pull"}
+    if not required_sources.issubset(supported_sources):
+        raise RuntimeError(f"{label}.slice 应声明支持 NPC Presence 来源：{required_sources}")
+    if not state["anchors"] or not all(anchor.get("id") and anchor.get("locationId") and anchor.get("kind") for anchor in state["anchors"]):
+        raise RuntimeError(f"{label}.anchors 应包含 id、locationId 和 kind")
+    if not state["interactables"] or not all(item.get("id") and item.get("locationId") and item.get("anchorId") and isinstance(item.get("actions"), list) for item in state["interactables"]):
+        raise RuntimeError(f"{label}.interactables 应包含 id、locationId、anchorId 和 actions")
+    if not state["farmPlots"] or not all(plot.get("id") and plot.get("locationId") and plot.get("anchorId") and plot.get("stage") for plot in state["farmPlots"]):
+        raise RuntimeError(f"{label}.farmPlots 应包含 id、locationId、anchorId 和 stage")
+    if not state["npcPresence"]:
+        raise RuntimeError(f"{label}.npcPresence 应为非空数组")
+    for index, presence in enumerate(state["npcPresence"]):
+        if not presence.get("agentId") or not presence.get("locationId") or not presence.get("anchorId"):
+            raise RuntimeError(f"{label}.npcPresence[{index}] 应包含 agentId、locationId 和 anchorId")
+        if not presence.get("source") or not presence.get("intent"):
+            raise RuntimeError(f"{label}.npcPresence[{index}] 应包含 source 和 intent")
+        if presence["source"] not in supported_sources:
+            raise RuntimeError(f"{label}.npcPresence[{index}].source 未声明支持：{presence['source']}")
     active_event = next((event for event in state["activeEvents"] if event.get("id") == "starlight_festival_shortage"), None)
     if not active_event:
         raise RuntimeError(f"{label} 缺少星灯祭供应短缺事件")
@@ -443,12 +471,26 @@ game_state = app.get_game_state()
 assert_game_state_contract(game_state, "/api/world/state")
 if game_state["player"]["locationId"] != "farm":
     raise RuntimeError("玩家初始位置应为 farm")
+if game_state["player"]["anchorId"] != "farm_house_door":
+    raise RuntimeError("玩家初始锚点应为 farm_house_door")
+if game_state["clock"]["phase"] != "morning" or game_state["clock"]["actionBudget"] <= 0:
+    raise RuntimeError("游戏状态应返回 clock.phase 和正数 actionBudget")
+if not any(item["id"] == "starlight_turnip_seed" and item["quantity"] >= 1 for item in game_state["player"]["inventory"]):
+    raise RuntimeError("玩家初始背包应包含可播种的星灯芜菁种子")
 if len(game_state["npcs"]) != 6:
     raise RuntimeError(f"游戏状态应只暴露首发 6 个 NPC，实际得到 {len(game_state['npcs'])}")
 if {location["id"] for location in game_state["locations"]} != {"farm", "plaza", "tavern"}:
     raise RuntimeError("游戏状态应只暴露首版 3 个地点")
 if not any(location["id"] == "farm" for location in game_state["locations"]):
     raise RuntimeError("游戏状态缺少玩家农场地点")
+if not any(anchor["id"] == "farm_field" for anchor in game_state["anchors"]):
+    raise RuntimeError("游戏状态缺少农场田地锚点")
+presence_sources = {presence["source"] for presence in game_state["npcPresence"]}
+for expected_source in ("habit", "event_skill", "relationship_pull"):
+    if expected_source not in presence_sources:
+        raise RuntimeError(f"初始 npcPresence 应覆盖来源：{expected_source}")
+if not any(plot["id"] == "farm_plot_01" and plot["stage"] == "empty" for plot in game_state["farmPlots"]):
+    raise RuntimeError("游戏状态缺少空置 farm_plot_01")
 if not any(event["id"] == "starlight_festival_shortage" for event in game_state["activeEvents"]):
     raise RuntimeError("游戏状态缺少星灯祭供应短缺事件")
 starlight_event = next(event for event in game_state["activeEvents"] if event["id"] == "starlight_festival_shortage")
@@ -457,9 +499,42 @@ if starlight_event.get("skillId") != STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID:
 if not all(choice.get("brief") and choice.get("consequences") for choice in starlight_event.get("choices", [])):
     raise RuntimeError("游戏状态中的事件选项应由 Skill 提供 brief 和 consequences")
 interaction_types = {item.get("type") for item in game_state["availableInteractions"]}
-for required_interaction in ("move", "talk", "give_gift", "inspect", "attend_event"):
+for required_interaction in ("move", "move_to_anchor", "farm_action", "end_phase", "talk", "give_gift", "inspect", "attend_event"):
     if required_interaction not in interaction_types:
         raise RuntimeError(f"/api/world/state availableInteractions 缺少 {required_interaction}")
+
+anchor_move = app.player_action({"type": "move_to_anchor", "locationId": "farm", "anchorId": "farm_field"})
+assert_player_action_contract(anchor_move, "move_to_anchor")
+if anchor_move["state"]["player"]["anchorId"] != "farm_field":
+    raise RuntimeError("move_to_anchor 后玩家锚点应同步为 farm_field")
+if anchor_move["state"]["clock"]["actionBudget"] != game_state["clock"]["actionBudget"] - 1:
+    raise RuntimeError("move_to_anchor 应消耗 1 点行动预算")
+
+plant = app.player_action({"type": "farm_action", "locationId": "farm", "interactableId": "farm_plot_01", "action": "plant", "itemId": "starlight_turnip_seed"})
+assert_player_action_contract(plant, "farm_action plant")
+if not any(plot["id"] == "farm_plot_01" and plot["stage"] == "planted" for plot in plant["state"]["farmPlots"]):
+    raise RuntimeError("plant 后 farm_plot_01 应进入 planted 阶段")
+
+water = app.player_action({"type": "farm_action", "locationId": "farm", "interactableId": "farm_plot_01", "action": "water"})
+assert_player_action_contract(water, "farm_action water")
+if not any(plot["id"] == "farm_plot_01" and plot["stage"] == "watered" for plot in water["state"]["farmPlots"]):
+    raise RuntimeError("water 后 farm_plot_01 应进入 watered 阶段")
+if water["state"]["clock"]["actionBudget"] != 0:
+    raise RuntimeError("连续移动、播种、浇水后行动预算应耗尽")
+
+phase_end = app.player_action({"type": "end_phase"})
+assert_player_action_contract(phase_end, "end_phase")
+if phase_end["state"]["clock"]["phase"] != "noon" or phase_end["state"]["clock"]["actionBudget"] <= 0:
+    raise RuntimeError("end_phase 应推进到 noon 并刷新行动预算")
+if "farm_plot_01" not in phase_end["result"]["clockTransition"]["maturedFarmPlotIds"]:
+    raise RuntimeError("end_phase 应把已浇水田块推进到可收获")
+
+harvest = app.player_action({"type": "farm_action", "locationId": "farm", "interactableId": "farm_plot_01", "action": "harvest"})
+assert_player_action_contract(harvest, "farm_action harvest")
+if not any(plot["id"] == "farm_plot_01" and plot["stage"] == "empty" for plot in harvest["state"]["farmPlots"]):
+    raise RuntimeError("harvest 后 farm_plot_01 应回到 empty 阶段")
+if not any(item["id"] == "fresh_turnip" and item["quantity"] >= 2 for item in harvest["state"]["player"]["inventory"]):
+    raise RuntimeError("harvest 后玩家背包应接收作物")
 
 director_app = create_town_app(provider_mode="rule")
 director_step = director_app.step_simulation({"actorId": "director-smoke"})
@@ -477,6 +552,9 @@ if consumed["payload"]["beat"]["beatType"] != "activate_event_skill":
     raise RuntimeError("Director Beat 类型应为 activate_event_skill")
 if consumed["payload"]["beat"]["payload"]["skillId"] != STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID:
     raise RuntimeError("Director Beat 应激活星灯祭供应短缺 Event Skill")
+director_game_state = director_app.get_game_state()
+if not any(presence["source"] == "director_spotlight" for presence in director_game_state["npcPresence"]):
+    raise RuntimeError("Director Beat 消费后 npcPresence 应包含 director_spotlight 来源")
 
 current_digest = WorldDigest.from_world(director_app.runtime.world)
 expired_beat = DirectorBeat(
@@ -603,10 +681,11 @@ if not memory_search["items"]:
 http_debug_summary = assert_http_debug_endpoints(app)
 fallback_summary = assert_provider_fallback_debug()
 
+tick_before_step = app.get_public_state()["clock"]["tick"]
 step = app.step_simulation({"actorId": "smoke-test"})
 state = step["state"]
-if state["clock"]["tick"] != 1:
-    raise RuntimeError(f"期望 tick=1，实际得到 {state['clock']['tick']}")
+if state["clock"]["tick"] != tick_before_step + 1:
+    raise RuntimeError(f"期望 tick={tick_before_step + 1}，实际得到 {state['clock']['tick']}")
 if len(state["events"]) < 3:
     raise RuntimeError("推进一轮后事件数量异常")
 
