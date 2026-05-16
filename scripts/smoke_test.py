@@ -29,6 +29,14 @@ REQUIRED_DEBUG_FIELDS = {
     "fallbackReason",
 }
 
+REQUIRED_CLIENT_CONTEXT_FIELDS = {
+    "memoryEvidence",
+    "relationshipEvidence",
+    "playerProfile",
+    "currentObjective",
+    "availableInteractions",
+}
+
 
 def assert_feature_debug(state: dict, feature: str) -> dict:
     """确认指定 feature 生成了本轮 LLM 验证要求的 Debug 字段。"""
@@ -50,6 +58,39 @@ def assert_feature_debug(state: dict, feature: str) -> dict:
     if not isinstance(debug["usage"], dict):
         raise RuntimeError(f"{feature} Debug usage 应为对象")
     return debug
+
+
+def assert_client_context_fields(payload: dict, label: str) -> None:
+    """确认 Godot 直显字段完整且具备基础可渲染结构。"""
+    missing = sorted(REQUIRED_CLIENT_CONTEXT_FIELDS - set(payload))
+    if missing:
+        raise RuntimeError(f"{label} 缺少 Godot 直显字段：{missing}")
+    if not isinstance(payload["memoryEvidence"], dict):
+        raise RuntimeError(f"{label}.memoryEvidence 应为对象")
+    if "ragHits" not in payload["memoryEvidence"]:
+        raise RuntimeError(f"{label}.memoryEvidence 应包含 ragHits")
+    relationship = payload["relationshipEvidence"]
+    if not isinstance(relationship, dict) or not relationship.get("current"):
+        raise RuntimeError(f"{label}.relationshipEvidence 应包含当前关系快照")
+    if not payload["playerProfile"].get("styleSummary"):
+        raise RuntimeError(f"{label}.playerProfile 应包含风格摘要")
+    objective = payload["currentObjective"]
+    if not isinstance(objective, dict) or not objective.get("id") or not objective.get("title"):
+        raise RuntimeError(f"{label}.currentObjective 应包含 id 和 title")
+    interactions = payload["availableInteractions"]
+    if not isinstance(interactions, list) or not interactions:
+        raise RuntimeError(f"{label}.availableInteractions 应为非空数组")
+    if not all(isinstance(item, dict) and item.get("type") and isinstance(item.get("payload"), dict) for item in interactions):
+        raise RuntimeError(f"{label}.availableInteractions 每项应包含 type 和 payload")
+
+
+def assert_player_action_contract(response: dict, label: str) -> None:
+    """确认 POST /api/player/action 根节点、result 和 state 都可直接取 Godot 直显字段。"""
+    if not response.get("ok"):
+        raise RuntimeError(f"{label} 动作应执行成功")
+    assert_client_context_fields(response, f"{label} response")
+    assert_client_context_fields(response["result"], f"{label} result")
+    assert_client_context_fields(response["state"], f"{label} state")
 
 
 def has_real_llm_config() -> bool:
@@ -151,6 +192,7 @@ if len(initial["agents"]) != 10:
     raise RuntimeError(f"期望 10 个初始 Agent，实际得到 {len(initial['agents'])}")
 
 game_state = app.get_game_state()
+assert_client_context_fields(game_state, "/api/world/state")
 if game_state["player"]["locationId"] != "farm":
     raise RuntimeError("玩家初始位置应为 farm")
 if len(game_state["npcs"]) != 6:
@@ -166,6 +208,10 @@ if starlight_event.get("skillId") != STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID:
     raise RuntimeError("游戏状态中的星灯祭事件应叠加 Event Skill 数据")
 if not all(choice.get("brief") and choice.get("consequences") for choice in starlight_event.get("choices", [])):
     raise RuntimeError("游戏状态中的事件选项应由 Skill 提供 brief 和 consequences")
+interaction_types = {item.get("type") for item in game_state["availableInteractions"]}
+for required_interaction in ("move", "talk", "give_gift", "inspect", "attend_event"):
+    if required_interaction not in interaction_types:
+        raise RuntimeError(f"/api/world/state availableInteractions 缺少 {required_interaction}")
 
 director_app = create_town_app(provider_mode="rule")
 director_step = director_app.step_simulation({"actorId": "director-smoke"})
@@ -209,9 +255,13 @@ director_app.runtime._consume_director_queue(current_digest)
 if not any(event["type"] == "director.beat_discarded" and event["payload"].get("reason") == "world_version_mismatch" for event in director_app.get_public_state()["events"]):
     raise RuntimeError("Director 队列应丢弃世界版本不匹配 Beat")
 
+move = app.player_action({"type": "move", "locationId": "plaza"})
+assert_player_action_contract(move, "move")
+if move["state"]["player"]["locationId"] != "plaza":
+    raise RuntimeError("玩家移动后 state 应同步位置")
+
 talk = app.player_action({"type": "talk", "targetId": "orren", "locationId": "plaza", "topic": "first_meeting", "message": "你好，我刚搬到晨露农场。"})
-if not talk["ok"]:
-    raise RuntimeError("玩家对话动作应执行成功")
+assert_player_action_contract(talk, "talk")
 if "orren" not in talk["state"]["player"]["knownNpcs"]:
     raise RuntimeError("玩家对话后应记录已认识 NPC")
 if not talk["result"]["dialogue"]:
@@ -223,8 +273,7 @@ if not talk["result"].get("playerProfile", {}).get("styleSummary"):
     raise RuntimeError("玩家对话后应更新 Player Profile")
 
 gift = app.player_action({"type": "give_gift", "targetId": "kai", "locationId": "tavern", "itemId": "farm_flower"})
-if not gift["ok"]:
-    raise RuntimeError("玩家送礼动作应执行成功")
+assert_player_action_contract(gift, "give_gift")
 if not gift["result"]["relationshipDeltas"]:
     raise RuntimeError("送礼后应产生关系变化")
 if not any("player_gift" in item.get("tags", []) for item in gift["result"]["memoryWrites"]):
@@ -233,8 +282,7 @@ if "礼物" not in gift["result"].get("playerProfile", {}).get("styleSummary", "
     raise RuntimeError("送礼后 Player Profile 应体现礼物风格")
 
 inspect = app.player_action({"type": "inspect", "eventId": "starlight_festival_shortage"})
-if not inspect["ok"]:
-    raise RuntimeError("事件查看动作应执行成功")
+assert_player_action_contract(inspect, "inspect")
 if not inspect["result"]["inspect"]["choices"]:
     raise RuntimeError("事件查看应返回可选项")
 if inspect["result"]["inspect"].get("skillId") != STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID:
@@ -243,8 +291,7 @@ if not inspect["result"]["inspect"].get("debugFields"):
     raise RuntimeError("事件查看结果应包含 Skill Debug 字段")
 
 event_result = app.player_action({"type": "attend_event", "eventId": "starlight_festival_shortage", "choice": "donate_crop"})
-if not event_result["ok"]:
-    raise RuntimeError("星灯祭事件参与动作应执行成功")
+assert_player_action_contract(event_result, "attend_event")
 if event_result["result"]["eventResult"]["choice"] != "donate_crop":
     raise RuntimeError("星灯祭事件结算选项异常")
 if event_result["result"]["eventResult"].get("skillId") != STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID:
@@ -267,8 +314,7 @@ if night_reflection_debug.get("skillId") != STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID
     raise RuntimeError("night_reflection Debug 应记录 Skill 字段")
 
 follow_up = app.player_action({"type": "talk", "targetId": "kai", "locationId": "tavern", "topic": "starlight_follow_up", "message": "昨晚星灯祭之后，你怎么看我的选择？"})
-if not follow_up["ok"]:
-    raise RuntimeError("星灯祭后的第二次对话应执行成功")
+assert_player_action_contract(follow_up, "follow_up")
 follow_up_text = follow_up["result"]["dialogue"][0]["text"]
 if "记得" not in follow_up_text and "星灯祭" not in follow_up_text:
     raise RuntimeError("第二次对话应引用既有记忆或星灯祭上下文")

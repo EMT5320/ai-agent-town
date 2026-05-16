@@ -32,8 +32,11 @@ from app.skills import (
     get_event_skill,
     list_event_skills,
 )
-from app.world.seed_data import DAY1_EVENT_ID
+from app.world.seed_data import DAY1_EVENT_ID, DAY1_LOCATION_IDS, DAY1_NPC_IDS
 from app.world.world_state import advance_clock, adjust_relation, create_initial_world, get_relation, living_agents, public_game_world, public_world
+
+
+CLIENT_CONTEXT_FIELDS = ("memoryEvidence", "relationshipEvidence", "playerProfile", "currentObjective", "availableInteractions")
 
 
 class _SafeFormatDict(dict[str, Any]):
@@ -77,6 +80,10 @@ class AgentRuntime:
         state = public_game_world(self.world, self.event_store.list())
         state["activeEvents"] = self._skill_enriched_events(state.get("activeEvents", []))
         state["playerProfile"] = self._player_profile_payload()
+        state["memoryEvidence"] = self._memory_evidence_payload()
+        state["relationshipEvidence"] = self._relationship_evidence_payload()
+        state["currentObjective"] = self._current_objective_payload()
+        state["availableInteractions"] = self._available_interactions_payload()
         return state
 
     def get_debug_snapshot(self, filters: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -184,6 +191,296 @@ class AgentRuntime:
             "events": self._influence_event_debug(filters, skill_id=skill_id, event_id=event_id),
         }
 
+    def _enrich_player_action_result(
+        self,
+        action_type: str,
+        payload: dict[str, Any],
+        result: dict[str, Any],
+        state: dict[str, Any],
+    ) -> dict[str, Any]:
+        """补齐 Godot 可直接读取的玩家动作回执字段。"""
+        enriched = dict(result)
+        enriched["playerProfile"] = enriched.get("playerProfile") or state.get("playerProfile") or self._player_profile_payload()
+        enriched["memoryEvidence"] = self._memory_evidence_payload(action_type=action_type, payload=payload, action_result=enriched)
+        enriched["relationshipEvidence"] = self._relationship_evidence_payload(payload=payload, action_result=enriched)
+        enriched["currentObjective"] = state.get("currentObjective") or self._current_objective_payload()
+        enriched["availableInteractions"] = state.get("availableInteractions") or self._available_interactions_payload()
+        return enriched
+
+    def _memory_evidence_payload(
+        self,
+        *,
+        action_type: str | None = None,
+        payload: dict[str, Any] | None = None,
+        action_result: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """整理 Godot 展示记忆证据需要的摘要、检索命中和本次写入。"""
+        payload = payload or {}
+        action_result = action_result or {}
+        existing = action_result.get("memoryEvidence") if isinstance(action_result.get("memoryEvidence"), dict) else None
+        target_id = str(payload.get("targetId") or "")
+        target_id = target_id if target_id in self.world.get("agents", {}) else None
+        query = self._memory_evidence_query(action_type, payload, action_result)
+
+        if existing:
+            evidence = dict(existing)
+            evidence.setdefault("scope", "action")
+            evidence.setdefault("targetId", target_id)
+            evidence.setdefault("query", query)
+        else:
+            retrieval = rag_lite_search(self.world, query=query, agent_id=target_id, limit=5)
+            if target_id:
+                summary_key = "summary"
+                summary_value: Any = memory_summary_payload(target_id, self.world["agents"][target_id], limit=8)
+            else:
+                summary_key = "summaries"
+                visible_ids = {"player", *DAY1_NPC_IDS}
+                summary_value = [
+                    item
+                    for item in world_memory_summaries(self.world, limit=4)["items"]
+                    if item.get("agentId") in visible_ids
+                ]
+            evidence = {
+                "scope": "target" if target_id else "world",
+                "targetId": target_id,
+                "query": retrieval.get("query", query),
+                summary_key: summary_value,
+                "ragHits": retrieval.get("items", []),
+            }
+
+        evidence["recentWrites"] = self._recent_memory_evidence_events()
+        if action_result.get("memoryWrites"):
+            evidence["writes"] = list(action_result.get("memoryWrites", []))
+        if action_result.get("memoryEvidenceUsed"):
+            evidence["used"] = action_result["memoryEvidenceUsed"]
+        return evidence
+
+    def _memory_evidence_query(self, action_type: str | None, payload: dict[str, Any], action_result: dict[str, Any]) -> str:
+        """根据动作上下文选择轻量检索词，方便客户端解释命中来源。"""
+        event_result = action_result.get("eventResult") if isinstance(action_result.get("eventResult"), dict) else {}
+        if event_result.get("summary"):
+            return str(event_result["summary"])
+        inspect_payload = action_result.get("inspect") if isinstance(action_result.get("inspect"), dict) else {}
+        if inspect_payload.get("summary"):
+            return str(inspect_payload["summary"])
+        topic = str(payload.get("topic") or "").strip()
+        message = str(payload.get("message") or "").strip()
+        if topic or message:
+            return " ".join(part for part in (topic, message) if part)
+        if action_type in {"attend_event", "inspect"} or self.world["player"].get("questFlags", {}).get(DAY1_EVENT_ID):
+            return "星灯祭 玩家"
+        return ""
+
+    def _recent_memory_evidence_events(self, limit: int = 8) -> list[dict[str, Any]]:
+        """从事件流提取最近记忆写入，避免 Godot 再解析完整 recentEvents。"""
+        memory_types = {"npc.memory_created", "npc.night_reflection", "player.profile_updated"}
+        items: list[dict[str, Any]] = []
+        for event in self.event_store.list():
+            if event.get("type") not in memory_types:
+                continue
+            payload = event.get("payload", {})
+            items.append(
+                {
+                    "eventId": event.get("id"),
+                    "eventType": event.get("type"),
+                    "createdAt": event.get("createdAt"),
+                    "agentId": payload.get("agentId"),
+                    "agentName": payload.get("agentName"),
+                    "text": payload.get("text"),
+                    "tags": list(payload.get("tags", [])) if isinstance(payload.get("tags"), list) else [],
+                    "skillId": payload.get("skillId"),
+                    "sourceEventId": payload.get("eventId"),
+                }
+            )
+        return items[-limit:]
+
+    def _relationship_evidence_payload(
+        self,
+        *,
+        payload: dict[str, Any] | None = None,
+        action_result: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """整理玩家和首发 NPC 的关系快照、本次变化与近期变化。"""
+        payload = payload or {}
+        action_result = action_result or {}
+        target_id = str(payload.get("targetId") or "")
+        target_id = target_id if target_id in self.world.get("agents", {}) else None
+        changes = list(action_result.get("relationshipDeltas", [])) if isinstance(action_result.get("relationshipDeltas"), list) else []
+        focus_ids = {target_id} if target_id else {str(item.get("targetId")) for item in changes if isinstance(item, dict) and item.get("targetId")}
+
+        current = []
+        for npc_id in self._visible_npc_ids():
+            agent = self.world["agents"][npc_id]
+            current.append(
+                {
+                    "targetId": npc_id,
+                    "targetName": agent.get("name", npc_id),
+                    "focused": npc_id in focus_ids,
+                    "relation": get_relation(self.world, "player", npc_id),
+                }
+            )
+
+        return {
+            "scope": "target" if target_id else "world",
+            "targetId": target_id,
+            "current": current,
+            "changes": changes,
+            "recentChanges": self._recent_relationship_events(),
+        }
+
+    def _recent_relationship_events(self, limit: int = 8) -> list[dict[str, Any]]:
+        """从事件流提取关系变化，供客户端直接渲染变化列表。"""
+        items: list[dict[str, Any]] = []
+        for event in self.event_store.list():
+            if event.get("type") != "relationship.changed":
+                continue
+            items.append({"eventId": event.get("id"), "createdAt": event.get("createdAt"), "payload": event.get("payload", {})})
+        return items[-limit:]
+
+    def _current_objective_payload(self) -> dict[str, Any]:
+        """输出当前玩家目标，帮助 Godot 展示下一步引导。"""
+        for event in self.world.get("activeEvents", []):
+            if event.get("id") != DAY1_EVENT_ID:
+                continue
+            skill = self._get_event_skill_for_event(str(event.get("id")))
+            if event.get("status") == "resolved":
+                resolution = event.get("resolution", {}) if isinstance(event.get("resolution"), dict) else {}
+                return {
+                    "id": f"follow_up:{skill.event_id}",
+                    "type": "follow_up",
+                    "status": "active",
+                    "title": "回访星灯祭后的居民",
+                    "summary": resolution.get("summary") or "星灯祭供应短缺已经结算，可以继续观察居民记忆和关系变化。",
+                    "eventId": skill.event_id,
+                    "skillId": skill.skill_id,
+                    "locationId": skill.trigger.location_id,
+                    "targetNpcIds": [agent_id for agent_id in skill.participants if agent_id in self.world["agents"]],
+                    "nextAction": {"type": "talk", "targetId": "kai", "locationId": skill.trigger.location_id, "topic": "starlight_follow_up"},
+                }
+
+            inspected = bool(self.world["player"].get("questFlags", {}).get(f"inspected_{skill.event_id}"))
+            next_action = {"type": "attend_event", "eventId": skill.event_id, "choice": self._default_event_choice(skill), "locationId": skill.trigger.location_id}
+            if not inspected:
+                next_action = {"type": "inspect", "eventId": skill.event_id, "locationId": skill.trigger.location_id}
+            return {
+                "id": f"resolve:{skill.event_id}",
+                "type": "event",
+                "status": event.get("status", "available"),
+                "title": skill.title,
+                "summary": skill.brief,
+                "eventId": skill.event_id,
+                "skillId": skill.skill_id,
+                "locationId": skill.trigger.location_id,
+                "targetNpcIds": [agent_id for agent_id in skill.participants if agent_id in self.world["agents"]],
+                "progress": {"inspected": inspected, "resolved": False},
+                "nextAction": next_action,
+            }
+
+        first_npc = self._visible_npc_ids()[0] if self._visible_npc_ids() else None
+        return {
+            "id": "meet_townsfolk",
+            "type": "social",
+            "status": "active",
+            "title": "认识小镇居民",
+            "summary": "先和首发居民聊天，积累玩家风格、关系与记忆证据。",
+            "targetNpcIds": self._visible_npc_ids(),
+            "nextAction": {"type": "talk", "targetId": first_npc, "locationId": self.world["player"].get("locationId"), "topic": "first_meeting"} if first_npc else None,
+        }
+
+    def _available_interactions_payload(self) -> list[dict[str, Any]]:
+        """列出 Godot 可直接渲染成按钮的后端动作。"""
+        interactions: list[dict[str, Any]] = []
+        player_location = self.world["player"].get("locationId")
+
+        for location_id in DAY1_LOCATION_IDS:
+            location = self.world["locations"].get(location_id)
+            if not location:
+                continue
+            interactions.append(
+                {
+                    "id": f"move:{location_id}",
+                    "type": "move",
+                    "label": f"前往{location['name']}",
+                    "enabled": location_id != player_location,
+                    "reason": "already_here" if location_id == player_location else None,
+                    "target": {"kind": "location", "id": location_id, "name": location["name"]},
+                    "payload": {"type": "move", "locationId": location_id},
+                }
+            )
+
+        gift_items = [item for item in self.world["player"].get("inventory", []) if int(item.get("quantity", 0)) > 0 and "gift" in item.get("tags", [])]
+        # 首版事件会用到 fresh_turnip，默认送礼优先选择不影响事件选项的物品。
+        gift_items.sort(key=lambda item: (item.get("id") == "fresh_turnip", str(item.get("id", ""))))
+        first_gift = gift_items[0] if gift_items else None
+        for npc_id in self._visible_npc_ids():
+            npc = self.world["agents"][npc_id]
+            interactions.append(
+                {
+                    "id": f"talk:{npc_id}",
+                    "type": "talk",
+                    "label": f"和{npc['name']}聊天",
+                    "enabled": bool(npc.get("alive", True)),
+                    "target": {"kind": "npc", "id": npc_id, "name": npc["name"], "locationId": npc.get("locationId")},
+                    "payload": {"type": "talk", "targetId": npc_id, "locationId": npc.get("locationId"), "topic": "first_meeting"},
+                }
+            )
+            interactions.append(
+                {
+                    "id": f"give_gift:{npc_id}",
+                    "type": "give_gift",
+                    "label": f"送礼给{npc['name']}",
+                    "enabled": bool(first_gift and npc.get("alive", True)),
+                    "reason": None if first_gift else "no_gift_item",
+                    "target": {"kind": "npc", "id": npc_id, "name": npc["name"], "locationId": npc.get("locationId")},
+                    "payload": {"type": "give_gift", "targetId": npc_id, "locationId": npc.get("locationId"), "itemId": first_gift.get("id") if first_gift else None},
+                }
+            )
+
+        for event in self.world.get("activeEvents", []):
+            if event.get("status") == "resolved":
+                continue
+            try:
+                skill = self._get_event_skill_for_event(str(event.get("id") or ""))
+            except ValueError:
+                continue
+            interactions.append(
+                {
+                    "id": f"inspect:{skill.event_id}",
+                    "type": "inspect",
+                    "label": f"查看事件：{skill.title}",
+                    "enabled": True,
+                    "target": {"kind": "event", "id": skill.event_id, "name": skill.title, "locationId": skill.trigger.location_id},
+                    "payload": {"type": "inspect", "eventId": skill.event_id, "locationId": skill.trigger.location_id},
+                }
+            )
+            for option in skill.player_options:
+                has_required_item = option.requires_player_item_id is None or self._player_item_quantity(option.requires_player_item_id) > 0
+                interactions.append(
+                    {
+                        "id": f"attend_event:{skill.event_id}:{option.option_id}",
+                        "type": "attend_event",
+                        "label": option.label,
+                        "enabled": has_required_item,
+                        "reason": None if has_required_item else f"missing_item:{option.requires_player_item_id}",
+                        "target": {"kind": "event", "id": skill.event_id, "name": skill.title, "locationId": skill.trigger.location_id},
+                        "payload": {"type": "attend_event", "eventId": skill.event_id, "choice": option.option_id, "locationId": skill.trigger.location_id},
+                    }
+                )
+        return interactions
+
+    def _visible_npc_ids(self) -> list[str]:
+        """返回 Godot 首版切片内可见 NPC id。"""
+        return [npc_id for npc_id in DAY1_NPC_IDS if npc_id in self.world.get("agents", {})]
+
+    def _player_item_quantity(self, item_id: str | None) -> int:
+        """读取玩家背包中指定物品数量，供交互按钮判定可用性。"""
+        if not item_id:
+            return 0
+        for item in self.world["player"].get("inventory", []):
+            if item.get("id") == item_id:
+                return int(item.get("quantity", 0))
+        return 0
+
     def explain_event_skill(self, filters: dict[str, Any] | None = None) -> dict[str, Any]:
         """解释单个 Event Skill 在 API / Debug Console 中如何被追踪。"""
         filters = filters or {}
@@ -249,7 +546,13 @@ class AgentRuntime:
             result = self._handle_player_attend_event(payload)
         else:
             raise ValueError(f"未知玩家动作：{action_type}")
-        return {"ok": True, "result": result, "state": self.get_game_state()}
+        state = self.get_game_state()
+        result = self._enrich_player_action_result(str(action_type), payload, result, state)
+        response = {"ok": True, "result": result, "state": state}
+        # 为 Godot 首版接入降低取值成本：动作回执根节点同步透出常用展示字段。
+        for field in CLIENT_CONTEXT_FIELDS:
+            response[field] = result[field]
+        return response
 
     def step(self, actor_id: str = "developer") -> dict[str, Any]:
         if self.world["clock"].get("paused"):
