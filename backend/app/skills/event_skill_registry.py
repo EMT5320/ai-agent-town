@@ -2,14 +2,84 @@
 
 from app.skills.event_skill_schema import (
     EventAssetHint,
+    EventChoiceOutcome,
     EventConsequence,
+    EventDialogueFallback,
+    EventMemoryTemplate,
     EventParticipantDelta,
     EventPlayerOption,
+    EventReflectionSeed,
     EventSkillSchema,
+    EventSkillDebugField,
     EventTriggerCondition,
 )
 
 STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID = "event.starlight_festival_shortage"
+
+_STARLIGHT_COMMON_MEMORY_TEMPLATES = (
+    EventMemoryTemplate(
+        agent_id="kai",
+        text_template="星灯祭前夜差点因为食材短缺冷场，玩家的选择让我重新看见节日还能继续发光。结局：{summary}",
+        tags=("starlight_shortage", "event_memory"),
+    ),
+    EventMemoryTemplate(
+        agent_id="bram",
+        text_template="酒馆欠账和供货压力被摆到台面上，玩家的处理方式让我重新评估这个新农场主。结局：{summary}",
+        tags=("starlight_shortage", "event_memory"),
+    ),
+    EventMemoryTemplate(
+        agent_id="mira",
+        text_template="今晚的供应短缺让我担心小镇账目，但玩家让局面没有继续恶化。结局：{summary}",
+        tags=("starlight_shortage", "event_memory"),
+    ),
+    EventMemoryTemplate(
+        agent_id="lena",
+        text_template="争执让大家都紧绷，玩家的介入至少让晚上的情绪风险降了下来。结局：{summary}",
+        tags=("starlight_shortage", "event_memory"),
+    ),
+    EventMemoryTemplate(
+        agent_id="orren",
+        text_template="星灯祭的传统需要年轻人接住，玩家今晚给这段传统留下了新的注脚。结局：{summary}",
+        tags=("starlight_shortage", "event_memory"),
+    ),
+    EventMemoryTemplate(
+        agent_id="tomas",
+        text_template="我在旁边修灯架时看见玩家处理争执，这个人也许愿意认真守护小镇。结局：{summary}",
+        tags=("starlight_shortage", "event_memory"),
+    ),
+)
+
+_STARLIGHT_COMMON_REFLECTION_SEEDS = (
+    EventReflectionSeed(
+        agent_id="kai",
+        text_template="如果玩家没有选择“{choiceLabel}”，我可能会把节日压力全推给别人。明天要认真面对欠账。",
+        tags=("night_reflection", "starlight_shortage"),
+    ),
+    EventReflectionSeed(
+        agent_id="bram",
+        text_template="这个新来的农场主没有把供应当成理所当然。无论是否站在我这边，至少看见了农场人的压力。",
+        tags=("night_reflection", "starlight_shortage"),
+    ),
+    EventReflectionSeed(
+        agent_id="lena",
+        text_template="今晚的冲突证明节日压力会影响健康和关系。玩家的选择值得继续观察。",
+        tags=("night_reflection", "starlight_shortage"),
+    ),
+)
+
+_STARLIGHT_SKILL_DEBUG_FIELDS = (
+    EventSkillDebugField(field_id="skillId", label="事件 Skill", value_template="{skillId}"),
+    EventSkillDebugField(field_id="eventId", label="事件 ID", value_template="{eventId}"),
+    EventSkillDebugField(field_id="choiceId", label="玩家选项", value_template="{choice}"),
+    EventSkillDebugField(field_id="outcomeSource", label="结算来源", value_template="event_skill_registry"),
+)
+
+_STARLIGHT_OUTCOME_DEBUG_FIELDS = (
+    EventSkillDebugField(field_id="choiceLabel", label="结算选项文案", value_template="{choiceLabel}"),
+    EventSkillDebugField(field_id="consequenceTypes", label="后果类型", value_template="{consequenceTypes}"),
+    EventSkillDebugField(field_id="memoryTemplateCount", label="记忆模板数量", value_template="{memoryTemplateCount}"),
+    EventSkillDebugField(field_id="reflectionSeedCount", label="反思种子数量", value_template="{reflectionSeedCount}"),
+)
 
 STARLIGHT_FESTIVAL_SHORTAGE_SKILL = EventSkillSchema(
     skill_id=STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID,
@@ -137,6 +207,100 @@ STARLIGHT_FESTIVAL_SHORTAGE_SKILL = EventSkillSchema(
             tags=("choice", "donate", "mediate", "observe"),
         ),
     ),
+    choice_outcomes=(
+        EventChoiceOutcome(
+            option_id="donate_crop",
+            choice_label_template="拿出{itemName}帮酒馆渡过今晚",
+            summary_template="玩家拿出{itemName}补上节日食材，凯娅松了一口气，布兰娜也承认这份帮忙很实在。",
+            relation_deltas=(
+                EventParticipantDelta(participant_id="kai", affection=5, trust=4, conflict=-5),
+                EventParticipantDelta(participant_id="bram", affection=2, trust=3, conflict=-4),
+                EventParticipantDelta(participant_id="mira", affection=1, trust=2, conflict=-1),
+                EventParticipantDelta(participant_id="lena", affection=1, trust=1, conflict=-1),
+                EventParticipantDelta(participant_id="orren", affection=1, trust=2, conflict=-1),
+                EventParticipantDelta(participant_id="tomas", affection=1, trust=1, conflict=-1),
+            ),
+            memory_templates=_STARLIGHT_COMMON_MEMORY_TEMPLATES,
+            fallback_dialogue=(
+                EventDialogueFallback(agent_id="kai", speech_template="你真的把{itemName}拿来了？今晚的星灯不会暗下去了，谢谢你！"),
+                EventDialogueFallback(agent_id="bram", speech_template="哼，至少你知道作物都要靠人种出来。这份人情我记下。"),
+            ),
+            reflection_seeds=_STARLIGHT_COMMON_REFLECTION_SEEDS,
+            debug_fields=_STARLIGHT_OUTCOME_DEBUG_FIELDS,
+        ),
+        EventChoiceOutcome(
+            option_id="mediate",
+            choice_label_template="调解凯娅和布兰娜的欠账冲突",
+            summary_template="玩家请凯娅先确认还款安排，也帮布兰娜保住供货底线，争执被暂时压了下来。",
+            relation_deltas=(
+                EventParticipantDelta(participant_id="kai", affection=3, trust=4, conflict=-4),
+                EventParticipantDelta(participant_id="bram", affection=3, trust=4, conflict=-5),
+                EventParticipantDelta(participant_id="mira", affection=1, trust=2, conflict=-1),
+                EventParticipantDelta(participant_id="lena", affection=1, trust=2, conflict=-1),
+                EventParticipantDelta(participant_id="orren", affection=1, trust=2, conflict=-1),
+            ),
+            memory_templates=_STARLIGHT_COMMON_MEMORY_TEMPLATES,
+            fallback_dialogue=(
+                EventDialogueFallback(agent_id="kai", speech_template="好啦好啦，我会把账单写清楚。谢谢你没有让今晚变成吵架大会。"),
+                EventDialogueFallback(agent_id="bram", speech_template="能把话说到点子上，比单纯站队强。新来的，你有点分寸。"),
+            ),
+            reflection_seeds=_STARLIGHT_COMMON_REFLECTION_SEEDS,
+            debug_fields=_STARLIGHT_OUTCOME_DEBUG_FIELDS,
+        ),
+        EventChoiceOutcome(
+            option_id="support_kai",
+            choice_label_template="优先支持凯娅维持节日气氛",
+            summary_template="玩家站在凯娅这边让星灯祭继续热闹，但布兰娜对酒馆旧账更加不满。",
+            relation_deltas=(
+                EventParticipantDelta(participant_id="kai", affection=5, trust=2, conflict=-2),
+                EventParticipantDelta(participant_id="bram", affection=-1, trust=-1, conflict=4),
+                EventParticipantDelta(participant_id="mira", trust=1),
+                EventParticipantDelta(participant_id="orren", trust=1),
+            ),
+            memory_templates=_STARLIGHT_COMMON_MEMORY_TEMPLATES,
+            fallback_dialogue=(
+                EventDialogueFallback(agent_id="kai", speech_template="我就知道有人懂星灯祭的重要！今晚先让大家笑起来吧。"),
+                EventDialogueFallback(agent_id="bram", speech_template="热闹不能抵账。你今天的选择我看见了。"),
+            ),
+            reflection_seeds=_STARLIGHT_COMMON_REFLECTION_SEEDS,
+            debug_fields=_STARLIGHT_OUTCOME_DEBUG_FIELDS,
+        ),
+        EventChoiceOutcome(
+            option_id="support_bram",
+            choice_label_template="优先支持布兰娜守住供货底线",
+            summary_template="玩家支持布兰娜先把欠账说清，酒馆气氛短暂降温，但供货压力被认真看见了。",
+            relation_deltas=(
+                EventParticipantDelta(participant_id="kai", affection=-1, trust=0, conflict=3),
+                EventParticipantDelta(participant_id="bram", affection=5, trust=3, conflict=-2),
+                EventParticipantDelta(participant_id="mira", trust=1),
+                EventParticipantDelta(participant_id="lena", trust=1),
+            ),
+            memory_templates=_STARLIGHT_COMMON_MEMORY_TEMPLATES,
+            fallback_dialogue=(
+                EventDialogueFallback(agent_id="bram", speech_template="总算有人听见供货人的难处。节日也得先把账算明白。"),
+                EventDialogueFallback(agent_id="kai", speech_template="我知道她辛苦，可今晚的灯要是灭了，大家都会难过的。"),
+            ),
+            reflection_seeds=_STARLIGHT_COMMON_REFLECTION_SEEDS,
+            debug_fields=_STARLIGHT_OUTCOME_DEBUG_FIELDS,
+        ),
+        EventChoiceOutcome(
+            option_id="observe",
+            choice_label_template="先旁观并记录大家的反应",
+            summary_template="玩家没有立刻介入，只观察到凯娅的焦虑、布兰娜的压力，以及旁观居民的担心。",
+            relation_deltas=(
+                EventParticipantDelta(participant_id="orren", trust=1),
+                EventParticipantDelta(participant_id="lena", trust=1),
+            ),
+            memory_templates=_STARLIGHT_COMMON_MEMORY_TEMPLATES,
+            fallback_dialogue=(
+                EventDialogueFallback(agent_id="orren", speech_template="观察也是选择。你至少看见了节日背后的裂缝。"),
+                EventDialogueFallback(agent_id="lena", speech_template="先不急着介入也可以，但今晚需要有人继续照看大家的情绪。"),
+            ),
+            reflection_seeds=_STARLIGHT_COMMON_REFLECTION_SEEDS,
+            debug_fields=_STARLIGHT_OUTCOME_DEBUG_FIELDS,
+        ),
+    ),
+    debug_fields=_STARLIGHT_SKILL_DEBUG_FIELDS,
 )
 
 _EVENT_SKILL_REGISTRY: dict[str, EventSkillSchema] = {
@@ -164,3 +328,12 @@ def find_event_option(skill_id: str, option_id: str) -> EventPlayerOption:
         if option.option_id == option_id:
             return option
     raise KeyError(f"事件技能 {skill_id} 中不存在选项：{option_id}")
+
+
+def find_event_choice_outcome(skill_id: str, option_id: str) -> EventChoiceOutcome:
+    """按选项 id 读取 Skill 结算定义。"""
+    skill = get_event_skill(skill_id)
+    for outcome in skill.choice_outcomes:
+        if outcome.option_id == option_id:
+            return outcome
+    raise KeyError(f"事件技能 {skill_id} 中不存在结算定义：{option_id}")

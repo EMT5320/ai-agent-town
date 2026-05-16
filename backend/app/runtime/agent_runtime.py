@@ -22,9 +22,25 @@ from app.providers.context_builder import (
 from app.providers.rule_based_provider import RuleBasedProvider
 from app.runtime.action_executor import execute_action, maybe_population_event
 from app.runtime.action_parser import parse_provider_output
-from app.skills import STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID, EventSkillSchema, get_event_skill, list_event_skills
+from app.skills import (
+    STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID,
+    EventPlayerOption,
+    EventSkillDebugField,
+    EventSkillSchema,
+    find_event_choice_outcome,
+    find_event_option,
+    get_event_skill,
+    list_event_skills,
+)
 from app.world.seed_data import DAY1_EVENT_ID
 from app.world.world_state import advance_clock, adjust_relation, create_initial_world, get_relation, living_agents, public_game_world, public_world
+
+
+class _SafeFormatDict(dict[str, Any]):
+    """Skill 模板格式化上下文，缺字段时保留占位符方便 Debug。"""
+
+    def __missing__(self, key: str) -> str:
+        return "{" + key + "}"
 
 
 class AgentRuntime:
@@ -58,7 +74,9 @@ class AgentRuntime:
 
     def get_game_state(self) -> dict[str, Any]:
         """输出游戏客户端状态，后续 Godot 只依赖这个契约。"""
-        return public_game_world(self.world, self.event_store.list())
+        state = public_game_world(self.world, self.event_store.list())
+        state["activeEvents"] = self._skill_enriched_events(state.get("activeEvents", []))
+        return state
 
     def handle_player_action(self, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         """处理玩家动作入口，所有结果都写入事件流和玩家行动历史。"""
@@ -170,7 +188,7 @@ class AgentRuntime:
         }
 
     def _should_activate_event_skill(self, skill: EventSkillSchema) -> bool:
-        """检测星灯祭供应短缺候选，避免同一个事件技能重复激活。"""
+        """检测事件技能候选，避免同一个事件技能重复激活。"""
         director_state = self.world.setdefault("directorState", {"activatedEventSkills": [], "consumedBeatIds": []})
         if skill.skill_id in director_state.setdefault("activatedEventSkills", []):
             return False
@@ -228,6 +246,7 @@ class AgentRuntime:
                     {"id": hint.hint_id, "type": hint.asset_type, "brief": hint.brief, "tags": list(hint.tags)}
                     for hint in skill.asset_hints
                 ],
+                "debugFields": self._skill_debug_field_templates(skill.debug_fields),
                 "tension": {"level": tension.level, "score": tension.score, "evidence": tension.evidence},
             },
         )
@@ -382,14 +401,19 @@ class AgentRuntime:
         location_id = str(payload.get("locationId") or self.world["player"].get("locationId") or "")
         if event_id:
             event = self._get_active_event(event_id)
+            skill = self._get_event_skill_for_event(event["id"])
             inspect_payload = {
                 "subjectType": "event",
                 "subjectId": event["id"],
-                "title": event["title"],
-                "summary": event["summary"],
-                "locationId": event["locationId"],
+                "skillId": skill.skill_id,
+                "title": skill.title,
+                "summary": skill.brief,
+                "locationId": skill.trigger.location_id,
                 "status": event["status"],
-                "choices": event.get("choices", []),
+                "participants": list(skill.participants),
+                "choices": self._skill_choice_payloads(skill),
+                "assetHints": self._skill_asset_hint_payloads(skill),
+                "debugFields": self._skill_debug_payload(skill, None, choice="inspect"),
             }
         else:
             if location_id not in self.world["locations"]:
@@ -416,27 +440,34 @@ class AgentRuntime:
         }
 
     def _handle_player_attend_event(self, payload: dict[str, Any]) -> dict[str, Any]:
-        """处理星灯祭供应短缺事件选择，并写入关系、记忆和夜间反思种子。"""
+        """处理 Event Skill 事件选择，并写入关系、记忆和夜间反思种子。"""
         event_id = str(payload.get("eventId") or DAY1_EVENT_ID)
-        choice = str(payload.get("choice") or "mediate")
         event = self._get_active_event(event_id)
+        skill = self._get_event_skill_for_event(event_id)
+        choice = str(payload.get("choice") or self._default_event_choice(skill))
+        try:
+            option = find_event_option(skill.skill_id, choice)
+        except KeyError as error:
+            raise ValueError(str(error)) from error
         if event.get("status") == "resolved":
             raise ValueError(f"事件已结算：{event_id}")
-        if choice == "donate_crop":
-            donated_item = self._take_player_item("fresh_turnip")
+        if option.requires_player_item_id:
+            donated_item = self._take_player_item(option.requires_player_item_id)
         else:
             donated_item = None
 
         self.world["player"]["locationId"] = event["locationId"]
-        outcome = self._starlight_outcome(choice, donated_item)
+        outcome = self._resolve_event_skill_outcome(skill, option, donated_item)
         choice_event = self.event_store.append(
             "player.event_choice",
             {
                 "playerId": "player",
                 "eventId": event_id,
+                "skillId": skill.skill_id,
                 "choice": choice,
                 "choiceLabel": outcome["choiceLabel"],
                 "summary": outcome["summary"],
+                "consequenceTypes": outcome["consequenceTypes"],
             },
         )
 
@@ -448,15 +479,23 @@ class AgentRuntime:
                 relationship_payloads.append(payload_delta)
                 relationship_events.append(self.event_store.append("relationship.changed", payload_delta))
 
-        memory_payloads, memory_events = self._write_starlight_memories(choice, outcome)
-        dialogue_payloads, dialogue_events = self._write_starlight_dialogue(event, choice, outcome)
-        reflection_payloads, reflection_events = self._write_starlight_reflections(event, choice, outcome)
+        memory_payloads, memory_events = self._write_event_skill_memories(skill, choice, outcome)
+        dialogue_payloads, dialogue_events = self._write_event_skill_dialogue(event, skill, choice, outcome)
+        reflection_payloads, reflection_events = self._write_event_skill_reflections(event, skill, choice, outcome)
 
         event["status"] = "resolved"
-        event["resolution"] = {"choice": choice, "summary": outcome["summary"], "resolvedTick": self.world["clock"]["tick"]}
+        event["resolution"] = {
+            "skillId": skill.skill_id,
+            "choice": choice,
+            "summary": outcome["summary"],
+            "resolvedTick": self.world["clock"]["tick"],
+        }
         self.world.setdefault("completedEvents", []).append(dict(event))
-        self.world["player"].setdefault("questFlags", {})["starlight_shortage"] = f"resolved_{choice}"
-        resolved_event = self.event_store.append("town.event_resolved", {"eventId": event_id, "choice": choice, "summary": outcome["summary"]})
+        self.world["player"].setdefault("questFlags", {})[skill.event_id] = f"resolved_{choice}"
+        resolved_event = self.event_store.append(
+            "town.event_resolved",
+            {"eventId": event_id, "skillId": skill.skill_id, "choice": choice, "summary": outcome["summary"]},
+        )
 
         event_ids = (
             [choice_event["id"]]
@@ -471,7 +510,15 @@ class AgentRuntime:
             "dialogue": dialogue_payloads,
             "relationshipDeltas": relationship_payloads,
             "memoryWrites": memory_payloads + reflection_payloads,
-            "eventResult": {"eventId": event_id, "choice": choice, "summary": outcome["summary"]},
+            "eventResult": {
+                "eventId": event_id,
+                "skillId": skill.skill_id,
+                "choice": choice,
+                "choiceLabel": outcome["choiceLabel"],
+                "summary": outcome["summary"],
+                "consequenceTypes": outcome["consequenceTypes"],
+                "debugFields": self._skill_debug_payload(skill, outcome, choice=choice),
+            },
             "eventIds": event_ids,
         }
 
@@ -482,65 +529,223 @@ class AgentRuntime:
                 return event
         raise ValueError(f"未知事件：{event_id}")
 
-    def _starlight_outcome(self, choice: str, donated_item: dict[str, Any] | None) -> dict[str, Any]:
-        """返回星灯祭供应短缺事件的规则结算表。"""
+    def _get_event_skill_for_event(self, event_id: str) -> EventSkillSchema:
+        """按事件 id 查找对应 Skill，避免 Runtime 写死具体事件表。"""
+        for skill in self.event_skills.values():
+            if skill.event_id == event_id:
+                return skill
+        raise ValueError(f"事件缺少可用 Skill 定义：{event_id}")
+
+    def _default_event_choice(self, skill: EventSkillSchema) -> str:
+        """选择一个无需额外物品的默认事件选项。"""
+        for option in skill.player_options:
+            if not option.requires_player_item_id:
+                return option.option_id
+        if skill.player_options:
+            return skill.player_options[0].option_id
+        raise ValueError(f"事件技能缺少玩家选项：{skill.skill_id}")
+
+    def _resolve_event_skill_outcome(
+        self,
+        skill: EventSkillSchema,
+        option: EventPlayerOption,
+        donated_item: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        """把 Skill 选项结算定义解析为 Runtime 可执行的 JSON 结构。"""
+        try:
+            outcome_def = find_event_choice_outcome(skill.skill_id, option.option_id)
+        except KeyError as error:
+            raise ValueError(str(error)) from error
         item_name = donated_item["name"] if donated_item else "农场作物"
-        outcomes: dict[str, dict[str, Any]] = {
-            "donate_crop": {
-                "choiceLabel": f"拿出{item_name}帮酒馆渡过今晚",
-                "summary": f"玩家拿出{item_name}补上节日食材，凯娅松了一口气，布兰娜也承认这份帮忙很实在。",
-                "relationDeltas": {
-                    "kai": {"affection": 5, "trust": 4, "conflict": -5},
-                    "bram": {"affection": 2, "trust": 3, "conflict": -4},
-                    "mira": {"affection": 1, "trust": 2, "conflict": -1},
-                    "lena": {"affection": 1, "trust": 1, "conflict": -1},
-                    "orren": {"affection": 1, "trust": 2, "conflict": -1},
-                    "tomas": {"affection": 1, "trust": 1, "conflict": -1},
-                },
-            },
-            "mediate": {
-                "choiceLabel": "调解凯娅和布兰娜的欠账冲突",
-                "summary": "玩家请凯娅先确认还款安排，也帮布兰娜保住供货底线，争执被暂时压了下来。",
-                "relationDeltas": {
-                    "kai": {"affection": 3, "trust": 4, "conflict": -4},
-                    "bram": {"affection": 3, "trust": 4, "conflict": -5},
-                    "mira": {"affection": 1, "trust": 2, "conflict": -1},
-                    "lena": {"affection": 1, "trust": 2, "conflict": -1},
-                    "orren": {"affection": 1, "trust": 2, "conflict": -1},
-                },
-            },
-            "support_kai": {
-                "choiceLabel": "优先支持凯娅维持节日气氛",
-                "summary": "玩家站在凯娅这边让星灯祭继续热闹，但布兰娜对酒馆旧账更加不满。",
-                "relationDeltas": {
-                    "kai": {"affection": 5, "trust": 2, "conflict": -2},
-                    "bram": {"affection": -1, "trust": -1, "conflict": 4},
-                    "mira": {"trust": 1},
-                    "orren": {"trust": 1},
-                },
-            },
-            "support_bram": {
-                "choiceLabel": "优先支持布兰娜守住供货底线",
-                "summary": "玩家支持布兰娜先把欠账说清，酒馆气氛短暂降温，但供货压力被认真看见了。",
-                "relationDeltas": {
-                    "kai": {"affection": -1, "trust": 0, "conflict": 3},
-                    "bram": {"affection": 5, "trust": 3, "conflict": -2},
-                    "mira": {"trust": 1},
-                    "lena": {"trust": 1},
-                },
-            },
-            "observe": {
-                "choiceLabel": "先旁观并记录大家的反应",
-                "summary": "玩家没有立刻介入，只观察到凯娅的焦虑、布兰娜的压力，以及旁观居民的担心。",
-                "relationDeltas": {
-                    "orren": {"trust": 1},
-                    "lena": {"trust": 1},
-                },
-            },
+        consequence_types = [str(consequence.consequence_type) for consequence in option.consequences]
+
+        base_context = {
+            "skillId": skill.skill_id,
+            "eventId": skill.event_id,
+            "choice": option.option_id,
+            "optionId": option.option_id,
+            "itemName": item_name,
+            "consequenceTypes": ",".join(consequence_types),
         }
-        if choice not in outcomes:
-            raise ValueError(f"未知星灯祭事件选项：{choice}")
-        return outcomes[choice]
+        choice_label = self._format_skill_text(outcome_def.choice_label_template, base_context)
+        summary_context = dict(base_context, choiceLabel=choice_label)
+        summary = self._format_skill_text(outcome_def.summary_template, summary_context)
+        context = dict(
+            summary_context,
+            summary=summary,
+            memoryTemplateCount=len(outcome_def.memory_templates),
+            reflectionSeedCount=len(outcome_def.reflection_seeds),
+        )
+
+        relation_delta_defs = outcome_def.relation_deltas or self._option_relation_deltas(option)
+        relation_deltas = {
+            delta.participant_id: {"affection": delta.affection, "trust": delta.trust, "conflict": delta.conflict}
+            for delta in relation_delta_defs
+        }
+        memory_templates = [
+            {
+                "agentId": template.agent_id,
+                "text": self._format_skill_text(template.text_template, context),
+                "importance": template.importance,
+                "tags": self._skill_tags(template.tags, skill.event_id, option.option_id),
+            }
+            for template in outcome_def.memory_templates
+        ]
+        fallback_dialogue = [
+            {
+                "agentId": line.agent_id,
+                "speech": self._format_skill_text(line.speech_template, context),
+            }
+            for line in outcome_def.fallback_dialogue
+        ]
+        reflection_seeds = [
+            {
+                "agentId": seed.agent_id,
+                "text": self._format_skill_text(seed.text_template, context),
+                "tags": self._skill_tags(seed.tags, skill.event_id, option.option_id),
+            }
+            for seed in outcome_def.reflection_seeds
+        ]
+
+        return {
+            "skillId": skill.skill_id,
+            "eventId": skill.event_id,
+            "choice": option.option_id,
+            "choiceLabel": choice_label,
+            "summary": summary,
+            "consequenceTypes": consequence_types,
+            "relationDeltas": relation_deltas,
+            "memoryTemplates": memory_templates,
+            "fallbackDialogue": fallback_dialogue,
+            "reflectionSeeds": reflection_seeds,
+            "reflectionTags": self._skill_tags(("night_reflection",), skill.event_id, option.option_id),
+            "debugFieldDefinitions": outcome_def.debug_fields,
+            "debugFields": self._skill_debug_payload(
+                skill,
+                None,
+                choice=option.option_id,
+                context=context,
+                extra_fields=outcome_def.debug_fields,
+            ),
+        }
+
+    def _skill_choice_payloads(self, skill: EventSkillSchema) -> list[dict[str, Any]]:
+        """把 Skill 选项转换为客户端 inspect 可直接展示的结构。"""
+        return [
+            {
+                "id": option.option_id,
+                "label": option.label,
+                "brief": option.brief,
+                "requiresPlayerItemId": option.requires_player_item_id,
+                "consequences": [
+                    {
+                        "type": consequence.consequence_type,
+                        "brief": consequence.brief,
+                        "deltas": [
+                            {
+                                "participantId": delta.participant_id,
+                                "affection": delta.affection,
+                                "trust": delta.trust,
+                                "conflict": delta.conflict,
+                            }
+                            for delta in consequence.deltas
+                        ],
+                    }
+                    for consequence in option.consequences
+                ],
+            }
+            for option in skill.player_options
+        ]
+
+    def _skill_enriched_events(self, events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """把公开事件叠加 Skill 数据，减少客户端依赖种子表细节。"""
+        enriched: list[dict[str, Any]] = []
+        for event in events:
+            item = dict(event)
+            try:
+                skill = self._get_event_skill_for_event(str(event.get("id") or ""))
+            except ValueError:
+                enriched.append(item)
+                continue
+            item.update(
+                {
+                    "skillId": skill.skill_id,
+                    "title": skill.title,
+                    "summary": skill.brief,
+                    "participants": list(skill.participants),
+                    "choices": self._skill_choice_payloads(skill),
+                    "assetHints": self._skill_asset_hint_payloads(skill),
+                    "debugFields": self._skill_debug_payload(skill, None, choice="public_state"),
+                }
+            )
+            enriched.append(item)
+        return enriched
+
+    def _skill_asset_hint_payloads(self, skill: EventSkillSchema) -> list[dict[str, Any]]:
+        """把 Skill 资源提示转换为 Debug 和客户端可消费的字典。"""
+        return [{"id": hint.hint_id, "type": hint.asset_type, "brief": hint.brief, "tags": list(hint.tags)} for hint in skill.asset_hints]
+
+    def _skill_debug_field_templates(self, fields: tuple[EventSkillDebugField, ...]) -> list[dict[str, str]]:
+        """输出 Skill 声明的 Debug 字段模板，供 Director payload 展示。"""
+        return [{"id": field.field_id, "label": field.label, "valueTemplate": field.value_template} for field in fields]
+
+    def _skill_debug_payload(
+        self,
+        skill: EventSkillSchema,
+        outcome: dict[str, Any] | None,
+        *,
+        choice: str,
+        context: dict[str, Any] | None = None,
+        extra_fields: tuple[EventSkillDebugField, ...] = (),
+    ) -> list[dict[str, str]]:
+        """按 Skill 声明生成 Debug 字段值。"""
+        field_context = {
+            "skillId": skill.skill_id,
+            "eventId": skill.event_id,
+            "choice": choice,
+            "choiceLabel": outcome.get("choiceLabel") if outcome else "",
+            "summary": outcome.get("summary") if outcome else skill.brief,
+            "consequenceTypes": ",".join(outcome.get("consequenceTypes", [])) if outcome else "",
+            "memoryTemplateCount": len(outcome.get("memoryTemplates", [])) if outcome else 0,
+            "reflectionSeedCount": len(outcome.get("reflectionSeeds", [])) if outcome else 0,
+        }
+        if context:
+            field_context.update(context)
+
+        fields = list(skill.debug_fields)
+        fields.extend(extra_fields)
+        if outcome and isinstance(outcome.get("debugFieldDefinitions"), tuple):
+            fields.extend(outcome["debugFieldDefinitions"])
+
+        return [
+            {
+                "id": field.field_id,
+                "label": field.label,
+                "value": self._format_skill_text(field.value_template, field_context),
+            }
+            for field in fields
+        ]
+
+    def _option_relation_deltas(self, option: EventPlayerOption) -> tuple[Any, ...]:
+        """从选项后果中提取关系变化，作为缺省结算表。"""
+        deltas: list[Any] = []
+        for consequence in option.consequences:
+            deltas.extend(consequence.deltas)
+        return tuple(deltas)
+
+    def _skill_tags(self, tags: Any, event_id: str, choice: str) -> list[str]:
+        """统一整理 Skill 标签，补上事件 id 和选项 id。"""
+        if isinstance(tags, str):
+            tags = (tags,)
+        normalized = [str(tag) for tag in tags or [] if str(tag)]
+        for tag in (event_id, choice):
+            if tag and tag not in normalized:
+                normalized.append(tag)
+        return normalized
+
+    def _format_skill_text(self, template: str, context: dict[str, Any]) -> str:
+        """用 Skill 上下文填充文案模板。"""
+        return template.format_map(_SafeFormatDict(context))
 
     def _apply_player_relation_delta(self, target_id: str, delta: dict[str, int | str]) -> dict[str, Any]:
         """调整玩家与 NPC 的关系并返回 Debug 友好的差值记录。"""
@@ -556,33 +761,47 @@ class AgentRuntime:
             "after": after_relation,
         }
 
-    def _write_starlight_memories(self, choice: str, outcome: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-        """让参与者写入对星灯祭事件的即时主观记忆。"""
-        memory_templates = {
-            "kai": "星灯祭前夜差点因为食材短缺冷场，玩家的选择让我重新看见节日还能继续发光。",
-            "bram": "酒馆欠账和供货压力被摆到台面上，玩家的处理方式让我重新评估这个新农场主。",
-            "mira": "今晚的供应短缺让我担心小镇账目，但玩家让局面没有继续恶化。",
-            "lena": "争执让大家都紧绷，玩家的介入至少让晚上的情绪风险降了下来。",
-            "orren": "星灯祭的传统需要年轻人接住，玩家今晚给这段传统留下了新的注脚。",
-            "tomas": "我在旁边修灯架时看见玩家处理争执，这个人也许愿意认真守护小镇。",
-        }
+    def _write_event_skill_memories(
+        self,
+        skill: EventSkillSchema,
+        choice: str,
+        outcome: dict[str, Any],
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        """根据 Skill 记忆模板写入参与者的即时主观记忆。"""
         payloads: list[dict[str, Any]] = []
         events: list[dict[str, Any]] = []
-        for agent_id, text in memory_templates.items():
+        for template in outcome["memoryTemplates"]:
+            agent_id = str(template["agentId"])
+            if agent_id not in self.world["agents"]:
+                continue
             agent = self.world["agents"][agent_id]
-            memory_text = f"{text} 结局：{outcome['summary']}"
-            remember(agent, memory_text, tick=self.world["clock"]["tick"], importance=0.8, tags=["starlight_shortage", choice])
-            payload = {"agentId": agent_id, "agentName": agent["name"], "text": memory_text, "tags": ["starlight_shortage", choice]}
+            memory_text = str(template["text"])
+            tags = self._skill_tags(template.get("tags", ()), skill.event_id, choice)
+            remember(agent, memory_text, tick=self.world["clock"]["tick"], importance=float(template.get("importance", 0.8)), tags=tags)
+            payload = {
+                "agentId": agent_id,
+                "agentName": agent["name"],
+                "skillId": skill.skill_id,
+                "eventId": skill.event_id,
+                "text": memory_text,
+                "tags": tags,
+            }
             payloads.append(payload)
             events.append(self.event_store.append("npc.memory_created", payload))
         return payloads, events
 
-    def _write_starlight_dialogue(self, event: dict[str, Any], choice: str, outcome: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    def _write_event_skill_dialogue(
+        self,
+        event: dict[str, Any],
+        skill: EventSkillSchema,
+        choice: str,
+        outcome: dict[str, Any],
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         """按 event_reaction profile 生成事件结算时玩家能看到的关键 NPC 台词。"""
         context = build_event_reaction_context(self.world, event, outcome, choice, self.event_store)
         messages = build_event_reaction_messages(context)
         profile = self.model_config.resolve_profile(feature="event_reaction")
-        rule_result = self._rule_event_reaction(choice, outcome)
+        rule_result = self._rule_event_reaction(outcome)
         provider_result, fallback_reason = self._call_profile_provider(
             feature="event_reaction",
             agent=None,
@@ -604,7 +823,7 @@ class AgentRuntime:
                 events.append(
                     self.event_store.append(
                         "npc.dialogue",
-                        {"agentId": agent_id, "agentName": agent["name"], "targetId": "player", "speech": payload["text"], "topic": "starlight_shortage"},
+                        {"agentId": agent_id, "agentName": agent["name"], "targetId": "player", "speech": payload["text"], "topic": skill.event_id},
                     )
                 )
 
@@ -616,17 +835,28 @@ class AgentRuntime:
             parsed=parsed,
             fallback_reason=fallback_reason,
             executed={"dialogue": payloads},
-            extra={"eventId": event.get("id"), "choice": choice},
+            extra={
+                "eventId": event.get("id"),
+                "skillId": skill.skill_id,
+                "choice": choice,
+                "skillDebugFields": self._skill_debug_payload(skill, outcome, choice=choice),
+            },
         )
         events.append(self.event_store.append("debug.turn_recorded", {"agentId": "system", "agentName": event.get("title", "事件"), "debug": debug}))
         return payloads, events
 
-    def _write_starlight_reflections(self, event: dict[str, Any], choice: str, outcome: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-        """按 night_reflection profile 生成夜间反思摘要，失败时保留规则反思。"""
+    def _write_event_skill_reflections(
+        self,
+        event: dict[str, Any],
+        skill: EventSkillSchema,
+        choice: str,
+        outcome: dict[str, Any],
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        """按 night_reflection profile 生成夜间反思摘要，失败时保留 Skill 规则种子。"""
         context = build_night_reflection_context(self.world, event, outcome, choice, self.event_store)
         messages = build_night_reflection_messages(context)
         profile = self.model_config.resolve_profile(feature="night_reflection")
-        rule_result = self._rule_night_reflection(choice, outcome)
+        rule_result = self._rule_night_reflection(outcome)
         provider_result, fallback_reason = self._call_profile_provider(
             feature="night_reflection",
             agent=None,
@@ -636,10 +866,12 @@ class AgentRuntime:
             rule_call=lambda: rule_result,
         )
         parsed = parse_provider_output(provider_result, fallback=rule_result["parsed"])
-        payloads = self._normalise_reflection_payloads(parsed, rule_result["parsed"]["reflections"], choice)
+        payloads = self._normalise_reflection_payloads(parsed, rule_result["parsed"]["reflections"], outcome["reflectionTags"])
 
         events: list[dict[str, Any]] = []
         for payload in payloads:
+            payload["skillId"] = skill.skill_id
+            payload["eventId"] = skill.event_id
             agent = self.world["agents"][payload["agentId"]]
             remember(agent, payload["text"], tick=self.world["clock"]["tick"], importance=0.86, tags=payload["tags"])
             self.world.setdefault("nightReflections", []).append(payload)
@@ -653,7 +885,12 @@ class AgentRuntime:
             parsed=parsed,
             fallback_reason=fallback_reason,
             executed={"reflections": payloads},
-            extra={"eventId": event.get("id"), "choice": choice},
+            extra={
+                "eventId": event.get("id"),
+                "skillId": skill.skill_id,
+                "choice": choice,
+                "skillDebugFields": self._skill_debug_payload(skill, outcome, choice=choice),
+            },
         )
         events.append(self.event_store.append("debug.turn_recorded", {"agentId": "system", "agentName": event.get("title", "事件"), "debug": debug}))
         return payloads, events
@@ -706,43 +943,15 @@ class AgentRuntime:
             return rule_call(), "profile_provider_rule"
         return rule_call(), None
 
-    def _rule_event_reaction(self, choice: str, outcome: dict[str, Any]) -> dict[str, Any]:
+    def _rule_event_reaction(self, outcome: dict[str, Any]) -> dict[str, Any]:
         """生成离线可用的事件反应 JSON，供 event_reaction fallback 使用。"""
-        lines_by_choice = {
-            "donate_crop": [
-                ("kai", "你真的把农场作物拿来了？今晚的星灯不会暗下去了，谢谢你！"),
-                ("bram", "哼，至少你知道作物不是凭空来的。这份人情我记下。"),
-            ],
-            "mediate": [
-                ("kai", "好啦好啦，我会把账单写清楚。谢谢你没有让今晚变成吵架大会。"),
-                ("bram", "能把话说到点子上，比单纯站队强。新来的，你有点分寸。"),
-            ],
-            "support_kai": [
-                ("kai", "我就知道有人懂星灯祭的重要！今晚先让大家笑起来吧。"),
-                ("bram", "热闹不能抵账。你今天的选择我看见了。"),
-            ],
-            "support_bram": [
-                ("bram", "总算有人听见供货人的难处。节日也得先把账算明白。"),
-                ("kai", "我知道她辛苦，可今晚的灯要是灭了，大家都会难过的。"),
-            ],
-            "observe": [
-                ("orren", "观察也是选择。你至少看见了节日背后的裂缝。"),
-                ("lena", "先不急着介入也可以，但今晚需要有人继续照看大家的情绪。"),
-            ],
-        }
-        dialogue = [{"agentId": agent_id, "speech": speech} for agent_id, speech in lines_by_choice[choice]]
+        dialogue = [{"agentId": item["agentId"], "speech": item["speech"]} for item in outcome["fallbackDialogue"]]
         response = {"dialogue": dialogue, "memory_to_save": f"事件结算：{outcome['summary']}"}
         return {"provider": "RuleEventReactionProvider", "rawText": json.dumps(response, ensure_ascii=False), "parsed": response, "usage": {"tokens": 0, "cost": 0, "latencyMs": 1}}
 
-    def _rule_night_reflection(self, choice: str, outcome: dict[str, Any]) -> dict[str, Any]:
+    def _rule_night_reflection(self, outcome: dict[str, Any]) -> dict[str, Any]:
         """生成离线可用的夜间反思 JSON，供 night_reflection fallback 使用。"""
-        response = {
-            "reflections": [
-                {"agentId": "kai", "text": f"如果不是玩家选择“{outcome['choiceLabel']}”，我可能会把节日压力全推给别人。明天要认真面对欠账。"},
-                {"agentId": "bram", "text": "这个新来的农场主没有把供应当成理所当然。无论是否站在我这边，至少看见了农场人的压力。"},
-                {"agentId": "lena", "text": "今晚的冲突证明节日压力会影响健康和关系。玩家的选择值得继续观察。"},
-            ]
-        }
+        response = {"reflections": outcome["reflectionSeeds"]}
         return {"provider": "RuleNightReflectionProvider", "rawText": json.dumps(response, ensure_ascii=False), "parsed": response, "usage": {"tokens": 0, "cost": 0, "latencyMs": 1}}
 
     def _normalise_dialogue_payloads(self, parsed: dict[str, Any], fallback_dialogue: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -775,7 +984,12 @@ class AgentRuntime:
             return payloads
         return self._normalise_dialogue_payloads({"dialogue": fallback_dialogue}, [])
 
-    def _normalise_reflection_payloads(self, parsed: dict[str, Any], fallback_reflections: list[dict[str, Any]], choice: str) -> list[dict[str, Any]]:
+    def _normalise_reflection_payloads(
+        self,
+        parsed: dict[str, Any],
+        fallback_reflections: list[dict[str, Any]],
+        fallback_tags: list[str],
+    ) -> list[dict[str, Any]]:
         """把模型输出统一整理成 nightReflections 与记忆系统可写入的 payload。"""
         if parsed.get("naturalLanguageFallback") and parsed.get("speech"):
             items = [{"agentId": fallback_reflections[0]["agentId"], "text": parsed["speech"]}]
@@ -788,7 +1002,6 @@ class AgentRuntime:
             items = [{"agentId": fallback_reflections[0]["agentId"], "text": speech}] if speech else fallback_reflections
 
         payloads: list[dict[str, Any]] = []
-        tags = ["night_reflection", "starlight_shortage", choice]
         for item in items:
             if not isinstance(item, dict):
                 continue
@@ -797,10 +1010,11 @@ class AgentRuntime:
             if agent_id not in self.world["agents"] or not text:
                 continue
             agent = self.world["agents"][agent_id]
+            tags = self._skill_tags(item.get("tags", fallback_tags), "", "")
             payloads.append({"agentId": agent_id, "agentName": agent["name"], "text": text, "tags": tags})
         if payloads:
             return payloads
-        return self._normalise_reflection_payloads({"reflections": fallback_reflections}, fallback_reflections, choice)
+        return self._normalise_reflection_payloads({"reflections": fallback_reflections}, fallback_reflections, fallback_tags)
 
     def _build_provider_debug(
         self,

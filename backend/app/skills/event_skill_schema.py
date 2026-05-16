@@ -66,6 +66,56 @@ class EventAssetHint:
 
 
 @dataclass(frozen=True, slots=True)
+class EventSkillDebugField:
+    """事件技能希望 Debug 面板展示的字段。"""
+
+    field_id: str
+    label: str
+    value_template: str
+
+
+@dataclass(frozen=True, slots=True)
+class EventMemoryTemplate:
+    """事件结算后写入 NPC 记忆的模板。"""
+
+    agent_id: str
+    text_template: str
+    importance: float = 0.8
+    tags: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class EventDialogueFallback:
+    """离线规则 Provider 使用的 NPC 反应台词。"""
+
+    agent_id: str
+    speech_template: str
+
+
+@dataclass(frozen=True, slots=True)
+class EventReflectionSeed:
+    """夜间反思的规则种子，LLM 跳过时可直接落地。"""
+
+    agent_id: str
+    text_template: str
+    tags: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class EventChoiceOutcome:
+    """单个玩家选项对应的 Skill 结算数据。"""
+
+    option_id: str
+    choice_label_template: str
+    summary_template: str
+    relation_deltas: tuple[EventParticipantDelta, ...] = ()
+    memory_templates: tuple[EventMemoryTemplate, ...] = ()
+    fallback_dialogue: tuple[EventDialogueFallback, ...] = ()
+    reflection_seeds: tuple[EventReflectionSeed, ...] = ()
+    debug_fields: tuple[EventSkillDebugField, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class EventSkillSchema:
     """事件技能定义。"""
 
@@ -77,3 +127,5 @@ class EventSkillSchema:
     participants: tuple[str, ...]
     player_options: tuple[EventPlayerOption, ...]
     asset_hints: tuple[EventAssetHint, ...]
+    choice_outcomes: tuple[EventChoiceOutcome, ...] = ()
+    debug_fields: tuple[EventSkillDebugField, ...] = ()

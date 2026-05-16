@@ -69,6 +69,11 @@ if not any(location["id"] == "farm" for location in game_state["locations"]):
     raise RuntimeError("游戏状态缺少玩家农场地点")
 if not any(event["id"] == "starlight_festival_shortage" for event in game_state["activeEvents"]):
     raise RuntimeError("游戏状态缺少星灯祭供应短缺事件")
+starlight_event = next(event for event in game_state["activeEvents"] if event["id"] == "starlight_festival_shortage")
+if starlight_event.get("skillId") != STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID:
+    raise RuntimeError("游戏状态中的星灯祭事件应叠加 Event Skill 数据")
+if not all(choice.get("brief") and choice.get("consequences") for choice in starlight_event.get("choices", [])):
+    raise RuntimeError("游戏状态中的事件选项应由 Skill 提供 brief 和 consequences")
 
 director_app = create_town_app(provider_mode="rule")
 director_step = director_app.step_simulation({"actorId": "director-smoke"})
@@ -128,18 +133,32 @@ if not inspect["ok"]:
     raise RuntimeError("事件查看动作应执行成功")
 if not inspect["result"]["inspect"]["choices"]:
     raise RuntimeError("事件查看应返回可选项")
+if inspect["result"]["inspect"].get("skillId") != STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID:
+    raise RuntimeError("事件查看结果应包含 Skill ID")
+if not inspect["result"]["inspect"].get("debugFields"):
+    raise RuntimeError("事件查看结果应包含 Skill Debug 字段")
 
 event_result = app.player_action({"type": "attend_event", "eventId": "starlight_festival_shortage", "choice": "donate_crop"})
 if not event_result["ok"]:
     raise RuntimeError("星灯祭事件参与动作应执行成功")
 if event_result["result"]["eventResult"]["choice"] != "donate_crop":
     raise RuntimeError("星灯祭事件结算选项异常")
+if event_result["result"]["eventResult"].get("skillId") != STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID:
+    raise RuntimeError("星灯祭事件结算应返回 Skill ID")
+if not event_result["result"]["eventResult"].get("debugFields"):
+    raise RuntimeError("星灯祭事件结算应返回 Skill Debug 字段")
+if not all(item.get("skillId") == STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID for item in event_result["result"]["memoryWrites"]):
+    raise RuntimeError("星灯祭记忆写入应记录来源 Skill")
 if not event_result["state"]["nightReflections"]:
     raise RuntimeError("星灯祭事件后应生成夜间反思摘要")
 if not any(event["type"] == "town.event_resolved" for event in event_result["state"]["recentEvents"]):
     raise RuntimeError("星灯祭事件后应写入事件结算记录")
 event_reaction_debug = assert_feature_debug(event_result["state"], "event_reaction")
 night_reflection_debug = assert_feature_debug(event_result["state"], "night_reflection")
+if event_reaction_debug.get("skillId") != STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID or not event_reaction_debug.get("skillDebugFields"):
+    raise RuntimeError("event_reaction Debug 应记录 Skill 字段")
+if night_reflection_debug.get("skillId") != STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID or not night_reflection_debug.get("skillDebugFields"):
+    raise RuntimeError("night_reflection Debug 应记录 Skill 字段")
 
 step = app.step_simulation({"actorId": "smoke-test"})
 state = step["state"]
