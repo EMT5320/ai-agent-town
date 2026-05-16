@@ -7,13 +7,14 @@
 1. [`project_vision.md`](./project_vision.md)：最高优先级推进依据，定义项目愿景、边界、成功标准和完整游戏推进原则。
 2. [`agentic_game_design.md`](./agentic_game_design.md)：多层 Agent 游戏系统定调，定义 Director System、Event Skill、异步 Director Beat、记忆/RAG 和模型分工。
 3. [`current_status.md`](./current_status.md)：当前代码状态、可复用模块、主要缺口、开发前约束。
-4. [`vertical_slice_spec.md`](./vertical_slice_spec.md)：第一版可玩切片规格、数据契约、验收边界和扩展性要求。
-5. [`art_direction.md`](./art_direction.md)：二次元轻幻想轻异世界美术风格、角色设定、资产清单和生图顺序。
-6. [`asset_generation_prompts.md`](./asset_generation_prompts.md)：首版生图提示词包，方便直接产出对接资产。
-7. [`initial_asset_generation_plan.md`](./initial_asset_generation_plan.md)：正式资产生成批次、优先级和 Godot 接入路线。
-8. [`architecture_blueprint.md`](./architecture_blueprint.md)：整体架构、模块职责、数据流、客户端与后端协作方式。
-9. [`implementation_plan.md`](./implementation_plan.md)：初版垂直切片执行方案、批次任务、验收标准。
-10. [`open_questions.md`](./open_questions.md)：已确认决策、剩余验证点、下一轮讨论入口。
+4. [`daytime_integration_handoff.md`](./daytime_integration_handoff.md)：2026-05-16 白天整合结果、验收证据和晚上客户端 / LLM 线开工目标。
+5. [`vertical_slice_spec.md`](./vertical_slice_spec.md)：第一版可玩切片规格、数据契约、验收边界和扩展性要求。
+6. [`art_direction.md`](./art_direction.md)：二次元轻幻想轻异世界美术风格、角色设定、资产清单和生图顺序。
+7. [`asset_generation_prompts.md`](./asset_generation_prompts.md)：首版生图提示词包，方便直接产出对接资产。
+8. [`initial_asset_generation_plan.md`](./initial_asset_generation_plan.md)：正式资产生成批次、优先级和 Godot 接入路线。
+9. [`architecture_blueprint.md`](./architecture_blueprint.md)：整体架构、模块职责、数据流、客户端与后端协作方式。
+10. [`implementation_plan.md`](./implementation_plan.md)：初版垂直切片执行方案、批次任务、验收标准。
+11. [`open_questions.md`](./open_questions.md)：已确认决策、剩余验证点、下一轮讨论入口。
 
 ## 当前决策摘要
 
@@ -30,5 +31,6 @@
 - 首版同步推进可移动地图层和 Visual Novel 对话层，并开始恋爱铺垫。
 - 首版直接接入 LLM 做测试，DeepSeek V4 Flash 作为优先低成本模型，RuleBasedProvider 保留为 fallback。
 - 首版视觉路线采用二次元轻幻想轻异世界田园风，像素风暂时只作为小人占位或后续专项方向。
+- 2026-05-16 白天整合后，后端 agent 线和地图小人资产线已进入 `main`；地图小人仍需 Godot 实机窗口确认后再晋级正式资产状态。
 - 现有网页前端后续收敛为 Debug / 研究控制台。
 - Codex 应用内生图能力用于开发期美术资产生产，游戏运行时不接入图片生成 API。

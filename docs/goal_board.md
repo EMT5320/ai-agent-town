@@ -18,6 +18,9 @@
 - `npm.cmd run client:env`：通过，Godot 4.6.2 headless 项目打开检查通过。
 - `npm.cmd run client:run:check`：通过 DryRun，只验证运行入口和 Godot 参数。
 - `git diff --check`：通过；当前仅有 CRLF/LF 提示，不阻塞。
+- 白天后端 agent 线已合并到 `main`：`a61a16c merge: integrate day backend agent line`。
+- 白天美术资产线已合并到 `main`：`6e77406 merge: integrate day art asset line`。
+- Godot 新 sprite `.import` 元数据已提交：`1de91f6 chore: import Godot map sprite metadata`。
 
 ## 3. 本轮收口状态
 
@@ -31,29 +34,31 @@
 - Godot 事件交互代码已接入：`activeEvents` 事件区、`inspect` 查看、choices 渲染、`attend_event` 提交、VN 结果展示。
 - Godot `AssetRegistry` 已接入星灯祭事件 CG，并支持 `happy` / `troubled` 表情回退到 `neutral`。
 - 资产 manifest 和 Godot registry 已覆盖首批背景、事件 CG 与 neutral 立绘。
+- Debug / Memory / influence HTTP 查询 API 已纳入 smoke 覆盖。
+- 7 张地图小人和 3 张交互标记已进入 manifest、资产目录和 Godot 资源镜像。
 
 ### 部分完成
 
 - Godot 事件交互已通过代码检查、headless 检查和 dry-run，真实窗口体验仍待主人手动验收。
-- Godot 地图层仍是背景 + 按钮层，尚未升级为正式地图小人/节点交互。
+- Godot 地图层仍是背景 + 按钮层，地图小人资源已就绪，尚未升级为正式地图小人/节点交互。
 - Event Skill 仍只有星灯祭单技能，结算逻辑仍有 Runtime 硬编码。
 - LLM profile 可配置，真实云端 smoke 尚未执行。
-- 资产批次只完成到首批背景、事件 CG、neutral 立绘和风格参考；batch 1b 尚未入库。
+- 资产批次完成到首批背景、事件 CG、neutral 立绘、地图小人候选和交互标记；batch 1b 表情差分尚未入库。
 
 ### 阻塞项
 
 - 真实 LLM 验证需要本地 `config/models.local.json` 或环境变量 API key。
 - 真实 Godot 窗口体验需要人工运行 `npm.cmd run start` + `npm.cmd run client:run`。
-- 表情差分、地图小人、UI 组件需要继续生成和人工筛选。
+- 表情差分、UI 组件需要继续生成和人工筛选；地图小人需要 Godot 实机确认。
 
 ## 4. 开发线看板
 
 | 开发线 | 当前状态 | 下一步 | 主要写入范围 | 禁止/谨慎范围 | 验收命令 |
 | --- | --- | --- | --- | --- | --- |
-| Godot 客户端 | partial | 按人工窗口验收结果修体验问题；随后推进基础地图节点、角色站位、交互区域 | `clients/godot/`、必要时 `clients/godot/assets/` | 不在客户端保存权威世界状态；不把后端结算规则复制进 GDScript | `npm.cmd run client:env`、`npm.cmd run client:run:check`、`npm.cmd run check`，人工 `client:run` |
+| Godot 客户端 | partial | 优先接入地图小人角色层、角色站位、交互 marker 和点击入口；随后按人工窗口验收结果修体验问题 | `clients/godot/`、必要时 `clients/godot/assets/`、`scripts/check_godot_project.py` | 不在客户端保存权威世界状态；不把后端结算规则复制进 GDScript | `npm.cmd run client:env`、`npm.cmd run client:run:check`、`npm.cmd run check`，人工 `client:run` |
 | 后端 Director / Event Skill | partial | 将星灯祭结算表、记忆模板和 fallback 台词继续迁入 Event Skill 数据；补 Skill 复用测试 | `backend/app/director/`、`backend/app/skills/`、`backend/app/runtime/agent_runtime.py`、相关测试 | 不让 LLM 直接改世界状态；不破坏旧 `/api/state` 与 Debug 观察台 | `npm.cmd run smoke`、`npm.cmd run check` |
-| 资产管线 | partial | 完成 batch 1b 表情差分，随后补地图小人与 UI 组件；先补 prompt/manifest，再生成或筛选图 | `assets/source/`、`assets/processed/`、`assets/manifests/`、`clients/godot/assets/` | 不覆盖原图；不提交来源不清的资产；不把未生成资产标成 `source_selected` | `npm.cmd run asset:check`、`npm.cmd run check` |
-| LLM / Debug | partial | 配置本地 key 后执行真实 dialogue / event_reaction / night_reflection smoke；记录延迟、成本、fallback | `backend/app/providers/`、`backend/app/providers/context_builder.py`、Debug 记录结构、迁移期 `frontend/` | 不提交密钥；不隐藏 token、延迟、错误；不把跳过的 live smoke 写成通过 | `npm.cmd run smoke`、真实 LLM 手动记录 |
+| 资产管线 | partial | 等 Godot 实机确认地图小人后再晋级或修正；随后完成 batch 1b 表情差分与 UI 组件 | `assets/source/`、`assets/processed/`、`assets/manifests/`、`clients/godot/assets/` | 不覆盖原图；不提交来源不清的资产；不把未人工确认的小人标成 `source_selected` | `npm.cmd run asset:check`、`npm.cmd run check` |
+| LLM / Debug | partial | 配置本地 key 后执行真实 dialogue / event_reaction / night_reflection smoke；记录延迟、成本、fallback；必要时补 profile 文档 | `backend/app/providers/`、`backend/app/providers/context_builder.py`、Debug 记录结构、迁移期 `frontend/`、相关 docs | 不提交密钥；不隐藏 token、延迟、错误；不把跳过的 live smoke 写成通过 | `npm.cmd run smoke`、真实 LLM 手动记录 |
 | Web Debug Console | watch | 等事件 UI 和 Skill 链路更稳定后展示 Director 队列、Skill、fallback、成本 | 迁移期 `frontend/`，后续 `web-admin/` | 不阻塞 Godot 主体验；不泄漏玩家叙事视角 | `npm.cmd run check` |
 | 文档与治理 | done | 每轮结束只更新入口、状态、下一步和仍需验证问题 | `docs/agent_context.md`、`docs/goal_board.md`、`docs/current_status.md`、`docs/open_questions.md` | 不复制源设计长文；不把未验证能力写成完成 | `npm.cmd run check`、`git diff --check` |
 
@@ -99,7 +104,9 @@ npm.cmd run client:run
 ## 8. 下一轮推荐排程
 
 1. 主人先做 Godot 真实窗口人工验收。
-2. Godot 客户端：按人工反馈修交互体验，再推进基础地图节点。
-3. 资产：batch 1b 表情差分入 prompt/manifest，随后生成或筛选图片。
-4. 后端：星灯祭 Skill 数据化第二步，减少 Runtime 硬编码。
-5. LLM / Debug：配置本地 key 后完成一次真实 smoke。
+2. Godot 客户端：先把地图小人放入基础地图节点并打通点击交互。
+3. LLM / Debug：配置本地 key 后完成一次真实 smoke，并记录延迟、fallback 和输出质量。
+4. 资产：按 Godot 实机效果修正地图小人，再推进 batch 1b 表情差分。
+5. 后端：星灯祭 Skill 数据化第二步，减少 Runtime 硬编码。
+
+白天整合后的详细交接和可直接投喂的 goal 见 `docs/daytime_integration_handoff.md`。
