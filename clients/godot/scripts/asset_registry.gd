@@ -21,6 +21,22 @@ const PORTRAITS := {
 	"bram": {"neutral": "res://assets/characters/npc_bram_neutral.png"},
 }
 
+const MAP_SPRITES := {
+	"player": "res://assets/sprites/player_farmer_map_idle.png",
+	"mira": "res://assets/sprites/npc_mira_map_idle.png",
+	"tomas": "res://assets/sprites/npc_tomas_map_idle.png",
+	"orren": "res://assets/sprites/npc_orren_map_idle.png",
+	"lena": "res://assets/sprites/npc_lena_map_idle.png",
+	"kai": "res://assets/sprites/npc_kai_map_idle.png",
+	"bram": "res://assets/sprites/npc_bram_map_idle.png",
+}
+
+const INTERACTION_MARKERS := {
+	"talk": "res://assets/sprites/interaction_marker_talk.png",
+	"gift": "res://assets/sprites/interaction_marker_gift.png",
+	"event": "res://assets/sprites/interaction_marker_event.png",
+}
+
 # 首版约定的表情键；后续补图时在 PORTRAITS 对应角色下补同名键即可。
 const SUPPORTED_PORTRAIT_EXPRESSIONS := ["neutral", "happy", "troubled"]
 const PORTRAIT_NEUTRAL_EXPRESSION := "neutral"
@@ -40,12 +56,28 @@ func has_event_cg(event_id: String) -> bool:
 	return EVENT_CGS.has(event_id)
 
 
+func has_map_sprite(owner_id: String) -> bool:
+	return MAP_SPRITES.has(owner_id)
+
+
+func has_interaction_marker(marker_id: String) -> bool:
+	return INTERACTION_MARKERS.has(marker_id)
+
+
 func get_location_background(location_id: String) -> Texture2D:
 	return _load_texture(LOCATION_BACKGROUNDS.get(location_id, ""))
 
 
 func get_event_cg(event_id: String) -> Texture2D:
 	return _load_texture(EVENT_CGS.get(event_id, ""))
+
+
+func get_map_sprite(owner_id: String) -> Texture2D:
+	return _load_texture(MAP_SPRITES.get(owner_id, ""))
+
+
+func get_interaction_marker(marker_id: String) -> Texture2D:
+	return _load_texture(INTERACTION_MARKERS.get(marker_id, ""))
 
 
 func get_portrait(owner_id: String, expression: String = "neutral") -> Texture2D:

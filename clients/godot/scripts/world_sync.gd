@@ -23,6 +23,10 @@ func get_locations() -> Array:
 	return current_state.get("locations", [])
 
 
+func get_player() -> Dictionary:
+	return current_state.get("player", {})
+
+
 func get_npcs() -> Array:
 	return current_state.get("npcs", [])
 
@@ -35,8 +39,48 @@ func get_active_events() -> Array:
 	return current_state.get("activeEvents", [])
 
 
+func get_available_interactions() -> Array:
+	return current_state.get("availableInteractions", [])
+
+
+func get_current_objective() -> Dictionary:
+	var objective = current_state.get("currentObjective", {})
+	if objective is Dictionary:
+		return objective
+	return {}
+
+
 func find_active_event(event_id: String) -> Dictionary:
 	for event in get_active_events():
 		if str(event.get("id", "")) == event_id:
 			return event
+	return {}
+
+
+func find_interaction(action_type: String, target_kind: String, target_id: String) -> Dictionary:
+	for interaction in get_available_interactions():
+		if not (interaction is Dictionary):
+			continue
+		if str(interaction.get("type", "")) != action_type:
+			continue
+		var target = interaction.get("target", {})
+		if not (target is Dictionary):
+			continue
+		if str(target.get("kind", "")) == target_kind and str(target.get("id", "")) == target_id:
+			return interaction
+	return {}
+
+
+func find_event_choice_interaction(event_id: String, choice_id: String) -> Dictionary:
+	for interaction in get_available_interactions():
+		if not (interaction is Dictionary):
+			continue
+		if str(interaction.get("type", "")) != "attend_event":
+			continue
+		var target = interaction.get("target", {})
+		var payload = interaction.get("payload", {})
+		if not (target is Dictionary) or not (payload is Dictionary):
+			continue
+		if str(target.get("kind", "")) == "event" and str(target.get("id", "")) == event_id and str(payload.get("choice", "")) == choice_id:
+			return interaction
 	return {}

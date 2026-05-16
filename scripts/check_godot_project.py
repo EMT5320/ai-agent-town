@@ -42,9 +42,14 @@ checks = {
     "asset registry class": "class_name AssetRegistry" in asset_registry,
     "asset registry backgrounds": "farm_day_anime.png" in asset_registry and "tavern_evening_anime.png" in asset_registry,
     "asset registry portraits": "npc_orren_neutral.png" in asset_registry and "player_farmer_neutral.png" in asset_registry,
+    "asset registry map sprites": "npc_orren_map_idle.png" in asset_registry and "player_farmer_map_idle.png" in asset_registry,
+    "asset registry interaction markers": "interaction_marker_talk.png" in asset_registry and "interaction_marker_event.png" in asset_registry,
     "world sync class": "class_name WorldSync" in world_sync,
+    "world sync interactions": "get_available_interactions" in world_sync and "find_event_choice_interaction" in world_sync,
     "main asset registry": "AssetRegistryScript" in main_script,
     "main background texture": "background_rect" in main_script,
+    "main map character layer": "map_character_layer" in main_script and "_render_map_characters" in main_script,
+    "main backend interactions": "give_gift" in main_script and "find_interaction" in main_script,
     "main portrait texture": "portrait_rect" in main_script,
     "main refresh": "_refresh_world" in main_script,
 }
@@ -64,6 +69,16 @@ required_assets = [
     GODOT_ROOT / "assets" / "characters" / "npc_lena_neutral.png",
     GODOT_ROOT / "assets" / "characters" / "npc_kai_neutral.png",
     GODOT_ROOT / "assets" / "characters" / "npc_bram_neutral.png",
+    GODOT_ROOT / "assets" / "sprites" / "player_farmer_map_idle.png",
+    GODOT_ROOT / "assets" / "sprites" / "npc_mira_map_idle.png",
+    GODOT_ROOT / "assets" / "sprites" / "npc_tomas_map_idle.png",
+    GODOT_ROOT / "assets" / "sprites" / "npc_orren_map_idle.png",
+    GODOT_ROOT / "assets" / "sprites" / "npc_lena_map_idle.png",
+    GODOT_ROOT / "assets" / "sprites" / "npc_kai_map_idle.png",
+    GODOT_ROOT / "assets" / "sprites" / "npc_bram_map_idle.png",
+    GODOT_ROOT / "assets" / "sprites" / "interaction_marker_talk.png",
+    GODOT_ROOT / "assets" / "sprites" / "interaction_marker_gift.png",
+    GODOT_ROOT / "assets" / "sprites" / "interaction_marker_event.png",
 ]
 missing_assets = [str(path.relative_to(GODOT_ROOT)) for path in required_assets if not path.exists()]
 if missing_assets:
