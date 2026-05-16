@@ -7,9 +7,9 @@
 
 | 资产 ID | source | processed | Godot 同步 | Manifest 状态 |
 | --- | --- | --- | --- | --- |
-| `player_farmer_map_idle` | `assets/source/sprites/player_farmer_map_idle.png` | `assets/processed/sprites/player_farmer_map_idle.png` | `clients/godot/assets/sprites/player_farmer_map_idle.png` | `pending_review` |
-| `npc_mira_map_idle` | `assets/source/sprites/npc_mira_map_idle.png` | `assets/processed/sprites/npc_mira_map_idle.png` | `clients/godot/assets/sprites/npc_mira_map_idle.png` | `pending_review` |
-| `npc_tomas_map_idle` | `assets/source/sprites/npc_tomas_map_idle.png` | `assets/processed/sprites/npc_tomas_map_idle.png` | `clients/godot/assets/sprites/npc_tomas_map_idle.png` | `pending_review` |
+| `player_farmer_map_idle` | `assets/source/sprites/player_farmer_map_idle.png` | `assets/processed/sprites/player_farmer_map_idle.png` | `clients/godot/assets/sprites/player_farmer_map_idle.png` | `style_anchor_candidate` |
+| `npc_mira_map_idle` | `assets/source/sprites/npc_mira_map_idle.png` | `assets/processed/sprites/npc_mira_map_idle.png` | `clients/godot/assets/sprites/npc_mira_map_idle.png` | `style_anchor_candidate` |
+| `npc_tomas_map_idle` | `assets/source/sprites/npc_tomas_map_idle.png` | `assets/processed/sprites/npc_tomas_map_idle.png` | `clients/godot/assets/sprites/npc_tomas_map_idle.png` | `style_anchor_candidate` |
 
 对比图：`assets/processed/sprites/map_idle_first_batch_64_32_check.png`
 
@@ -19,15 +19,15 @@
 2. 以纯 `#ff00ff` / 接近 magenta 的平底进行 chroma-key 去背。
 3. 裁切可见像素并缩放到 `64x64` RGBA PNG，角色主体控制在约 `48x56` 安全框内，底部保留约 4px 落脚余量。
 4. 同步到 `assets/source/sprites/`、`assets/processed/sprites/`、`clients/godot/assets/sprites/`。
-5. `asset_manifest.json` 只登记为 `pending_review`，本轮没有提升为 `source_selected`。
+5. 质量回退后，`asset_manifest.json` 将三张图登记为 `style_anchor_candidate`，只作为当前地图小人风格候选锚点；正式采用仍需人工确认。
 
 ## 单图检查结论
 
 | 资产 ID | 头身 | 轮廓 | 身份继承 | 64x64 / 32x32 可读性 | 结论 |
 | --- | --- | --- | --- | --- | --- |
-| `player_farmer_map_idle` | 满足。大头 Q 版比例明显，角色可见尺寸约 `31x56`，头部占比接近目标区间。 | 满足。深色外轮廓清楚，内部线条保留发型、上衣、围裙和挎包。 | 满足。叶绿色与米白主色、种子挎包、小星灯挂饰保留；和米娅的橙色围裙区分明显。 | 64px 身份清晰；32px 仍可读出绿色玩家农场主，星灯细节会弱化。 | 通过本轮试生成，继续保持 `pending_review`。 |
-| `npc_mira_map_idle` | 满足。更接近 2 头身的 Q 版形体，角色可见尺寸约 `37x56`。 | 满足。头发、围裙、账本块面清楚，线宽适合 64px。 | 满足。栗色头发、暖橙围裙、账本 / 种子店主读感保留；和玩家绿色主色区分明显。 | 64px 读感强；32px 橙色围裙和栗色头发可读，侧辫与账本细节会弱化。 | 通过本轮试生成，继续保持 `pending_review`。 |
-| `npc_tomas_map_idle` | 满足。男性 Q 版比例稳定，角色可见尺寸约 `39x56`，头身在目标范围内。 | 满足。深色头发、蓝色工作衫、腰带工具形成明确剪影。 | 满足。深蓝工作衫、皮革工具腰带、木槌 / 尺子读感保留，未出现盔甲化或贵族化。 | 64px 木匠身份清楚；32px 仍能读出蓝衣男性木匠，工具细节简化为棕色块面。 | 通过本轮试生成，继续保持 `pending_review`。 |
+| `player_farmer_map_idle` | 满足。大头 Q 版比例明显，角色可见尺寸约 `31x56`，头部占比接近目标区间。 | 满足。深色外轮廓清楚，内部线条保留发型、上衣、围裙和挎包。 | 满足。叶绿色与米白主色、种子挎包、小星灯挂饰保留；和米娅的橙色围裙区分明显。 | 64px 身份清晰；32px 仍可读出绿色玩家农场主，星灯细节会弱化。 | 通过本轮试生成，质量回退后作为 `style_anchor_candidate` 保留。 |
+| `npc_mira_map_idle` | 满足。更接近 2 头身的 Q 版形体，角色可见尺寸约 `37x56`。 | 满足。头发、围裙、账本块面清楚，线宽适合 64px。 | 满足。栗色头发、暖橙围裙、账本 / 种子店主读感保留；和玩家绿色主色区分明显。 | 64px 读感强；32px 橙色围裙和栗色头发可读，侧辫与账本细节会弱化。 | 通过本轮试生成，质量回退后作为 `style_anchor_candidate` 保留。 |
+| `npc_tomas_map_idle` | 满足。男性 Q 版比例稳定，角色可见尺寸约 `39x56`，头身在目标范围内。 | 满足。深色头发、蓝色工作衫、腰带工具形成明确剪影。 | 满足。深蓝工作衫、皮革工具腰带、木槌 / 尺子读感保留，未出现盔甲化或贵族化。 | 64px 木匠身份清楚；32px 仍能读出蓝衣男性木匠，工具细节简化为棕色块面。 | 通过本轮试生成，质量回退后作为 `style_anchor_candidate` 保留。 |
 
 ## 后续人工评审关注点
 

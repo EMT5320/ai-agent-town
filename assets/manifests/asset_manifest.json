@@ -436,8 +436,8 @@
     "processedPath": "assets/processed/sprites/player_farmer_map_idle.png",
     "godotPath": "res://assets/sprites/player_farmer_map_idle.png",
     "licenseNote": "development generated asset",
-    "status": "pending_review",
-    "reviewNotes": "First map-sprite style probe; 64px and 32px comparison prepared, awaiting human source selection."
+    "status": "style_anchor_candidate",
+    "reviewNotes": "质量回退后保留为当前地图小人风格候选锚点；用于后续重画参照 64px/32px Q 版轮廓、外轮廓线宽和身份继承。正式采用仍需人工确认。"
   },
   {
     "id": "npc_mira_map_idle",
@@ -456,8 +456,8 @@
     "processedPath": "assets/processed/sprites/npc_mira_map_idle.png",
     "godotPath": "res://assets/sprites/npc_mira_map_idle.png",
     "licenseNote": "development generated asset",
-    "status": "pending_review",
-    "reviewNotes": "First map-sprite style probe; 64px and 32px comparison prepared, awaiting human source selection."
+    "status": "style_anchor_candidate",
+    "reviewNotes": "质量回退后保留为当前地图小人风格候选锚点；用于后续重画参照 64px/32px 发型、主色、职业道具和身份继承。正式采用仍需人工确认。"
   },
   {
     "id": "npc_tomas_map_idle",
@@ -476,8 +476,8 @@
     "processedPath": "assets/processed/sprites/npc_tomas_map_idle.png",
     "godotPath": "res://assets/sprites/npc_tomas_map_idle.png",
     "licenseNote": "development generated asset",
-    "status": "pending_review",
-    "reviewNotes": "First map-sprite style probe; 64px and 32px comparison prepared, awaiting human source selection."
+    "status": "style_anchor_candidate",
+    "reviewNotes": "质量回退后保留为当前地图小人风格候选锚点；用于后续重画参照 64px/32px 男性木匠剪影、工具块面和线宽。正式采用仍需人工确认。"
   },
   {
     "id": "npc_orren_map_idle",
@@ -496,8 +496,8 @@
     "processedPath": "assets/processed/sprites/npc_orren_map_idle.png",
     "godotPath": "res://assets/sprites/npc_orren_map_idle.png",
     "licenseNote": "development generated asset",
-    "status": "pending_review",
-    "reviewNotes": "Second map-sprite and interaction-marker probe; 64px and 32px comparison prepared, awaiting human source selection."
+    "status": "redraw_required",
+    "reviewNotes": "第二批地图小人评审失败：与第一批候选锚点的 Q 版比例和轮廓线宽不一致，银发、书本和绿色外套在 32px 下合并；禁止接入正式地图角色层，需按锚点重画。"
   },
   {
     "id": "npc_lena_map_idle",
@@ -516,8 +516,8 @@
     "processedPath": "assets/processed/sprites/npc_lena_map_idle.png",
     "godotPath": "res://assets/sprites/npc_lena_map_idle.png",
     "licenseNote": "development generated asset",
-    "status": "pending_review",
-    "reviewNotes": "Second map-sprite and interaction-marker probe; 64px and 32px comparison prepared, awaiting human source selection."
+    "status": "redraw_required",
+    "reviewNotes": "第二批地图小人评审失败：医生白 coat 形成过大白色块面，医疗身份和发型在 32px 下辨识不足；禁止接入正式地图角色层，需按锚点重画。"
   },
   {
     "id": "npc_kai_map_idle",
@@ -536,8 +536,8 @@
     "processedPath": "assets/processed/sprites/npc_kai_map_idle.png",
     "godotPath": "res://assets/sprites/npc_kai_map_idle.png",
     "licenseNote": "development generated asset",
-    "status": "pending_review",
-    "reviewNotes": "Second map-sprite and interaction-marker probe; 64px and 32px comparison prepared, awaiting human source selection."
+    "status": "redraw_required",
+    "reviewNotes": "第二批地图小人评审失败：乐手道具读感弱，红发与暖色服装在 32px 下接近泛用村民色块，风格稳定性不足；禁止接入正式地图角色层，需按锚点重画。"
   },
   {
     "id": "npc_bram_map_idle",
@@ -556,8 +556,8 @@
     "processedPath": "assets/processed/sprites/npc_bram_map_idle.png",
     "godotPath": "res://assets/sprites/npc_bram_map_idle.png",
     "licenseNote": "development generated asset",
-    "status": "pending_review",
-    "reviewNotes": "Second map-sprite and interaction-marker probe; 64px and 32px comparison prepared, awaiting human source selection."
+    "status": "redraw_required",
+    "reviewNotes": "第二批地图小人评审失败：木箱道具占比过高并压过角色主体，农场主剪影不适合作为后续 idle/行走帧基础；禁止接入正式地图角色层，需按锚点重画。"
   },
   {
     "id": "interaction_marker_talk",
@@ -577,7 +577,7 @@
     "godotPath": "res://assets/sprites/interaction_marker_talk.png",
     "licenseNote": "development generated asset",
     "status": "pending_review",
-    "reviewNotes": "Second map-sprite and interaction-marker probe; 64px and 32px comparison prepared, awaiting human source selection."
+    "reviewNotes": "质量回退后仅保留为 pending_review 图标候选；可继续评审 talk 标记的 UI 可读性，不进入正式地图角色层。"
   },
   {
     "id": "interaction_marker_gift",
@@ -597,7 +597,7 @@
     "godotPath": "res://assets/sprites/interaction_marker_gift.png",
     "licenseNote": "development generated asset",
     "status": "pending_review",
-    "reviewNotes": "Second map-sprite and interaction-marker probe; 64px and 32px comparison prepared, awaiting human source selection."
+    "reviewNotes": "质量回退后仅保留为 pending_review 图标候选；可继续评审 gift 标记的 UI 可读性，不进入正式地图角色层。"
   },
   {
     "id": "interaction_marker_event",
@@ -617,6 +617,6 @@
     "godotPath": "res://assets/sprites/interaction_marker_event.png",
     "licenseNote": "development generated asset",
     "status": "pending_review",
-    "reviewNotes": "Second map-sprite and interaction-marker probe; 64px and 32px comparison prepared, awaiting human source selection."
+    "reviewNotes": "质量回退后仅保留为 pending_review 图标候选；可继续评审 event 标记的 UI 可读性，不进入正式地图角色层。"
   }
 ]
