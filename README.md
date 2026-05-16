@@ -310,13 +310,13 @@ npm run check
 
 ## 模型配置文件
 
-模型配置位于：
+本机实际模型配置位于：
 
 ```text
 config/models.json
 ```
 
-首次创建时会从 `config/models.example.json` 复制一份。后续可以在 `models.json` 里配置不同 NPC 和不同功能使用的模型。
+`config/models.json` 已加入 gitignore，首次使用时可从 `config/models.example.json` 复制一份。后续可以在 `models.json` 里配置不同 NPC 和不同功能使用的模型。
 
 ### 关键字段
 
@@ -370,3 +370,11 @@ npcProfiles[agentId] > featureProfiles[feature] > defaultProfile > fallbackProfi
 Debug 面板会显示本轮实际使用的 `profile`、`model`、`baseUrl`、`temperature`、`maxTokens` 和 `apiKeyConfigured`，不会显示真实 API Key。
 
 也可以通过 `GET /api/model-config` 查看当前可公开展示的配置。
+
+开发期推荐先跑结构检查：
+
+```powershell
+npm.cmd run model:check
+```
+
+启动服务后，迁移期 Web 观察台右侧的 **LLM 配置** 卡片会展示当前运行模式、profiles、NPC / feature 路由、key 是否已配置和校验结果。修改 `config/models.json` 或本地 overlay 后，可点击“重载配置”热重载；点击“对话 Smoke”会触发一次玩家对话，用于快速确认真实模型输出或 fallback 情况。

@@ -11,6 +11,7 @@ __pycache__/
 *.pyc
 .venv/
 
+config/models.json
 config/models.local.json
 
 # Godot 本地导入缓存

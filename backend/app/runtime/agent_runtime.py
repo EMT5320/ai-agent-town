@@ -55,7 +55,8 @@ class AgentRuntime:
         self.model_config = ModelConfigStore(model_config_path)
         self.rule_provider = RuleBasedProvider()
         self.cloud_provider = CloudApiProvider()
-        self.provider_mode = provider_mode or os.getenv("AGENT_TOWN_PROVIDER") or self.model_config.active_provider()
+        self.provider_mode_override = provider_mode
+        self.provider_mode = self._resolve_runtime_provider_mode()
         self.event_skills = {skill.skill_id: skill for skill in list_event_skills()}
         self.tension_detector = TensionDetector()
         self.skill_router = SkillRouter()
@@ -66,6 +67,20 @@ class AgentRuntime:
         self.director_queue = DirectorQueueManager(self.director_validator)
         self.world.setdefault("directorState", {"activatedEventSkills": [], "consumedBeatIds": []})
         self.event_store.append("system.ready", {"message": "AI Agent 小镇 Python 运行时已启动。", "providerMode": self.provider_mode})
+
+    def reload_model_config(self) -> dict[str, Any]:
+        """热重载模型配置，避免每次调整 profile 后都重启开发服务器。"""
+        model_config = self.model_config.reload()
+        self.provider_mode = self._resolve_runtime_provider_mode()
+        payload = {
+            "providerMode": self.provider_mode,
+            "activeProvider": model_config.get("activeProvider"),
+            "defaultProfile": model_config.get("defaultProfile"),
+            "localConfigLoaded": model_config.get("localConfigLoaded"),
+            "validation": model_config.get("validation", {}),
+        }
+        event = self.event_store.append("model_config.reloaded", payload)
+        return {"ok": True, "providerMode": self.provider_mode, "modelConfig": model_config, "event": event}
 
     def get_public_state(self) -> dict[str, Any]:
         state = public_world(self.world)
@@ -2045,6 +2060,10 @@ class AgentRuntime:
     def _effective_provider_mode(self, profile: dict[str, Any]) -> str:
         """解析当前调用实际采用的 Provider 模式。"""
         return self.provider_mode if self.provider_mode != "auto" else str(profile.get("provider", "rule"))
+
+    def _resolve_runtime_provider_mode(self) -> str:
+        """统一解析全局 Provider 模式，显式测试覆盖优先于配置文件。"""
+        return self.provider_mode_override or self.model_config.active_provider()
 
     def _safe_error_message(self, error: Exception) -> str:
         """保留错误摘要，避免把请求头或密钥写入事件流。"""

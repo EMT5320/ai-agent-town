@@ -23,7 +23,7 @@
 | 后端 Director / Event Skill | 部分完成 | `WorldDigest`、`DirectorBeat`、`TensionDetector`、`SkillRouter`、`DirectorValidator`、`DirectorQueueManager` 已落地；Runtime 会生成、校验、消费或丢弃 `activate_event_skill` Beat；星灯祭单技能已注册；Debug / Memory / influence 查询 API 已由 smoke 走真实 HTTP 路由验证 | Event Skill 仍只有一个；星灯祭结算、记忆模板和 fallback 台词仍有 Runtime 硬编码；通用 DirectorPlanner 和多事件 Skill 尚未完成 |
 | Godot 客户端 | 部分完成 | 代码已接入：地点背景层、NPC 选择、底部 VN 对话层、聊天提交、进行中事件区、`inspect` 查看、choices 渲染、`attend_event` 提交、VN 结果展示；地图小人 PNG 与 `.import` 已同步到 Godot 资产目录；命令已检：`client:env` 与 `client:run:check` 通过 | 人工未验收：真实窗口体验；地图小人尚未实际放入地图角色层；事件 UI 的布局、可读性和错误提示需要窗口内确认 |
 | 资产管线 | 部分完成 | manifest 当前有 31 条资产；3 张地图小人为 `style_anchor_candidate`；4 张重画地图小人和 3 张交互标记为 `pending_review`；3 张背景、1 张事件 CG、玩家 + 6 NPC neutral 立绘已登记；`AssetRegistry` 已支持表情回退 | `happy` / `troubled` 表情差分、道具图标、拆分 UI 组件尚未进 manifest 或 Godot registry；地图小人需实机确认后再晋级 |
-| LLM / Debug | 部分完成 | 代码已接入：OpenAI-compatible cloud provider、profile 解析、本地 overlay 示例、Debug 字段记录与规则 fallback；命令已检：smoke 覆盖 dialogue / event_reaction / night_reflection Debug 字段、compact Debug payload、RAG-lite memory search、玩家影响链 | 人工/外部配置未验收：本机当前没有真实 API key 配置，`llm-smoke` 会跳过；`debug_analysis` profile 只在配置中存在；真实延迟、成本、失败率待测 |
+| LLM / Debug | 部分完成 | 代码已接入：OpenAI-compatible cloud provider、profile 解析、本地 overlay 示例、Debug 字段记录、规则 fallback、`model:check` 配置校验、Web LLM 配置卡片和热重载接口；命令已检：smoke 覆盖 dialogue / event_reaction / night_reflection Debug 字段、compact Debug payload、RAG-lite memory search、玩家影响链 | 人工/外部配置未验收：本机当前没有真实 API key 配置，`llm-smoke` 会跳过；`debug_analysis` profile 只在配置中存在；真实延迟、成本、失败率待测 |
 | 文档治理 | 已完成本轮入口 | `agent_context`、`goal_board`、`current_status`、`open_questions` 已形成新对话入口和状态看板 | 后续每轮只记录已验证变化，避免复制源设计长文 |
 
 ## 3. 当前已实现能力
@@ -50,7 +50,9 @@
 - `RuleBasedProvider` 用于离线开发、测试夹具和异常兜底。
 - `CloudApiProvider` 支持 OpenAI-compatible API 形态。
 - `config/models.example.json` 默认 `activeProvider=rule`，保证无密钥也可检查。
-- `config/models.json` 当前 `activeProvider=cloud`，未配置本地密钥时运行链路会依赖 fallback。
+- `config/models.json` 是本机实际联调配置，已加入 gitignore；未配置本地密钥时运行链路会依赖 fallback。
+- `npm.cmd run model:check` 会校验 profile 引用、结构和公开配置是否误写 `apiKey`。
+- `/api/model-config/reload` 支持开发期热重载模型配置；Web 观察台已能展示 profile、路由、key 状态和触发对话 smoke。
 - Debug 记录已包含 profile、provider、messages、rawText、parsed、executed、usage、latency 和 fallbackReason。
 - 已提供 `/api/debug`、`/api/debug/director`、`/api/debug/skills`、`/api/debug/turns`、`/api/debug/influence`、`/api/debug/skill`、`/api/memory/summary`、`/api/memory/search` 查询入口。
 - Debug 列表响应会压缩长 prompt / raw text，保留预览、长度和 message 数，便于 Web Debug Console 或 Godot 调试层读取。

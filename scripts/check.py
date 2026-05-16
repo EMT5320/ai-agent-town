@@ -39,6 +39,10 @@ frontend_check = subprocess.run([find_node(), "--check", "frontend/app.js"], cwd
 if frontend_check.returncode != 0:
     raise SystemExit(frontend_check.returncode)
 
+model_config_check = subprocess.run([sys.executable, "scripts/check_model_config.py"], cwd=ROOT)
+if model_config_check.returncode != 0:
+    raise SystemExit(model_config_check.returncode)
+
 smoke = subprocess.run([sys.executable, "scripts/smoke_test.py"], cwd=ROOT)
 if smoke.returncode != 0:
     raise SystemExit(smoke.returncode)

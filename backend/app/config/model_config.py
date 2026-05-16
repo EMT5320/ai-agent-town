@@ -36,6 +36,11 @@ class ModelConfigStore:
         self.local_config_path = self.config_path.with_name("models.local.json")
         self.config = self._load_config()
 
+    def reload(self) -> dict[str, Any]:
+        """重新读取公开配置和本地私密覆盖，供长运行服务热重载。"""
+        self.config = self._load_config()
+        return self.public_config()
+
     def _load_config(self) -> dict[str, Any]:
         """读取 JSON 配置，并叠加本地私密覆盖文件。"""
         config = deepcopy(DEFAULT_CONFIG)
@@ -95,14 +100,110 @@ class ModelConfigStore:
         config["configPath"] = str(self.config_path)
         config["localConfigPath"] = str(self.local_config_path)
         config["localConfigLoaded"] = self.local_config_path.exists()
-        for profile in config.get("profiles", {}).values():
-            has_inline_key = bool(profile.pop("apiKey", None))
-            env_name = profile.get("apiKeyEnv")
-            env_configured = bool(os.getenv(env_name)) if env_name else False
-            if profile.get("provider") == "cloud":
-                env_configured = env_configured or bool(os.getenv("OPENAI_API_KEY"))
-            profile["apiKeyConfigured"] = has_inline_key or env_configured
+        config["validation"] = self.validate()
+        profiles = config.get("profiles", {})
+        if isinstance(profiles, dict):
+            for profile in profiles.values():
+                if not isinstance(profile, dict):
+                    continue
+                profile["apiKeyConfigured"] = self._profile_key_configured(profile)
+                if self._looks_like_inline_secret(profile.get("apiKeyEnv")):
+                    # 兼容把真实 key 误填到 apiKeyEnv 的本地配置，同时避免 Web 面板泄漏。
+                    profile["apiKeyEnv"] = "[redacted-inline-secret]"
+                profile.pop("apiKey", None)
         return config
+
+    def validate(self) -> dict[str, Any]:
+        """校验模型配置结构，给命令行和 Web 配置面板提供同一套诊断结果。"""
+        errors: list[str] = []
+        warnings: list[str] = []
+        profiles = self.config.get("profiles")
+        if not isinstance(profiles, dict) or not profiles:
+            errors.append("profiles 必须是非空对象。")
+            profiles = {}
+
+        active_provider = self.config.get("activeProvider", "rule")
+        if active_provider not in {"rule", "cloud", "auto"}:
+            errors.append("activeProvider 只支持 rule、cloud 或 auto。")
+
+        for field in ("defaultProfile", "fallbackProfile"):
+            profile_name = self.config.get(field)
+            if not profile_name:
+                errors.append(f"{field} 不能为空。")
+            elif profile_name not in profiles:
+                errors.append(f"{field} 指向不存在的 profile：{profile_name}。")
+
+        for mapping_name in ("npcProfiles", "featureProfiles"):
+            mapping = self.config.get(mapping_name, {})
+            if not isinstance(mapping, dict):
+                errors.append(f"{mapping_name} 必须是对象。")
+                continue
+            for key, profile_name in mapping.items():
+                if profile_name not in profiles:
+                    errors.append(f"{mapping_name}.{key} 指向不存在的 profile：{profile_name}。")
+
+        for profile_name, profile in profiles.items():
+            if not isinstance(profile, dict):
+                errors.append(f"profiles.{profile_name} 必须是对象。")
+                continue
+            provider = profile.get("provider", "cloud")
+            if provider not in {"rule", "cloud", "local"}:
+                errors.append(f"profiles.{profile_name}.provider 不受支持：{provider}。")
+                continue
+            if provider != "cloud":
+                continue
+            if not profile.get("baseUrl"):
+                warnings.append(f"profiles.{profile_name} 未配置 baseUrl，将使用 Provider 默认值。")
+            if not profile.get("model"):
+                warnings.append(f"profiles.{profile_name} 未配置 model，将使用 Provider 默认值。")
+            if not profile.get("apiKeyEnv") and not profile.get("apiKey"):
+                warnings.append(f"profiles.{profile_name} 未配置 apiKeyEnv 或本地 apiKey，真实调用会依赖 OPENAI_API_KEY 兜底。")
+            if self._looks_like_inline_secret(profile.get("apiKeyEnv")):
+                warnings.append(f"profiles.{profile_name}.apiKeyEnv 看起来像真实密钥，建议改为 apiKey 或环境变量名。")
+            self._validate_number(profile_name, profile, "temperature", errors, warnings, minimum=0, maximum=2)
+            self._validate_number(profile_name, profile, "maxTokens", errors, warnings, minimum=1)
+            self._validate_number(profile_name, profile, "timeoutSeconds", errors, warnings, minimum=1)
+
+        return {"ok": not errors, "errors": errors, "warnings": warnings}
+
+    def _profile_key_configured(self, profile: dict[str, Any]) -> bool:
+        """只返回密钥是否存在，不向公开配置泄漏真实密钥。"""
+        has_inline_key = bool(profile.get("apiKey"))
+        env_name = profile.get("apiKeyEnv")
+        if self._looks_like_inline_secret(env_name):
+            return True
+        env_configured = bool(os.getenv(str(env_name))) if env_name else False
+        if profile.get("provider") == "cloud":
+            env_configured = env_configured or bool(os.getenv("OPENAI_API_KEY"))
+        return has_inline_key or env_configured
+
+    def _looks_like_inline_secret(self, value: Any) -> bool:
+        """识别误填进公开字段的密钥形态，用于本地保护和展示脱敏。"""
+        text = str(value or "")
+        return text.startswith(("sk-", "sk_", "sk-proj-"))
+
+    def _validate_number(
+        self,
+        profile_name: str,
+        profile: dict[str, Any],
+        field: str,
+        errors: list[str],
+        warnings: list[str],
+        *,
+        minimum: float | None = None,
+        maximum: float | None = None,
+    ) -> None:
+        """检查数值字段，避免一次配置错误拖垮后续 LLM smoke。"""
+        if field not in profile:
+            return
+        value = profile[field]
+        if not isinstance(value, int | float):
+            errors.append(f"profiles.{profile_name}.{field} 必须是数字。")
+            return
+        if minimum is not None and value < minimum:
+            errors.append(f"profiles.{profile_name}.{field} 必须大于等于 {minimum}。")
+        if maximum is not None and value > maximum:
+            warnings.append(f"profiles.{profile_name}.{field} 当前为 {value}，请确认供应商是否支持。")
 
     def _apply_env_overrides(self, profile: dict[str, Any]) -> dict[str, Any]:
         """兼容早期环境变量，方便主人临时覆盖模型。"""

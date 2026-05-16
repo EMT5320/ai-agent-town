@@ -4,10 +4,24 @@
 
 ## 配置文件职责
 
-- `config/models.json`：仓库内当前默认配置，不写真实密钥。
-- `config/models.example.json`：可复制的公开模板，默认 `activeProvider` 为 `rule`，保证无密钥也能启动和检查。
+- `config/models.json`：本机实际调试配置，已加入 gitignore，可从公开模板复制后按需修改。
+- `config/models.example.json`：已提交的公开模板，默认 `activeProvider` 为 `rule`，保证无密钥也能启动和检查。
 - `config/models.local.example.json`：本地密钥覆盖模板，复制为 `config/models.local.json` 后再填真实 key。
 - `config/models.local.json`：本地私密覆盖文件，应保持 gitignore，不提交。
+
+## 推荐管理方式
+
+当前采用“配置文件为主、Web 面板辅助”的方式管理 LLM：
+
+1. `config/models.example.json` 负责可提交的 provider、profile、NPC 路由和 feature 路由模板。
+2. `config/models.json` 负责本机实际联调配置，不提交。
+3. `config/models.local.json` 只放本机密钥或临时私有覆盖，不提交。
+4. `npm.cmd run model:check` 负责检查 JSON 结构、profile 引用和公开配置是否误写 `apiKey`。
+5. Web 观察台的 **LLM 配置** 卡片负责展示当前运行模式、profile、key 是否已配置、结构校验结果。
+6. 修改配置文件后，可在 Web 面板点“重载配置”，触发 `POST /api/model-config/reload`，避免每次小改都重启服务器。
+7. “对话 Smoke” 会触发一次玩家对话，真实调用或规则 fallback 由当前 provider 和密钥状态决定。
+
+这种分层能同时满足后端 agent 联调、真实模型质量对比和密钥隔离。
 
 ## Profile 选择路径
 
@@ -82,6 +96,7 @@ git diff -- config/models.json config/models.example.json config/models.local.ex
 无真实 key 时：
 
 ```powershell
+npm.cmd run model:check
 npm.cmd run check
 npm.cmd run smoke
 ```
@@ -91,6 +106,7 @@ npm.cmd run smoke
 有真实 key 时：
 
 1. 设置环境变量或 `config/models.local.json`。
-2. 运行 1 个 NPC 玩家对话 smoke。
-3. 记录 debug 中的 `providerMode`、`profileName`、`apiKeyConfigured`、`usage`、`latency` 与 `fallbackReason`。
-4. 输出证据时只展示 `apiKeyConfigured: true`，不展示真实 key。
+2. 启动服务并打开 Web 观察台。
+3. 在 **LLM 配置** 卡片点“重载配置”，确认 `localConfigLoaded` 和 `apiKeyConfigured`。
+4. 点“对话 Smoke”，记录 debug 中的 `providerMode`、`profileName`、`apiKeyConfigured`、`usage`、`latency` 与 `fallbackReason`。
+5. 输出证据时只展示 `apiKeyConfigured: true`，不展示真实 key。

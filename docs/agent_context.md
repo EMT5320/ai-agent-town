@@ -21,7 +21,7 @@
 ### 后端 Runtime / Director
 
 - Python Agent Server 仍是权威世界状态入口。
-- 已有 `GET /api/world/state`、`POST /api/player/action`、`/api/state`、`/api/model-config`、`/api/events`、`/api/developer`。
+- 已有 `GET /api/world/state`、`POST /api/player/action`、`/api/state`、`/api/model-config`、`POST /api/model-config/reload`、`/api/events`、`/api/developer`。
 - 玩家动作已覆盖 `move`、`talk`、`give_gift`、`inspect`、`attend_event`。
 - `backend/app/director/v0.py` 已落地 `WorldDigest`、`TensionDetector`、`SkillRouter`、`DirectorBeat`、`DirectorValidator`、`DirectorQueueManager`。
 - Runtime 会运行规则版 Director v0，并写入 `director.digest_created`、`director.beat_created`、`director.beat_validated`、`director.beat_consumed`、`director.beat_discarded`。
@@ -31,7 +31,8 @@
 ### LLM / Debug
 
 - 已有 `RuleBasedProvider` 和 OpenAI-compatible `CloudApiProvider`。
-- 已有按 NPC / feature 选择 profile 的配置路径：`config/models.json`、`config/models.example.json`、`config/models.local.example.json`。
+- 已有按 NPC / feature 选择 profile 的配置路径：`config/models.example.json` 为提交模板，`config/models.json` 和 `config/models.local.json` 为本机忽略配置。
+- Web 观察台已有 LLM 配置卡片，可查看 profile、路由、key 状态，支持热重载与一次对话 smoke。
 - Debug 记录已包含 `providerMode`、`profileName`、`apiKeyConfigured`、`messages`、`rawText`、`parsed`、`executed`、`usage`、`latency`、`fallbackReason`。
 - 当前本机未检测到 `config/models.local.json` 或 API key 时，真实 LLM smoke 会跳过。
 

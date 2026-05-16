@@ -78,6 +78,34 @@ REQUIRED_MEMORY_SEARCH_FIELDS = {"query", "agentId", "tags", "limit", "items"}
 REQUIRED_MEMORY_ITEM_FIELDS = {"agentId", "agentName", "tick", "importance", "tags", "text", "match"}
 
 
+def assert_no_inline_api_key(payload: object, label: str, path: str = "") -> None:
+    """确认公开 API 响应没有返回真实 apiKey 字段。"""
+    if isinstance(payload, dict):
+        for key, value in payload.items():
+            child_path = f"{path}.{key}" if path else str(key)
+            if key == "apiKey":
+                raise RuntimeError(f"{label} 泄漏 apiKey 字段：{child_path}")
+            assert_no_inline_api_key(value, label, child_path)
+    elif isinstance(payload, list):
+        for index, value in enumerate(payload):
+            assert_no_inline_api_key(value, label, f"{path}[{index}]")
+
+
+def assert_model_config_contract(payload: dict, label: str) -> None:
+    """确认模型配置公开响应可用于 UI 展示且不泄漏密钥。"""
+    for field in ("activeProvider", "defaultProfile", "profiles", "featureProfiles", "fallbackProfile", "validation"):
+        if field not in payload:
+            raise RuntimeError(f"{label} 缺少字段：{field}")
+    if not isinstance(payload["profiles"], dict) or not payload["profiles"]:
+        raise RuntimeError(f"{label}.profiles 应为非空对象")
+    validation = payload["validation"]
+    if not isinstance(validation, dict) or "ok" not in validation or "errors" not in validation or "warnings" not in validation:
+        raise RuntimeError(f"{label}.validation 应包含 ok、errors、warnings")
+    if not validation["ok"]:
+        raise RuntimeError(f"{label}.validation 应通过：{validation['errors']}")
+    assert_no_inline_api_key(payload, label)
+
+
 def assert_feature_debug(state: dict, feature: str) -> dict:
     """确认指定 feature 生成了本轮 LLM 验证要求的 Debug 字段。"""
     events = state.get("recentEvents") or state.get("events") or []
@@ -249,6 +277,8 @@ def assert_http_debug_endpoints(api_app) -> dict:
             return json.loads(response.read().decode("utf-8"))
 
     try:
+        model_config = fetch("/api/model-config")
+        model_reload = post("/api/model-config/reload", {})
         world_state = fetch("/api/world/state")
         http_action = post("/api/player/action", {"type": "talk", "targetId": "mira", "locationId": "plaza", "topic": "http_contract", "message": "请确认后端动作契约。"})
         debug = fetch("/api/debug", {"skillId": STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID, "limit": "20"})
@@ -260,6 +290,10 @@ def assert_http_debug_endpoints(api_app) -> dict:
         server.server_close()
         thread.join(timeout=5)
 
+    assert_model_config_contract(model_config, "HTTP /api/model-config")
+    if not model_reload.get("ok"):
+        raise RuntimeError("HTTP /api/model-config/reload 应返回 ok=true")
+    assert_model_config_contract(model_reload["modelConfig"], "HTTP /api/model-config/reload")
     assert_game_state_contract(world_state, "HTTP /api/world/state")
     assert_player_action_contract(http_action, "HTTP /api/player/action")
     assert_debug_snapshot_contract(debug, "/api/debug")

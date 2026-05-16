@@ -22,7 +22,9 @@ class CloudApiProvider:
         """使用传入 Profile 调用模型，支持不同 NPC 或功能使用不同模型。"""
         profile = profile or {}
         api_key_env = profile.get("apiKeyEnv") or "DEEPSEEK_API_KEY"
-        api_key = profile.get("apiKey") or os.getenv(api_key_env) or os.getenv("OPENAI_API_KEY")
+        # 兼容本地配置把真实 key 误填到 apiKeyEnv 的情况；公开接口会负责脱敏展示。
+        inline_api_key = str(api_key_env) if self._looks_like_inline_secret(api_key_env) else None
+        api_key = profile.get("apiKey") or inline_api_key or os.getenv(str(api_key_env)) or os.getenv("OPENAI_API_KEY")
         if not api_key:
             raise RuntimeError(f"CloudApiProvider 缺少 API Key，请设置 {api_key_env} 或 OPENAI_API_KEY。")
 
@@ -34,6 +36,11 @@ class CloudApiProvider:
             "messages": messages,
             "temperature": float(profile.get("temperature", 0.8)),
         }
+
+    def _looks_like_inline_secret(self, value: Any) -> bool:
+        """识别常见 API key 前缀，避免误填 apiKeyEnv 时真实调用失败。"""
+        text = str(value or "")
+        return text.startswith(("sk-", "sk_", "sk-proj-"))
         if profile.get("maxTokens"):
             # OpenAI-compatible 接口常用 max_tokens 字段。
             payload_data["max_tokens"] = int(profile["maxTokens"])

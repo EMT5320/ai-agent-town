@@ -58,6 +58,10 @@ class TownApplication:
         """单个 Event Skill 可解释说明入口。"""
         return self.runtime.explain_event_skill(query or {})
 
+    def reload_model_config(self) -> dict[str, Any]:
+        """重新读取模型配置，供开发期 Web 面板热重载。"""
+        return self.runtime.reload_model_config()
+
     def memory_summary(self, query: dict[str, Any] | None = None) -> dict[str, Any]:
         """Memory Summary 查询入口。"""
         return self.runtime.get_memory_debug(query or {})["summaries"]
@@ -119,6 +123,8 @@ def create_handler(app: TownApplication, project_root: Path):
                     return self.write_json(app.player_action(payload))
                 except ValueError as error:
                     return self.write_json({"ok": False, "error": str(error)}, HTTPStatus.BAD_REQUEST)
+            if route == "/api/model-config/reload":
+                return self.write_json(app.reload_model_config())
             if route == "/api/developer":
                 return self.write_json(app.command(payload))
             return self.write_json({"error": "unknown endpoint"}, HTTPStatus.NOT_FOUND)
@@ -191,4 +197,3 @@ def run_server(port: int = 8787) -> None:
 
 if __name__ == "__main__":
     run_server(int(os.getenv("PORT", "8787")))
-

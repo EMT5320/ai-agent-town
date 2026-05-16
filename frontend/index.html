@@ -14,7 +14,16 @@
     </section>
     <section class="grid">
       <article class="map card"><div class="map-bg" id="map"></div></article>
-      <aside class="panel card"><h2>小镇指标</h2><div class="stats" id="stats"></div><h2>开发者通道</h2><div class="controls"><button id="stepBtn">单步推进</button><button id="autoBtn">自动运行</button><button id="pauseBtn">暂停/继续</button><button id="eventBtn">注入社区事件</button></div></aside>
+      <aside class="panel card">
+        <h2>小镇指标</h2>
+        <div class="stats" id="stats"></div>
+        <h2>开发者通道</h2>
+        <div class="controls"><button id="stepBtn">单步推进</button><button id="autoBtn">自动运行</button><button id="pauseBtn">暂停/继续</button><button id="eventBtn">注入社区事件</button></div>
+        <h2>LLM 配置</h2>
+        <div class="model-config" id="modelConfig">正在读取模型配置...</div>
+        <div class="controls model-controls"><button id="refreshModelBtn">刷新配置</button><button id="reloadModelBtn">重载配置</button><button id="llmSmokeBtn">对话 Smoke</button></div>
+        <div class="model-note" id="modelAction">密钥只从环境变量或本地 overlay 读取，前端不会展示真实 key。</div>
+      </aside>
       <article class="card roster"><h2>Agent 状态</h2><div id="agents"></div></article>
       <article class="card feed"><h2>事件流 / 对话</h2><div id="events"></div></article>
       <article class="card debug"><h2>完整 Debug</h2><pre id="debug">等待第一轮决策...</pre></article>
