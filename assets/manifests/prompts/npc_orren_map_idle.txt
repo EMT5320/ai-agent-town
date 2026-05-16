@@ -1,0 +1,12 @@
+Use case: map-sprite-followup
+Asset type: static idle_front map sprite concept
+Output asset: assets/source/sprites/npc_orren_map_idle.png
+Reference inputs: assets/source/characters/reference/npc_aurea_reference.png and assets/source/characters/npc_orren_neutral.png
+Primary request: Create Aurea Asterchron, internal id orren, as a low-pixel chibi map idle sprite.
+Identity lock: elderly retired teacher and town historian, silver hair, green long coat or vest, scarf, old star-map book or pocket watch, strict but caring posture.
+Distinction lock: preserve her elder identity; avoid de-aging, magical girl styling, combat mage robes, and youthful schoolgirl silhouette.
+Style lock: anime chibi low-pixel map sprite for Agent Valley, pixel-art inspired, light fantasy farming life sim, 2.0 to 2.5 heads tall, slight top-down front view, centered full body, crisp 1-2 px dark outline, limited warm palette, readable at 64x64 and 32x32, single character only.
+Canvas: square composition for later 64x64 transparent PNG processing; keep the body inside a 48x56 safe area with a small foot margin.
+Background: transparent background preferred. If transparency is unavailable, use a perfectly flat #ff00ff chroma key background with no shadows or gradients; do not use #ff00ff inside the character.
+Avoid: text, labels, watermark, logo, extra characters, portrait crop, tall realistic body, 3D model look, side-scroller view, heavy gradients, noisy dithering, muddy outline, huge prop covering the body, malformed limbs, wrong identity.
+Review rule: generated result starts as pending_review; do not mark source_selected until 64px/32px readability and identity inheritance are approved.

@@ -372,6 +372,24 @@ assets/source/ui/choice_button_anime.png
 assets/source/ui/memory_card_anime.png
 ```
 
+### 地图小人静态规范
+
+地图小人首版用于可移动地图层，当前只要求 `idle_front` 静态图。风格定调为 **二次元 Q 版低像素地图小人**，详细执行规范见 [`docs/map_sprite_style_guide.md`](./map_sprite_style_guide.md)。
+
+| 项目 | 规格 |
+| --- | --- |
+| 生图构图 | 方图，单角色居中，透明背景优先；无法透明时使用纯色抠图背景 |
+| 后处理目标 | `64x64` PNG，角色主体约 `48x56` 安全框，底部保留 4 px 落脚余量 |
+| 头身比例 | `2.0-2.5` 头身，头部占全高 44%-50% |
+| 视角 | 轻俯视正面，镜头高约 20-30 度，适合俯视 / 斜俯视地图 |
+| 轮廓线 | 1-2 px 深色外轮廓，缩到 `64x64` 和 `32x32` 后仍可读 |
+| 调色 | 每名角色 3-5 个主色，继承半身立绘主色和职业识别色 |
+| 身份继承 | 从 `source_selected` 角色参考图与 neutral 立绘继承发型、主色、职业道具、标志物 |
+| 首批试生成 | `player_farmer_map_idle`、`npc_mira_map_idle`、`npc_tomas_map_idle` |
+| 评审状态 | 新生成结果先保留 `pending_review`，通过可读性和身份评审后再进入可用登记 |
+
+失败判定：高头身、半身头像、写实全身、侧卷轴视角、复杂背景、轮廓糊、缩小后不可读、身份混淆、文字水印、额外人物、明显肢体错误。
+
 ### 资产清单字段
 
 ```text
@@ -388,6 +406,8 @@ fullPromptRef
 sourceTool
 createdAt
 sourceSize
+targetSize
+sourceReferenceRefs
 processedPath
 godotPath
 licenseNote
@@ -423,7 +443,7 @@ ai-agent-town-lab/
 
 - 玩家可以进入游戏场景并移动。
 - 玩家可以看到 3 个地点和 6 个 NPC 的基础表现。
-- 玩家和 NPC 在地图层都有小人或占位小人表现。
+- 玩家和 NPC 在地图层都有小人或占位小人表现；正式地图小人需要满足 `64x64` / `32x32` 可读性、2.0-2.5 头身、轻俯视正面和身份继承要求。
 - 对话界面可以展示二次元半身立绘和至少 1 种表情。
 - 玩家可以与至少 3 个 NPC 对话。
 - 玩家可以送出至少 1 个物品。

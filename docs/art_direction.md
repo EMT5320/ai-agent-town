@@ -1,6 +1,6 @@
-# 美术风格与资产生成指南：二次元轻幻想轻异世界田园风
+﻿# 美术风格与资产生成指南：二次元轻幻想轻异世界田园风
 
-> 本文用于指导 `Agent Valley` 首版视觉资产生成、筛选、命名、导入和后续扩展。后续调用生图能力前，优先参考本文，再结合 `vertical_slice_spec.md` 的资产清单执行。可直接复制的首版提示词见 [`asset_generation_prompts.md`](./asset_generation_prompts.md)。
+> 本文用于指导 `Agent Valley` 首版视觉资产生成、筛选、命名、导入和后续扩展。后续调用生图能力前，优先参考本文，再结合 `vertical_slice_spec.md` 的资产清单执行。可直接复制的首版提示词见 [`asset_generation_prompts.md`](./asset_generation_prompts.md)；地图小人的细粒度返工规范见 [`map_sprite_style_guide.md`](./map_sprite_style_guide.md)。
 
 ## 核心定位
 
@@ -20,7 +20,7 @@
 - 传统童话绘本水彩感。
 - 暗黑废土、强恐怖、强战斗压迫感。
 - 高复杂机械、赛博朋克、现代都市主视觉。
-- 过度 Q 版导致角色关系张力减弱。
+- 半身立绘过度 Q 版，导致角色关系张力减弱；地图小人另按 Q 版低像素规范执行。
 
 ## 视觉关键词
 
@@ -36,10 +36,16 @@ bright anime farming life sim, light fantasy isekai village, cozy rural town, ce
 明亮二次元、轻幻想、轻异世界、田园生活模拟、星灯祭、温柔阳光、干净线稿、赛璐璐上色、角色半身立绘、番剧式群像、可爱但有生活质感
 ```
 
+地图小人专用关键词：
+
+```text
+anime chibi low-pixel map sprite, 2.2-head-tall character, pixel-art inspired, crisp 1-2 px outline, limited warm palette, slight top-down front view, transparent background, readable at 64x64 and 32x32
+```
+
 建议负向约束：
 
 ```text
-photorealistic, western storybook watercolor, heavy oil painting, dark grim fantasy, cyberpunk, horror, gritty realism, noisy background, low detail, distorted hands, extra fingers, text, watermark, logo, blurry face, inconsistent eyes
+photorealistic, western storybook watercolor, heavy oil painting, dark grim fantasy, cyberpunk, horror, gritty realism, noisy background, low detail, distorted hands, extra fingers, text, watermark, logo, blurry face, inconsistent eyes, tall realistic body, cropped portrait, side-scroller sprite, noisy pixel dithering, muddy outline
 ```
 
 ## 世界观视觉基调
@@ -145,7 +151,7 @@ UI 风格要求：
 1. **可移动地图层**：Godot 中需要有玩家小人、NPC 小人、3 个地点和基础交互区域，保证游戏可以正常游玩。
 2. **Visual Novel 对话层**：玩家靠近或点击 NPC 后，显示半身立绘、表情差分、对话框、选择按钮和关系变化提示。
 
-地图小人首版可以先使用静态正面或轻俯视角色图，行走动画和多方向 Sprite Sheet 后续扩展。半身立绘与地图小人需要共享发型、主色和标志物，避免玩家感到角色割裂。
+地图小人首版统一定调为 **二次元 Q 版低像素地图小人**：静态 idle 正面 / 轻俯视正面，后续再扩展行走动画和多方向 Sprite Sheet。地图小人必须从已通过的角色参考图与半身立绘继承发型、主色、职业道具和标志物；生成结果先进入 `pending_review` 评审，确认尺寸、身份与可读性后再登记为可用来源。
 
 ## 首版资产包
 
@@ -200,7 +206,14 @@ assets/source/characters/npc_bram_troubled.png
 
 ### C. 地图小人与交互资产
 
-首版地图小人与半身立绘同步推进，先生成静态小人概念图，保证 Godot 可移动场景有可用表现：
+首版地图小人与半身立绘同步推进，先生成静态 idle 小人概念图，保证 Godot 可移动场景有可用表现。该批资产的目标风格是 **二次元 Q 版低像素地图小人**，详细规范以 [`map_sprite_style_guide.md`](./map_sprite_style_guide.md) 为准：
+
+- **尺寸**：生图阶段使用方图构图，后处理目标为 `64x64` PNG；角色主体控制在约 `48x56` 安全框内，底部保留 4 px 落脚余量。远期 Sprite Sheet 使用 `64x64` 单元格，首版只做 `idle_front`。
+- **头身比例**：约 `2.0-2.5` 头身，头部占全高 44%-50%，手脚简化成清晰块面。
+- **视角**：轻俯视正面，镜头高约 20-30 度，脚底可见，适配俯视 / 斜俯视地图行走。
+- **轮廓线**：1-2 px 深色外轮廓，内线少量保留；缩到 `64x64` 和 `32x32` 仍能辨认发型、服装和道具。
+- **调色**：每个角色保留 3-5 个主色，优先继承半身立绘主色；阴影只做 1-2 级，避免复杂渐变和脏噪点。
+- **身份继承**：必须继承 `source_selected` 角色参考图 / neutral 立绘的发型、主色、职业道具与标志物。当前地图小人重做只准备提示词，不把任何既有 `pending_review` 小人提升为 `source_selected`。
 
 ```text
 assets/source/sprites/player_farmer_map_idle.png
@@ -214,6 +227,8 @@ assets/source/sprites/interaction_marker_talk.png
 assets/source/sprites/interaction_marker_gift.png
 assets/source/sprites/interaction_marker_event.png
 ```
+
+对应完整提示词先放在 `assets/manifests/prompts/*_map_idle.txt`。第一批试生成建议只跑 3 张：`player_farmer_map_idle`、`npc_mira_map_idle`、`npc_tomas_map_idle`，用于确认玩家、女性 NPC、男性 NPC 在同一低像素 Q 版体系中的比例与可读性；通过后再扩到 `npc_orren`、`npc_lena`、`npc_kai`、`npc_bram`。
 
 ### D. 地点背景
 
@@ -484,11 +499,12 @@ reviewNotes
 4. 生成偏少女玩家农场主 1 张 `neutral` 表情立绘。
 5. 生成 6 个 NPC 的 `neutral` 立绘，并确认幻想显示名与视觉设定匹配。
 6. 对通过的角色补 `happy` 和 `troubled` 差分。
-7. 生成玩家和 6 个 NPC 的地图小人静态概念图。
-8. 生成 3 张地点背景。
-9. 生成星灯祭事件 CG。
-10. 生成道具图标和 UI 切图。
-11. 处理成 Godot 可导入尺寸并登记 manifest。
+7. 按 `map_sprite_style_guide.md` 先试生成 `player_farmer_map_idle`、`npc_mira_map_idle`、`npc_tomas_map_idle` 3 张低像素 Q 版地图小人，并保持 `pending_review`。
+8. 试生成通过后再扩展 `npc_orren_map_idle`、`npc_lena_map_idle`、`npc_kai_map_idle`、`npc_bram_map_idle`。
+9. 生成 3 张地点背景。
+10. 生成星灯祭事件 CG。
+11. 生成道具图标和 UI 切图。
+12. 处理成 Godot 可导入尺寸并登记 manifest。
 
 ## 质量验收标准
 
@@ -501,6 +517,23 @@ reviewNotes
 - 背景能承载半身立绘和对话 UI。
 - 文件名符合 lowercase snake_case。
 - 资产用途、提示词摘要和生成日期可追踪。
+
+地图小人额外验收：
+
+- 明确呈现二次元 Q 版低像素地图小人气质，主体能压进 `64x64` 单元格。
+- 头身比约 `2.0-2.5`，轻俯视正面，脚底和身体重心清楚。
+- `64x64` 可辨认角色，`32x32` 仍能看出身份主色或职业道具。
+- 轮廓线干净，透明背景或单色抠图背景可处理。
+- 必须继承已选参考图 / neutral 立绘的发型、主色、标志物和职业身份。
+- 失败图保留为 `pending_review` 或直接废弃，禁止因为已有文件存在就提升为 `source_selected`。
+
+地图小人生成失败判定：
+
+- 变成半身头像、写实全身立绘、侧卷轴角色、3D 模型感或高头身角色。
+- 比例超过 3 头身，头部不够 Q 版，或道具大到遮挡身体。
+- 轮廓糊、背景复杂、透明区域不干净，缩小后无法辨认。
+- 玩家和米娅混淆，奥蕾娅被明显年轻化，托玛性别气质漂移，凯娅变现代偶像风，布兰娜失去成熟农场主感。
+- 出现文字、水印、logo、额外人物、残肢、错手错脚、严重透视错误。
 
 ## 已确认细节
 

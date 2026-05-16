@@ -22,6 +22,12 @@ visual novel half-body character portrait, transparent background, consistent ch
 16:9 background, clean composition for visual novel dialogue overlay, no readable text, no logo, clear foreground and midground, warm cozy lighting
 ```
 
+地图小人追加：
+
+```text
+anime chibi low-pixel map sprite, pixel-art inspired, 2.0 to 2.5 heads tall, slight top-down front view, 64x64 sprite target, 48x56 safe character area, crisp 1-2 px dark outline, limited warm palette, readable at 64x64 and 32x32, transparent background, single character only
+```
+
 负向提示词：
 
 ```text
@@ -131,23 +137,31 @@ Anime half-body portrait of Branna Wheatrow, a strong adult female farm owner in
 
 ## 生成批次 3：地图小人与交互标记
 
-地图小人用于 Godot 可移动场景。首版先生成静态概念图，后续再拆 Sprite Sheet。
+地图小人用于 Godot 可移动场景。首版只做静态 `idle_front` 概念图，统一定调为 **二次元 Q 版低像素地图小人**。详细尺寸、头身比例、视角、轮廓线、调色、身份继承和失败判定见 [`map_sprite_style_guide.md`](./map_sprite_style_guide.md)。
 
 统一追加：
 
 ```text
-small anime map character sprite concept, light fantasy farming life sim, full body, front view or slight top-down view, transparent background, clean silhouette, readable at small size, cel-shaded, no text, no watermark
+anime chibi low-pixel map sprite, pixel-art inspired, light fantasy farming life sim, 2.0 to 2.5 heads tall, slight top-down front view, centered full body, 64x64 sprite target, 48x56 safe character area, crisp 1-2 px dark outline, limited warm palette, readable at 64x64 and 32x32, transparent background, single character only, no text, no watermark
 ```
 
-逐项提示词：
+完整提示词文件：
 
-- `player_farmer_map_idle.png`：`young female farmer protagonist, cream white and leaf green outfit, seed pouch, small starlight charm`
-- `npc_mira_map_idle.png`：`Mia Starwheat, warm grocery shop owner, orange apron, seed packets, star hairpin`
-- `npc_tomas_map_idle.png`：`Toma Elmgarden, quiet carpenter, dark blue work shirt, leather tool belt, wooden hammer`
-- `npc_orren_map_idle.png`：`Aurea Asterchron, elderly female teacher, green vest or long coat, scarf, old book`
-- `npc_lena_map_idle.png`：`Lena Birchveil, calm doctor, white short coat, mint accents, herb satchel`
-- `npc_kai_map_idle.png`：`Kaya Moonstring, cheerful young female musician, burgundy cape, lute, star pendant`
-- `npc_bram_map_idle.png`：`Branna Wheatrow, strong adult female farm owner, work gloves, straw hat, crop crate`
+- `assets/manifests/prompts/player_farmer_map_idle.txt` -> `assets/source/sprites/player_farmer_map_idle.png`
+- `assets/manifests/prompts/npc_mira_map_idle.txt` -> `assets/source/sprites/npc_mira_map_idle.png`
+- `assets/manifests/prompts/npc_tomas_map_idle.txt` -> `assets/source/sprites/npc_tomas_map_idle.png`
+- `assets/manifests/prompts/npc_orren_map_idle.txt` -> `assets/source/sprites/npc_orren_map_idle.png`
+- `assets/manifests/prompts/npc_lena_map_idle.txt` -> `assets/source/sprites/npc_lena_map_idle.png`
+- `assets/manifests/prompts/npc_kai_map_idle.txt` -> `assets/source/sprites/npc_kai_map_idle.png`
+- `assets/manifests/prompts/npc_bram_map_idle.txt` -> `assets/source/sprites/npc_bram_map_idle.png`
+
+第一批试生成范围：
+
+1. `player_farmer_map_idle`：确认玩家绿色新手农场主小人读感。
+2. `npc_mira_map_idle`：确认女性 NPC、橙色围裙和杂货铺身份读感。
+3. `npc_tomas_map_idle`：确认男性 NPC、深蓝木匠和工具腰带读感。
+
+这 3 张通过后，再生成 `npc_orren_map_idle`、`npc_lena_map_idle`、`npc_kai_map_idle`、`npc_bram_map_idle`。新生成的小人先保持 `pending_review`，完成 64px / 32px 可读性和身份继承评审后再考虑登记为可用来源。
 
 交互标记统一追加：
 
