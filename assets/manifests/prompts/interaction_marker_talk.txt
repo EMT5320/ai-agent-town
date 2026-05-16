@@ -1,0 +1,8 @@
+Use case: interaction-marker
+Asset type: small UI interaction marker icon
+Output asset: assets/source/sprites/interaction_marker_talk.png
+Primary request: Create a speech bubble with a tiny star for talk actions.
+Style lock: anime farming life sim, low-pixel UI marker, transparent background, readable silhouette, soft starlight accent, warm palette, legible at 64x64 and 32x32.
+Canvas: square 64x64 transparent PNG with generous padding.
+Avoid: text, letters, watermark, logo, extra icons, noisy glow, heavy gradients, unreadable silhouette.
+Review rule: generated result starts as pending_review; do not mark source_selected until 64px/32px readability is approved.
