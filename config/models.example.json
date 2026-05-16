@@ -9,7 +9,14 @@
       "model": "deepseek-chat",
       "temperature": 0.8,
       "maxTokens": 900,
-      "timeoutSeconds": 60
+      "timeoutSeconds": 60,
+      "pricing": {
+        "currency": "USD",
+        "inputCacheHitPerMillionTokens": 0.0028,
+        "inputCacheMissPerMillionTokens": 0.14,
+        "outputPerMillionTokens": 0.28,
+        "source": "deepseek_official_2026_05_16"
+      }
     },
     "cheap_daily": {
       "provider": "cloud",
@@ -18,7 +25,14 @@
       "model": "deepseek-chat",
       "temperature": 0.65,
       "maxTokens": 600,
-      "timeoutSeconds": 45
+      "timeoutSeconds": 45,
+      "pricing": {
+        "currency": "USD",
+        "inputCacheHitPerMillionTokens": 0.0028,
+        "inputCacheMissPerMillionTokens": 0.14,
+        "outputPerMillionTokens": 0.28,
+        "source": "deepseek_official_2026_05_16"
+      }
     },
     "dialogue_story": {
       "provider": "cloud",
@@ -27,7 +41,17 @@
       "model": "deepseek-chat",
       "temperature": 1.0,
       "maxTokens": 1100,
-      "timeoutSeconds": 60
+      "timeoutSeconds": 60,
+      "pricing": {
+        "currency": "USD",
+        "inputCacheHitPerMillionTokens": 0.0028,
+        "inputCacheMissPerMillionTokens": 0.14,
+        "outputPerMillionTokens": 0.28,
+        "source": "deepseek_official_2026_05_16"
+      },
+      "responseFormat": {
+        "type": "json_object"
+      }
     },
     "event_reaction_fast": {
       "provider": "cloud",
@@ -36,7 +60,17 @@
       "model": "deepseek-chat",
       "temperature": 0.85,
       "maxTokens": 900,
-      "timeoutSeconds": 45
+      "timeoutSeconds": 45,
+      "pricing": {
+        "currency": "USD",
+        "inputCacheHitPerMillionTokens": 0.0028,
+        "inputCacheMissPerMillionTokens": 0.14,
+        "outputPerMillionTokens": 0.28,
+        "source": "deepseek_official_2026_05_16"
+      },
+      "responseFormat": {
+        "type": "json_object"
+      }
     },
     "night_reflection_deep": {
       "provider": "cloud",
@@ -45,7 +79,17 @@
       "model": "deepseek-chat",
       "temperature": 0.75,
       "maxTokens": 1200,
-      "timeoutSeconds": 60
+      "timeoutSeconds": 60,
+      "pricing": {
+        "currency": "USD",
+        "inputCacheHitPerMillionTokens": 0.0028,
+        "inputCacheMissPerMillionTokens": 0.14,
+        "outputPerMillionTokens": 0.28,
+        "source": "deepseek_official_2026_05_16"
+      },
+      "responseFormat": {
+        "type": "json_object"
+      }
     },
     "rule_fallback": {
       "provider": "rule"

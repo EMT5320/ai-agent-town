@@ -50,14 +50,24 @@ def is_profile_api_key_configured(profile: dict[str, Any]) -> bool:
     if profile.get("apiKey"):
         return True
     env_name = profile.get("apiKeyEnv")
+    if _looks_like_inline_secret(env_name):
+        return True
     if env_name:
-        return bool(os.getenv(str(env_name))) or bool(os.getenv("OPENAI_API_KEY"))
-    return bool(os.getenv("OPENAI_API_KEY"))
+        return bool(os.getenv(str(env_name))) or bool(os.getenv("AGENT_TOWN_API_KEY")) or bool(os.getenv("OPENAI_API_KEY"))
+    return bool(os.getenv("AGENT_TOWN_API_KEY")) or bool(os.getenv("OPENAI_API_KEY"))
 
 
 def sanitize_profile_for_debug(profile: dict[str, Any]) -> dict[str, Any]:
     """用于 debug 展示的 profile 副本，移除密钥并补充状态。"""
     safe_profile = deepcopy(profile)
     safe_profile.pop("apiKey", None)
+    if _looks_like_inline_secret(safe_profile.get("apiKeyEnv")):
+        safe_profile["apiKeyEnv"] = "[redacted-inline-secret]"
     safe_profile["apiKeyConfigured"] = is_profile_api_key_configured(profile)
     return safe_profile
+
+
+def _looks_like_inline_secret(value: Any) -> bool:
+    """识别常见 API key 前缀，供 Debug 脱敏和状态判断复用。"""
+    text = str(value or "")
+    return text.startswith(("sk-", "sk_", "sk-proj-"))

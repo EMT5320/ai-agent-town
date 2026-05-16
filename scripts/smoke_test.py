@@ -14,6 +14,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "backend"))
 
 from app.director import DirectorBeat, WorldDigest  # noqa: E402
+from app.config.model_config import ModelConfigStore  # noqa: E402
 from app.main import create_handler, create_town_app  # noqa: E402
 from app.skills import STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID  # noqa: E402
 
@@ -27,6 +28,17 @@ REQUIRED_DEBUG_FIELDS = {
     "usage",
     "latency",
     "fallbackReason",
+}
+
+REQUIRED_LLM_USAGE_FIELDS = {
+    "tokens",
+    "promptTokens",
+    "completionTokens",
+    "cost",
+    "costEstimated",
+    "latencyMs",
+    "model",
+    "profileName",
 }
 
 REQUIRED_CLIENT_CONTEXT_FIELDS = {
@@ -85,10 +97,14 @@ def assert_no_inline_api_key(payload: object, label: str, path: str = "") -> Non
             child_path = f"{path}.{key}" if path else str(key)
             if key == "apiKey":
                 raise RuntimeError(f"{label} 泄漏 apiKey 字段：{child_path}")
+            if isinstance(value, str) and value.startswith(("sk-", "sk_", "sk-proj-")):
+                raise RuntimeError(f"{label} 泄漏疑似密钥字符串：{child_path}")
             assert_no_inline_api_key(value, label, child_path)
     elif isinstance(payload, list):
         for index, value in enumerate(payload):
             assert_no_inline_api_key(value, label, f"{path}[{index}]")
+    elif isinstance(payload, str) and payload.startswith(("sk-", "sk_", "sk-proj-")):
+        raise RuntimeError(f"{label} 泄漏疑似密钥字符串：{path}")
 
 
 def assert_model_config_contract(payload: dict, label: str) -> None:
@@ -249,9 +265,62 @@ def assert_debug_snapshot_contract(payload: dict, label: str) -> None:
 
 def has_real_llm_config() -> bool:
     """检测是否存在可用于真实 LLM smoke 的本地配置入口。"""
-    return (PROJECT_ROOT / "config" / "models.local.json").exists() or any(
+    if (PROJECT_ROOT / "config" / "models.local.json").exists() or any(
         os.getenv(name) for name in ("DEEPSEEK_API_KEY", "OPENAI_API_KEY", "AGENT_TOWN_API_KEY")
-    )
+    ):
+        return True
+    try:
+        public_config = ModelConfigStore().public_config()
+    except Exception:
+        return False
+    profiles = public_config.get("profiles", {})
+    if not isinstance(profiles, dict):
+        return False
+    return any(isinstance(profile, dict) and profile.get("provider") == "cloud" and profile.get("apiKeyConfigured") for profile in profiles.values())
+
+
+def assert_real_cloud_debug(debug: dict, feature: str) -> None:
+    """确认真实 LLM smoke 没有走规则兜底，并且 usage 已带成本与延迟字段。"""
+    if debug.get("providerMode") != "cloud":
+        raise RuntimeError(f"{feature} LLM smoke 应运行在 cloud providerMode，实际为 {debug.get('providerMode')}")
+    if debug.get("provider") != "CloudApiProvider":
+        raise RuntimeError(f"{feature} LLM smoke 应调用 CloudApiProvider，实际为 {debug.get('provider')}")
+    if not debug.get("apiKeyConfigured"):
+        raise RuntimeError(f"{feature} LLM smoke 应检测到 apiKeyConfigured=true")
+    if debug.get("fallbackReason"):
+        raise RuntimeError(f"{feature} LLM smoke 不应触发 fallbackReason：{debug.get('fallbackReason')}")
+    usage = debug.get("usage")
+    if not isinstance(usage, dict):
+        raise RuntimeError(f"{feature} LLM smoke usage 应为对象")
+    missing = sorted(REQUIRED_LLM_USAGE_FIELDS - set(usage))
+    if missing:
+        raise RuntimeError(f"{feature} LLM smoke usage 缺少字段：{missing}")
+    if int(usage.get("latencyMs") or 0) <= 0:
+        raise RuntimeError(f"{feature} LLM smoke latencyMs 应大于 0")
+    if int(usage.get("tokens") or 0) <= 0:
+        raise RuntimeError(f"{feature} LLM smoke tokens 应大于 0")
+    if not debug.get("rawText"):
+        raise RuntimeError(f"{feature} LLM smoke rawText 应非空")
+
+
+def llm_debug_summary(debug: dict) -> dict:
+    """输出不含 Prompt 正文和 rawText 全文的 LLM smoke 摘要。"""
+    usage = debug.get("usage", {}) if isinstance(debug.get("usage"), dict) else {}
+    return {
+        "providerMode": debug.get("providerMode"),
+        "provider": debug.get("provider"),
+        "profileName": debug.get("profileName"),
+        "apiKeyConfigured": debug.get("apiKeyConfigured"),
+        "model": usage.get("model"),
+        "tokens": usage.get("tokens"),
+        "latencyMs": usage.get("latencyMs"),
+        "cost": usage.get("cost"),
+        "currency": usage.get("currency"),
+        "costEstimated": usage.get("costEstimated"),
+        "fallbackReason": debug.get("fallbackReason"),
+        "rawTextLength": len(str(debug.get("rawText", ""))),
+        "messageCount": len(debug.get("messages", [])) if isinstance(debug.get("messages"), list) else 0,
+    }
 
 
 def assert_http_debug_endpoints(api_app) -> dict:
@@ -559,19 +628,25 @@ print(
 )
 
 if has_real_llm_config():
-    llm_app = create_town_app()
-    llm_talk = llm_app.player_action({"type": "talk", "targetId": "orren", "locationId": "plaza", "topic": "llm_smoke", "message": "能和我聊聊今晚的小镇吗？"})
-    llm_debug = assert_feature_debug(llm_app.get_public_state(), "dialogue")
+    llm_app = create_town_app(provider_mode="cloud")
+    llm_talk = llm_app.player_action({"type": "talk", "targetId": "mira", "locationId": "plaza", "topic": "llm_smoke", "message": "能和我聊聊今晚的小镇吗？"})
+    llm_dialogue_debug = assert_feature_debug(llm_app.get_public_state(), "dialogue")
+    assert_real_cloud_debug(llm_dialogue_debug, "dialogue")
+    llm_event = llm_app.player_action({"type": "attend_event", "eventId": "starlight_festival_shortage", "choice": "mediate"})
+    llm_event_reaction_debug = assert_feature_debug(llm_app.get_public_state(), "event_reaction")
+    llm_night_reflection_debug = assert_feature_debug(llm_app.get_public_state(), "night_reflection")
+    assert_real_cloud_debug(llm_event_reaction_debug, "event_reaction")
+    assert_real_cloud_debug(llm_night_reflection_debug, "night_reflection")
     print(
         "[llm-smoke]",
         {
-            "providerMode": llm_debug["providerMode"],
-            "provider": llm_debug.get("provider"),
-            "profileName": llm_debug["profileName"],
-            "apiKeyConfigured": llm_debug["apiKeyConfigured"],
-            "latency": llm_debug["latency"],
-            "fallbackReason": llm_debug["fallbackReason"],
+            "dialogue": llm_debug_summary(llm_dialogue_debug),
+            "eventReaction": llm_debug_summary(llm_event_reaction_debug),
+            "nightReflection": llm_debug_summary(llm_night_reflection_debug),
             "dialoguePreview": llm_talk["result"]["dialogue"][0]["text"][:80],
+            "eventChoice": llm_event["result"]["eventResult"]["choice"],
+            "eventDialogueCount": len(llm_event["result"]["dialogue"]),
+            "nightReflectionCount": len(llm_event["state"]["nightReflections"]),
         },
     )
 else:

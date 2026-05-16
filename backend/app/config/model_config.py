@@ -174,7 +174,7 @@ class ModelConfigStore:
             return True
         env_configured = bool(os.getenv(str(env_name))) if env_name else False
         if profile.get("provider") == "cloud":
-            env_configured = env_configured or bool(os.getenv("OPENAI_API_KEY"))
+            env_configured = env_configured or bool(os.getenv("AGENT_TOWN_API_KEY")) or bool(os.getenv("OPENAI_API_KEY"))
         return has_inline_key or env_configured
 
     def _looks_like_inline_secret(self, value: Any) -> bool:

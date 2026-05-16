@@ -52,6 +52,8 @@ PowerShell 示例：
 
 ```powershell
 $env:DEEPSEEK_API_KEY = "你的真实 key"
+# 或使用项目统一兜底变量：
+$env:AGENT_TOWN_API_KEY = "你的真实 key"
 # 如需临时覆盖兼容 OpenAI-compatible 地址或模型，可按需设置：
 $env:AGENT_TOWN_BASE_URL = "https://api.deepseek.com"
 $env:AGENT_TOWN_MODEL = "请按官方文档复核后的模型名"
@@ -75,6 +77,13 @@ git diff -- config/models.json config/models.example.json config/models.local.ex
 
 `model`、`baseUrl`、`maxTokens`、`temperature`、超时与 JSON 输出能力都属于供应商侧会变动的信息。每次真实接入前，应按当前官方文档复核，并把变更保留在本地配置或经过审查后再改公开模板。
 
+当前模板给 `dialogue`、`event_reaction`、`night_reflection` 相关 profile 增加了：
+
+- `responseFormat: {"type": "json_object"}`：用于 OpenAI-compatible JSON 输出模式。
+- `pricing`：用于 Debug usage 里的成本估算字段；字段单位为每 100 万 tokens。
+
+`pricing.source` 记录价格来源快照。供应商价格可能调整，真实成本以供应商账单为准。
+
 ## Debug 验收字段
 
 三条 LLM 验证路径的 debug 记录需要包含：
@@ -91,6 +100,22 @@ git diff -- config/models.json config/models.example.json config/models.local.ex
 
 `messages` 和 `rawText` 用于本地调试时复现提示词与模型输出，禁止写入 API key、Authorization header 或其它密钥材料。
 
+`usage` 至少需要覆盖：
+
+- `tokens`
+- `promptTokens`
+- `completionTokens`
+- `cacheHitPromptTokens`
+- `cacheMissPromptTokens`
+- `latencyMs`
+- `cost`
+- `costInput`
+- `costOutput`
+- `costEstimated`
+- `currency`
+- `model`
+- `profileName`
+
 ## 无 key 与有 key 的验收
 
 无真实 key 时：
@@ -105,8 +130,10 @@ npm.cmd run smoke
 
 有真实 key 时：
 
-1. 设置环境变量或 `config/models.local.json`。
-2. 启动服务并打开 Web 观察台。
-3. 在 **LLM 配置** 卡片点“重载配置”，确认 `localConfigLoaded` 和 `apiKeyConfigured`。
-4. 点“对话 Smoke”，记录 debug 中的 `providerMode`、`profileName`、`apiKeyConfigured`、`usage`、`latency` 与 `fallbackReason`。
-5. 输出证据时只展示 `apiKeyConfigured: true`，不展示真实 key。
+1. 设置环境变量、`config/models.local.json` 或本机 gitignored 的 `config/models.json`。
+2. 运行 `npm.cmd run smoke`，脚本会强制 `provider_mode="cloud"` 依次触发 `dialogue`、`event_reaction` 和 `night_reflection`。
+3. 观察 `[llm-smoke]` 摘要：只展示 profile、model、tokens、latency、cost、fallbackReason、rawTextLength 和 messageCount。
+4. 启动服务并打开 Web 观察台。
+5. 在 **LLM 配置** 卡片点“重载配置”，确认 `localConfigLoaded` 和 `apiKeyConfigured`。
+6. 点“对话 Smoke”或执行一次事件结算，记录 debug 中的 `providerMode`、`profileName`、`apiKeyConfigured`、`usage`、`latency` 与 `fallbackReason`。
+7. 输出证据时只展示 `apiKeyConfigured: true`，不展示真实 key。

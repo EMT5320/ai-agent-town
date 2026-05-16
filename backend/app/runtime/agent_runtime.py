@@ -19,6 +19,8 @@ from app.providers.context_builder import (
     build_player_dialogue_messages,
     build_prompt_messages,
 )
+from app.providers.provider_support import FEATURE_DIALOGUE, FEATURE_EVENT_REACTION, FEATURE_NIGHT_REFLECTION, sanitize_profile_for_debug
+from app.providers.response_parser import parse_feature_response
 from app.providers.rule_based_provider import RuleBasedProvider
 from app.runtime.action_executor import execute_action, maybe_population_event
 from app.runtime.action_parser import parse_provider_output
@@ -1210,7 +1212,11 @@ class AgentRuntime:
         context["memoryEvidence"] = self._dialogue_memory_evidence(target, payload)
         messages = build_player_dialogue_messages(context)
         provider_result, profile, fallback_reason = self._decide_player_dialogue(target, payload, context, messages)
-        parsed = parse_provider_output(provider_result)
+        parsed, fallback_reason = self._parse_structured_provider_result(
+            provider_result,
+            FEATURE_DIALOGUE,
+            fallback_reason=fallback_reason,
+        )
         speech = str(parsed.get("speech") or provider_result.get("rawText") or f"{target['name']}向你点点头。")
         memory_text = str(parsed.get("memory_to_save") or f"我和新来的农场主聊了 {topic}。")
         memory_evidence = context["memoryEvidence"]
@@ -1800,17 +1806,22 @@ class AgentRuntime:
         context["playerProfile"] = self._player_profile_payload()
         context["memoryRetrieval"] = rag_lite_search(self.world, query=outcome["summary"], tags=skill.event_id, limit=5)
         messages = build_event_reaction_messages(context)
-        profile = self.model_config.resolve_profile(feature="event_reaction")
+        profile = self._structured_feature_profile(self.model_config.resolve_profile(feature=FEATURE_EVENT_REACTION), FEATURE_EVENT_REACTION)
         rule_result = self._rule_event_reaction(outcome)
         provider_result, fallback_reason = self._call_profile_provider(
-            feature="event_reaction",
+            feature=FEATURE_EVENT_REACTION,
             agent=None,
             context=context,
             messages=messages,
             profile=profile,
             rule_call=lambda: rule_result,
         )
-        parsed = parse_provider_output(provider_result, fallback=rule_result["parsed"])
+        parsed, fallback_reason = self._parse_structured_provider_result(
+            provider_result,
+            FEATURE_EVENT_REACTION,
+            fallback_reason=fallback_reason,
+            fallback=rule_result["parsed"],
+        )
         payloads = self._normalise_dialogue_payloads(parsed, rule_result["parsed"]["dialogue"])
         if not any(item.get("speakerId") == "system" and item.get("text") == outcome["summary"] for item in payloads):
             payloads.append({"speakerId": "system", "speakerName": "旁白", "text": outcome["summary"]})
@@ -1828,7 +1839,7 @@ class AgentRuntime:
                 )
 
         debug = self._build_provider_debug(
-            feature="event_reaction",
+            feature=FEATURE_EVENT_REACTION,
             profile=profile,
             messages=messages,
             result=provider_result,
@@ -1859,17 +1870,22 @@ class AgentRuntime:
         context["playerProfile"] = self._player_profile_payload()
         context["memoryRetrieval"] = rag_lite_search(self.world, query=outcome["summary"], tags=skill.event_id, limit=5)
         messages = build_night_reflection_messages(context)
-        profile = self.model_config.resolve_profile(feature="night_reflection")
+        profile = self._structured_feature_profile(self.model_config.resolve_profile(feature=FEATURE_NIGHT_REFLECTION), FEATURE_NIGHT_REFLECTION)
         rule_result = self._rule_night_reflection(outcome)
         provider_result, fallback_reason = self._call_profile_provider(
-            feature="night_reflection",
+            feature=FEATURE_NIGHT_REFLECTION,
             agent=None,
             context=context,
             messages=messages,
             profile=profile,
             rule_call=lambda: rule_result,
         )
-        parsed = parse_provider_output(provider_result, fallback=rule_result["parsed"])
+        parsed, fallback_reason = self._parse_structured_provider_result(
+            provider_result,
+            FEATURE_NIGHT_REFLECTION,
+            fallback_reason=fallback_reason,
+            fallback=rule_result["parsed"],
+        )
         payloads = self._normalise_reflection_payloads(parsed, rule_result["parsed"]["reflections"], outcome["reflectionTags"])
 
         events: list[dict[str, Any]] = []
@@ -1882,7 +1898,7 @@ class AgentRuntime:
             events.append(self.event_store.append("npc.night_reflection", payload))
 
         debug = self._build_provider_debug(
-            feature="night_reflection",
+            feature=FEATURE_NIGHT_REFLECTION,
             profile=profile,
             messages=messages,
             result=provider_result,
@@ -1903,9 +1919,9 @@ class AgentRuntime:
 
     def _decide_player_dialogue(self, target: dict[str, Any], payload: dict[str, Any], context: dict[str, Any], messages: list[dict[str, str]]) -> tuple[dict[str, Any], dict[str, Any], str | None]:
         """按 dialogue profile 生成玩家对话回复，失败时退回规则回复。"""
-        profile = self.model_config.resolve_profile(agent_id=target["id"], feature="dialogue")
+        profile = self._structured_feature_profile(self.model_config.resolve_profile(agent_id=target["id"], feature=FEATURE_DIALOGUE), FEATURE_DIALOGUE)
         provider_result, fallback_reason = self._call_profile_provider(
-            feature="dialogue",
+            feature=FEATURE_DIALOGUE,
             agent=target,
             context=context,
             messages=messages,
@@ -1931,7 +1947,7 @@ class AgentRuntime:
                 return self.cloud_provider.decide(context, messages, profile), None
             except Exception as error:
                 fallback_profile = self.model_config.fallback_profile()
-                fallback_reason = self._safe_error_message(error)
+                fallback_reason = self._safe_error_message(error, profile=profile)
                 self.event_store.append(
                     "provider.fallback",
                     {
@@ -1948,6 +1964,33 @@ class AgentRuntime:
         if provider_mode == "cloud" and profile.get("provider") != "cloud":
             return rule_call(), "profile_provider_rule"
         return rule_call(), None
+
+    def _structured_feature_profile(self, profile: dict[str, Any], feature: str) -> dict[str, Any]:
+        """给结构化功能补齐 JSON response_format，提升真实 LLM smoke 的可解析率。"""
+        call_profile = dict(profile)
+        if feature in {FEATURE_DIALOGUE, FEATURE_EVENT_REACTION, FEATURE_NIGHT_REFLECTION} and call_profile.get("provider") == "cloud":
+            call_profile.setdefault("responseFormat", {"type": "json_object"})
+        return call_profile
+
+    def _parse_structured_provider_result(
+        self,
+        result: dict[str, Any],
+        feature: str,
+        *,
+        fallback_reason: str | None,
+        fallback: dict[str, Any] | None = None,
+    ) -> tuple[dict[str, Any], str | None]:
+        """解析结构化功能输出，并把解析兜底原因合并进 Debug。"""
+        parsed_response = parse_feature_response(result, feature)
+        parsed = parse_provider_output({"rawText": result.get("rawText", ""), "parsed": parsed_response.parsed}, fallback=fallback)
+        return parsed, self._combine_fallback_reasons(fallback_reason, parsed_response.fallback_reason)
+
+    def _combine_fallback_reasons(self, *reasons: str | None) -> str | None:
+        """把 provider 兜底和解析兜底合并成一条可搜索字符串。"""
+        normalized = [reason for reason in reasons if reason]
+        if not normalized:
+            return None
+        return "|".join(normalized)
 
     def _rule_event_reaction(self, outcome: dict[str, Any]) -> dict[str, Any]:
         """生成离线可用的事件反应 JSON，供 event_reaction fallback 使用。"""
@@ -2065,13 +2108,18 @@ class AgentRuntime:
         """统一解析全局 Provider 模式，显式测试覆盖优先于配置文件。"""
         return self.provider_mode_override or self.model_config.active_provider()
 
-    def _safe_error_message(self, error: Exception) -> str:
+    def _safe_error_message(self, error: Exception, *, profile: dict[str, Any] | None = None) -> str:
         """保留错误摘要，避免把请求头或密钥写入事件流。"""
         message = str(error)
         for env_name in ("OPENAI_API_KEY", "DEEPSEEK_API_KEY", "AGENT_TOWN_API_KEY"):
             secret = os.getenv(env_name)
             if secret:
                 message = message.replace(secret, "[REDACTED_SECRET]")
+        profile = profile or {}
+        for value in (profile.get("apiKey"), profile.get("apiKeyEnv")):
+            text = str(value or "")
+            if text.startswith(("sk-", "sk_", "sk-proj-")):
+                message = message.replace(text, "[REDACTED_SECRET]")
         return message
 
     def _select_dialogue_memory_evidence(self, memory_evidence: dict[str, Any]) -> dict[str, Any] | None:
@@ -2171,12 +2219,4 @@ class AgentRuntime:
 
     def _debug_profile(self, profile: dict[str, Any]) -> dict[str, Any]:
         """Debug 展示模型配置时隐藏实际密钥。"""
-        safe_profile = dict(profile)
-        has_inline_key = bool(safe_profile.pop("apiKey", None))
-        env_configured = False
-        if safe_profile.get("apiKeyEnv"):
-            env_configured = bool(os.getenv(str(safe_profile["apiKeyEnv"])))
-        if safe_profile.get("provider") == "cloud":
-            env_configured = env_configured or bool(os.getenv("OPENAI_API_KEY"))
-        safe_profile["apiKeyConfigured"] = has_inline_key or env_configured
-        return safe_profile
+        return sanitize_profile_for_debug(profile)
