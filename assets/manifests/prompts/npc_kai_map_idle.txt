@@ -1,12 +1,11 @@
-Use case: map-sprite-followup
-Asset type: static idle_front map sprite concept
+Use case: map-sprite-redraw-closure
+Asset type: static idle_front map sprite candidate
 Output asset: assets/source/sprites/npc_kai_map_idle.png
-Reference inputs: assets/source/characters/reference/npc_kaya_reference.png and assets/source/characters/npc_kai_neutral.png
-Primary request: Create Kaya Moonstring, internal id kai, as a low-pixel chibi map idle sprite.
-Identity lock: cheerful young female tavern musician, reddish hair, burgundy cape or shawl, small lute or star pendant, Moon Cat Tavern charm, playful confident posture.
-Distinction lock: keep her as a cozy tavern musician; avoid modern idol costume, giant stage instrument, and excessive glamour details.
-Style lock: anime chibi low-pixel map sprite for Agent Valley, pixel-art inspired, light fantasy farming life sim, 2.0 to 2.5 heads tall, slight top-down front view, centered full body, crisp 1-2 px dark outline, limited warm palette, readable at 64x64 and 32x32, single character only.
-Canvas: square composition for later 64x64 transparent PNG processing; keep the body inside a 48x56 safe area with a small foot margin.
-Background: transparent background preferred. If transparency is unavailable, use a perfectly flat #ff00ff chroma key background with no shadows or gradients; do not use #ff00ff inside the character.
-Avoid: text, labels, watermark, logo, extra characters, portrait crop, tall realistic body, 3D model look, side-scroller view, heavy gradients, noisy dithering, muddy outline, huge prop covering the body, malformed limbs, wrong identity.
-Review rule: generated result starts as pending_review; do not mark source_selected until 64px/32px readability and identity inheritance are approved.
+Style anchors: player_farmer_map_idle, npc_mira_map_idle, npc_tomas_map_idle only.
+Primary request: Redraw Kai / Kaya Moonstring as a centered full-body anime chibi low-pixel map sprite for Agent Valley.
+Identity lock: cheerful young female Moon Cat Tavern musician, warm red-auburn hair in a compact wavy side ponytail, burgundy short cape or shawl, cream blouse, dark skirt, small gold star pendant, tiny lute or music-note charm close to the hip.
+Style lock: 2.0 to 2.5 heads tall, soft anime chibi low-pixel rendering, pixel-art inspired, compact full-body map sprite, crisp 1-2 px dark outline after resize, limited warm palette, readable at 64x64 and 32x32.
+Composition lock: centered full body, slight top-down front view, feet visible, simple idle_front pose, body fits a 48x56 safe character area after resizing, generous empty margin.
+Background lock: perfectly flat solid #ff00ff chroma-key background only, no shadows, no texture, no floor plane, do not use #ff00ff in the character.
+Avoid: geometric icon, abstract symbol, large instrument covering the torso, stage performance pose, modern idol outfit, huge lute, half-body portrait, tall realistic body, over 2.5 heads tall, realistic style, 3D render, side-scroller pose, combat pose, complex background, extra characters, text, watermark, logo.
+Post-process: chroma-key remove #ff00ff, crop visible subject, resize into 64x64 RGBA with 48x56 safe area, compare at 64x64 and 32x32.
