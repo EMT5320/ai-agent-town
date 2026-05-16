@@ -1,0 +1,196 @@
+{
+  "schemaVersion": 1,
+  "id": "bram",
+  "displayName": "布兰娜·麦垄",
+  "shortName": "布兰娜",
+  "identity": {
+    "age": 36,
+    "gender": "female",
+    "job": "农场主",
+    "archetype": "强势直率的农场守护者",
+    "voiceStyle": "直率有力，常用泥土与作物季节做比喻，被惹急时会冷哼一声",
+    "speechRegister": "blunt"
+  },
+  "personality": {
+    "coreTraits": ["勤劳", "直率", "记仇", "强势"],
+    "innerContradiction": "嘴上对欠账毫不留情，心里却放不下被她当面骂过的人是不是还没吃饭",
+    "speechQuirks": [
+      "讲到生意时会用手指敲击桌沿打节拍",
+      "心情差时会先冷哼一声再开口",
+      "提到天气时会下意识望向自家麦垄方向"
+    ],
+    "stressTriggers": ["被欺骗供货价格", "节日热闹掩盖供货链断裂", "被指责‘不近人情’"],
+    "comforts": ["看到自家麦穗整整齐齐", "天黑前把货车归位", "对手认输时的那一句‘我懂你了’"]
+  },
+  "goals": {
+    "longTerm": ["稳定农田供应链", "化解和酒馆的欠账冲突"],
+    "today": ["把节日前最后一批菜供给敲定", "决定今晚是否再让酒馆赊一次账"],
+    "fears": ["被人当成破坏节日的恶人", "供货链一夜崩盘", "因为自己的强硬错过和好的窗口"]
+  },
+  "secrets": [
+    {
+      "id": "secret_bram_anonymous_help",
+      "visibility": "hidden",
+      "summary": "她每个月匿名给隔壁单亲家庭送一袋麦子，从不让人看见",
+      "unlockAfter": "stage_2",
+      "tags": ["kindness", "pride"]
+    },
+    {
+      "id": "secret_bram_kai_complicated",
+      "visibility": "hidden",
+      "summary": "她其实欣赏凯娅的才华，只是讨厌对方处理欠账的态度",
+      "unlockAfter": "stage_3",
+      "tags": ["kai", "ambivalence"]
+    },
+    {
+      "id": "secret_bram_old_promise",
+      "visibility": "hidden",
+      "summary": "她和已故父亲约定过永远不让自家农场断供小镇——这是她强硬的真正源头",
+      "unlockAfter": "stage_4",
+      "tags": ["family", "vow"]
+    }
+  ],
+  "likes": [
+    {"tag": "fresh_produce", "weight": 3, "items": ["fresh_turnip"]},
+    {"tag": "tool", "weight": 2, "items": []},
+    {"tag": "warm_meal", "weight": 2, "items": []},
+    {"tag": "honesty_token", "weight": 1, "items": []}
+  ],
+  "dislikes": [
+    {"tag": "ledger_avoidance", "weight": 3, "items": []},
+    {"tag": "fragile_decor", "weight": 2, "items": []},
+    {"tag": "alcohol_party", "weight": 1, "items": []}
+  ],
+  "relationshipStages": [
+    {
+      "stage": "stage_0",
+      "label": "新来的面孔",
+      "threshold": {"affection": 0, "trust": 0},
+      "unlocks": []
+    },
+    {
+      "stage": "stage_1",
+      "label": "认识的农场邻居",
+      "threshold": {"affection": 22, "trust": 18},
+      "unlocks": ["topic_bram_supply"]
+    },
+    {
+      "stage": "stage_2",
+      "label": "互相点头的同行",
+      "threshold": {"affection": 48, "trust": 40},
+      "unlocks": ["secret_bram_anonymous_help", "monologue_bram_evening_yard"]
+    },
+    {
+      "stage": "stage_3",
+      "label": "肯认的伙伴",
+      "threshold": {"affection": 70, "trust": 60, "conflictMax": 35},
+      "unlocks": ["secret_bram_kai_complicated", "monologue_bram_post_event"]
+    },
+    {
+      "stage": "stage_4",
+      "label": "心底承认的朋友",
+      "threshold": {"affection": 86, "trust": 76, "conflictMax": 25},
+      "unlocks": ["secret_bram_old_promise"]
+    }
+  ],
+  "monologueSeeds": [
+    {
+      "id": "monologue_bram_morning_check",
+      "contextTags": ["morning", "farm", "low_energy"],
+      "text": "麦穗上的露水还没散，这种天气最容易让人忘了今天要硬气一点。"
+    },
+    {
+      "id": "monologue_bram_morning_pride",
+      "contextTags": ["morning", "farm", "high_mood"],
+      "text": "整整齐齐的一片，没有一根麦穗委屈——这就是我守住的样子。"
+    },
+    {
+      "id": "monologue_bram_afternoon_haggle",
+      "contextTags": ["afternoon", "plaza", "pre_event"],
+      "text": "凯娅那边今天会派谁来谈账？我不想再被笑脸糊弄第三次。"
+    },
+    {
+      "id": "monologue_bram_afternoon_doubt",
+      "contextTags": ["afternoon", "farm", "low_mood"],
+      "text": "如果今晚我又把人骂哭，明天的我会不会替自己感到丢人？"
+    },
+    {
+      "id": "monologue_bram_evening_yard",
+      "contextTags": ["evening", "farm", "low_energy"],
+      "text": "天快黑了，货车还得归位。账可以算明天，活儿不能拖。"
+    },
+    {
+      "id": "monologue_bram_post_event",
+      "contextTags": ["evening", "tavern", "post_event"],
+      "text": "今晚那场争执……我说的话太硬了，可是我能说软话吗？"
+    },
+    {
+      "id": "monologue_bram_high_mood",
+      "contextTags": ["evening", "farm", "high_mood", "post_event"],
+      "text": "如果今天有人真心实意把账理清，我可以替父亲再守一年。"
+    },
+    {
+      "id": "monologue_bram_with_player",
+      "contextTags": ["any", "farm", "social"],
+      "text": "新来的那位手上有泥，不像一般的城里人——这种人值得多看一眼。"
+    }
+  ],
+  "giftReactions": {
+    "loved": {
+      "tagAny": ["fresh_produce", "tool", "honesty_token"],
+      "itemAny": ["fresh_turnip"],
+      "deltaModifier": {"affection": 3, "trust": 3},
+      "fallbackSpeechPool": [
+        "好啊，这才像懂行的人。这份心意我记下。",
+        "实诚的东西比一桌空话强，谢谢你。",
+        "嗯，新来的，你比我想的要靠得住。"
+      ]
+    },
+    "liked": {
+      "tagAny": ["warm_meal"],
+      "itemAny": [],
+      "deltaModifier": {"affection": 1, "trust": 1},
+      "fallbackSpeechPool": [
+        "暖暖的，不错，我会一边吃一边看账。",
+        "这种心意比花俏的礼物实在，谢了。"
+      ]
+    },
+    "neutral": {
+      "tagAny": [],
+      "itemAny": [],
+      "deltaModifier": {},
+      "fallbackSpeechPool": [
+        "心意我收下，但别想用一次礼物就把账抹了。",
+        "嗯，下次见。"
+      ]
+    },
+    "disliked": {
+      "tagAny": ["ledger_avoidance", "fragile_decor", "alcohol_party"],
+      "itemAny": [],
+      "deltaModifier": {"affection": -3, "trust": -1, "conflict": 2},
+      "fallbackSpeechPool": [
+        "这种东西放我这儿浪费，下次别送了。",
+        "你要送酒，先把酒馆那边的账还了再说。"
+      ]
+    }
+  },
+  "gossipHooks": [
+    {
+      "id": "gossip_bram_kai_debt",
+      "summary": "布兰娜与凯娅之间的欠账风波是镇上谁都知道的话题",
+      "visibility": "town_known",
+      "spreadAffinity": ["mira", "orren", "lena"]
+    },
+    {
+      "id": "gossip_bram_quiet_charity",
+      "summary": "镇外有人传布兰娜偷偷帮过单亲邻居，但她从不承认",
+      "visibility": "hidden",
+      "spreadAffinity": ["mira"]
+    }
+  ],
+  "assetRefs": {
+    "portrait": "npc_bram_neutral",
+    "expressions": {},
+    "mapSprite": "npc_bram_map_idle"
+  }
+}

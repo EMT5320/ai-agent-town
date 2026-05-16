@@ -50,6 +50,9 @@ def build_player_dialogue_context(world: dict[str, Any], npc: dict[str, Any], pl
     player = world["player"]
     location_id = player_action.get("locationId") or player.get("locationId") or npc.get("locationId")
     location = world["locations"].get(location_id) or world["locations"][npc["locationId"]]
+    deep_card = npc.get("deepCard") if isinstance(npc.get("deepCard"), dict) else None
+    deep_identity = (deep_card or {}).get("identity") or {}
+    deep_personality = (deep_card or {}).get("personality") or {}
     return {
         "feature": "player_dialogue",
         "npc": {
@@ -62,6 +65,10 @@ def build_player_dialogue_context(world: dict[str, Any], npc: dict[str, Any], pl
             "goals": npc["todayGoals"],
             "status": npc["status"],
             "memory": memory_summary(npc),
+            "voiceStyle": deep_identity.get("voiceStyle", ""),
+            "archetype": deep_identity.get("archetype", ""),
+            "speechQuirks": list(deep_personality.get("speechQuirks", [])),
+            "innerContradiction": deep_personality.get("innerContradiction", ""),
         },
         "player": {
             "id": player["id"],
@@ -211,7 +218,7 @@ def build_structured_system_prompt(
 
 def _agent_brief(agent: dict[str, Any]) -> dict[str, Any]:
     """提取 Prompt 所需的 NPC 摘要，避免把完整运行态塞进 messages。"""
-    return {
+    brief: dict[str, Any] = {
         "id": agent["id"],
         "name": agent["name"],
         "job": agent["job"],
@@ -220,3 +227,12 @@ def _agent_brief(agent: dict[str, Any]) -> dict[str, Any]:
         "goals": agent.get("todayGoals", []),
         "memory": memory_summary(agent),
     }
+    deep_card = agent.get("deepCard")
+    if isinstance(deep_card, dict):
+        identity = deep_card.get("identity") or {}
+        personality = deep_card.get("personality") or {}
+        brief["voiceStyle"] = identity.get("voiceStyle", "")
+        brief["archetype"] = identity.get("archetype", "")
+        brief["speechQuirks"] = list(personality.get("speechQuirks", []))
+        brief["innerContradiction"] = personality.get("innerContradiction", "")
+    return brief

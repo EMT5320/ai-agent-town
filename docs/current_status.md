@@ -12,18 +12,22 @@
 - 首批静态视觉资产、地图小人候选与 manifest 校验。
 - 规则版 Director v0 + 单个 Event Skill 的最小闭环。
 - LLM profile、fallback、Debug 字段记录路径，以及 Debug / Memory / influence 查询 API。
+- 首发 6 名 NPC 的深度卡、关系阶段、送礼反应和写作工作流。
 - 新对话入口与目标看板。
 
 本阶段重点是把“可运行原型”收紧成“可人工验收的一天游戏闭环”。
 
 ## 2. 本轮核对结果
 
+游戏内容剧本线的讨论、四层方案、当前实现与后续主线拆分已沉淀到 `docs/game_content_storyline.md`。
+
 | 开发线 | 当前状态 | 已验证事实 | 仍需验证或实现 |
 | --- | --- | --- | --- |
 | 后端 Director / Event Skill | 部分完成 | `WorldDigest`、`DirectorBeat`、`TensionDetector`、`SkillRouter`、`DirectorValidator`、`DirectorQueueManager` 已落地；Runtime 会生成、校验、消费或丢弃 `activate_event_skill` Beat；星灯祭单技能已注册；Debug / Memory / influence 查询 API 已由 smoke 走真实 HTTP 路由验证 | Event Skill 仍只有一个；星灯祭结算、记忆模板和 fallback 台词仍有 Runtime 硬编码；通用 DirectorPlanner 和多事件 Skill 尚未完成 |
+| Content Codex / NPC 深度卡 | 已完成首批 | `docs/npc_deep_card_spec.md` 已定义数据契约；`.windsurf/workflows/author-npc-deep-card.md` 已定义批量写作流程；`backend/app/content/data/npc/` 已入库 `kai`、`bram`、`mira`、`tomas`、`orren`、`lena` 6 份卡；`npm.cmd run content:check` 通过；smoke 覆盖 `deepCard` 挂载、对话 Prompt 锚点、送礼 `giftReaction` 和返回 `relationshipStage` | `monologueSeeds` 暂时作为数据底料，尚未接入夜间反思/RAG；`gossipHooks` 尚未接入谣言传播玩法；后续批量 Event Skill 工作流未开始 |
 | Godot 客户端 | 部分完成 | 代码已接入：地点背景层、NPC 选择、底部 VN 对话层、聊天提交、进行中事件区、`inspect` 查看、choices 渲染、`attend_event` 提交、VN 结果展示；地图小人 PNG 与 `.import` 已同步到 Godot 资产目录；命令已检：`client:env` 与 `client:run:check` 通过 | 人工未验收：真实窗口体验；地图小人尚未实际放入地图角色层；事件 UI 的布局、可读性和错误提示需要窗口内确认 |
 | 资产管线 | 部分完成 | manifest 当前有 31 条资产；3 张地图小人为 `style_anchor_candidate`；4 张重画地图小人和 3 张交互标记为 `pending_review`；3 张背景、1 张事件 CG、玩家 + 6 NPC neutral 立绘已登记；`AssetRegistry` 已支持表情回退 | `happy` / `troubled` 表情差分、道具图标、拆分 UI 组件尚未进 manifest 或 Godot registry；地图小人需实机确认后再晋级 |
-| LLM / Debug | 部分完成 | 代码已接入：OpenAI-compatible cloud provider、profile 解析、本地 overlay 示例、Debug 字段记录、规则 fallback、`model:check` 配置校验、Web LLM 配置卡片和热重载接口；命令已检：smoke 覆盖 dialogue / event_reaction / night_reflection Debug 字段、compact Debug payload、RAG-lite memory search、玩家影响链 | 人工/外部配置未验收：本机当前没有真实 API key 配置，`llm-smoke` 会跳过；`debug_analysis` profile 只在配置中存在；真实延迟、成本、失败率待测 |
+| LLM / Debug | 部分完成 | 代码已接入：OpenAI-compatible cloud provider、profile 解析、本地 overlay 示例、Debug 字段记录、规则 fallback、`model:check` 配置校验、Web LLM 配置卡片和热重载接口；命令已检：smoke 覆盖 dialogue / event_reaction / night_reflection Debug 字段、compact Debug payload、RAG-lite memory search、玩家影响链 | 人工/外部配置未验收：提交态不包含真实 API key，Codex 沙箱内真实云端 smoke 未执行；`debug_analysis` profile 只在配置中存在；真实延迟、成本、失败率待测 |
 | 文档治理 | 已完成本轮入口 | `agent_context`、`goal_board`、`current_status`、`open_questions` 已形成新对话入口和状态看板 | 后续每轮只记录已验证变化，避免复制源设计长文 |
 
 ## 3. 当前已实现能力
@@ -44,6 +48,15 @@
 - `backend/app/skills/event_skill_schema.py` 已定义事件技能结构。
 - `backend/app/skills/event_skill_registry.py` 已注册 `event.starlight_festival_shortage`。
 - Runtime 会把 Director 关键步骤写入事件流，便于 Debug Console 读取。
+
+### Content Codex / NPC 深度卡
+
+- `backend/app/content/codex_schema.py` 定义 NPC 深度卡 dataclass 契约。
+- `backend/app/content/codex_loader.py` 负责读取 `data/npc/*.json`、交叉校验关系阶段与 unlock 引用，并提供 runtime 字典转换。
+- `backend/app/content/data/npc/` 已包含 6 份首发 NPC 卡，每份包含秘密、喜好/厌恶、5 段关系阶段、8 条以上独白种子、送礼四档反应和谣言钩子。
+- `create_initial_world()` 会把深度卡挂载到对应 `agent.deepCard`。
+- 对话 Prompt 已读取深度卡语气锚点；送礼会匹配深度卡 `giftReactions`；玩家对话和送礼结果会返回 `relationshipStage`。
+- `scripts/check_npc_codex.py` 已加入 `npm.cmd run content:check` 和 `npm.cmd run check`。
 
 ### Provider / Debug
 
@@ -82,10 +95,11 @@
 
 1. **真实 Godot 窗口验收**：需要用 `npm.cmd run start` + `npm.cmd run client:run` 人工确认窗口中的背景、NPC 选择、聊天提交、事件查看、事件选择、异常提示和同步频率。
 2. **基础地图层**：Godot 已具备地图小人图片资源，仍需要推进地图节点、角色站位、交互区域和玩家移动输入。
-3. **Event Skill 数据化深度**：当前已有 schema 和单技能注册表，结算细节还需要继续从 Runtime 规则表迁入数据层。
-4. **真实 LLM smoke**：需要本地 key 或 overlay 后验证 DeepSeek / OpenAI-compatible profile 的真实延迟、成本、错误和 fallback。
-5. **资产补齐**：表情差分、UI 组件、道具图标仍待生成、筛选、登记和接入；地图小人需窗口确认后定版。
-6. **Debug Console 扩展**：后端已有 Debug / Memory 查询 API，Web 侧仍需展示 Director 队列、Skill 激活、fallback 和成本字段。
+3. **Content Codex 二阶段接入**：NPC 深度卡已入库，`monologueSeeds` 和 `gossipHooks` 仍需接入夜间反思/RAG 与谣言传播。
+4. **Event Skill 数据化深度**：当前已有 schema 和单技能注册表，结算细节还需要继续从 Runtime 规则表迁入数据层。
+5. **真实 LLM smoke**：需要本地 key 或 overlay 后验证 DeepSeek / OpenAI-compatible profile 的真实延迟、成本、错误和 fallback。
+6. **资产补齐**：表情差分、UI 组件、道具图标仍待生成、筛选、登记和接入；地图小人需窗口确认后定版。
+7. **Debug Console 扩展**：后端已有 Debug / Memory 查询 API，Web 侧仍需展示 Director 队列、Skill 激活、fallback 和成本字段。
 
 ## 5. 开发前硬性约束
 
@@ -101,6 +115,7 @@
 
 ```powershell
 npm.cmd run check
+npm.cmd run content:check
 npm.cmd run smoke
 npm.cmd run asset:check
 npm.cmd run client:env
@@ -114,6 +129,7 @@ git diff --check
 
 ```powershell
 npm.cmd run check
+npm.cmd run content:check
 npm.cmd run smoke
 npm.cmd run asset:check
 npm.cmd run client:env
@@ -148,5 +164,6 @@ npm.cmd run client:run
 2. 客户端优先接入地图小人角色层、角色站位、交互 marker 和点击入口。
 3. 配置一次真实 LLM smoke，确认 dialogue / event_reaction / night_reflection 的真实输出、延迟和 fallback。
 4. 按客户端窗口效果决定地图小人是否晋级 `source_selected`，只修正实机暴露的资产问题。
-5. 收紧 Event Skill 数据化：用 Skill 定义驱动选项、后果预览、asset hints 和部分结算模板。
-6. Web Debug 追加 Director / Skill / fallback 视图，保持旧观察台不阻塞 Godot 主体验。
+5. 内容线优先接入 `monologueSeeds` 到夜间反思/RAG，或把 `gossipHooks` 做成第一版谣言传播数据源。
+6. 收紧 Event Skill 数据化：用 Skill 定义驱动选项、后果预览、asset hints 和部分结算模板。
+7. Web Debug 追加 Director / Skill / fallback 视图，保持旧观察台不阻塞 Godot 主体验。

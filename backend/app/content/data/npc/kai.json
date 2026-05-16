@@ -1,0 +1,200 @@
+{
+  "schemaVersion": 1,
+  "id": "kai",
+  "displayName": "凯娅·月弦",
+  "shortName": "凯娅",
+  "identity": {
+    "age": 22,
+    "gender": "female",
+    "job": "酒馆乐手",
+    "archetype": "热情直球乐手",
+    "voiceStyle": "直率，爱用感叹号，偶尔以星灯与琴弦做比喻",
+    "speechRegister": "casual"
+  },
+  "personality": {
+    "coreTraits": ["外向", "冲动", "浪漫"],
+    "innerContradiction": "表面热闹爱社交，骨子里害怕被欠账冲突连累而失去酒馆驻场资格",
+    "speechQuirks": [
+      "兴奋时会哼一段未完成的小调",
+      "紧张时反复用拇指擦拭指尖琴弦",
+      "提到星灯祭时下意识抬手指向夜空"
+    ],
+    "stressTriggers": ["节日冷场", "被指责不够专业", "看到镇民因自己而争执"],
+    "comforts": ["有人愿意听她写到一半的新曲", "看到月猫酒馆门口星灯亮起", "收到与音乐或节日相关的小礼物"]
+  },
+  "goals": {
+    "longTerm": ["写出真正属于小镇的星灯祭主题曲", "让月猫酒馆成为节日夜晚的核心舞台"],
+    "today": ["撑过星灯祭前夜的演出，让大家至少笑一次"],
+    "fears": ["节日冷场", "被布兰娜当众指责欠账", "失去酒馆驻场资格"]
+  },
+  "secrets": [
+    {
+      "id": "secret_kai_debt",
+      "visibility": "hidden",
+      "summary": "酒馆欠账其实有一部分是她私下赊账买乐谱与新弦",
+      "unlockAfter": "stage_3",
+      "tags": ["debt", "regret", "music"]
+    },
+    {
+      "id": "secret_kai_unfinished_song",
+      "visibility": "hidden",
+      "summary": "她写了一半的星灯祭主题曲卡在副歌，迟迟不敢拿出来给镇民听",
+      "unlockAfter": "stage_2",
+      "tags": ["creative_block", "vulnerability"]
+    },
+    {
+      "id": "secret_kai_orren_letter",
+      "visibility": "hidden",
+      "summary": "她偷偷收着一封奥蕾娅多年前写给她的鼓励信，遇到自我怀疑就拿出来读",
+      "unlockAfter": "stage_4",
+      "tags": ["mentor", "self_doubt"]
+    }
+  ],
+  "likes": [
+    {"tag": "music", "weight": 3, "items": []},
+    {"tag": "festival", "weight": 3, "items": ["starlight_lantern"]},
+    {"tag": "flower", "weight": 2, "items": ["farm_flower"]},
+    {"tag": "sweet", "weight": 1, "items": []}
+  ],
+  "dislikes": [
+    {"tag": "silence_punishment", "weight": 3, "items": []},
+    {"tag": "ledger", "weight": 2, "items": []}
+  ],
+  "relationshipStages": [
+    {
+      "stage": "stage_0",
+      "label": "陌生",
+      "threshold": {"affection": 0, "trust": 0},
+      "unlocks": []
+    },
+    {
+      "stage": "stage_1",
+      "label": "镇上熟人",
+      "threshold": {"affection": 25, "trust": 15},
+      "unlocks": ["topic_kai_music"]
+    },
+    {
+      "stage": "stage_2",
+      "label": "演出朋友",
+      "threshold": {"affection": 50, "trust": 35},
+      "unlocks": ["topic_kai_dream", "secret_kai_unfinished_song", "monologue_kai_late_night_doubt"]
+    },
+    {
+      "stage": "stage_3",
+      "label": "知音",
+      "threshold": {"affection": 70, "trust": 55, "conflictMax": 40},
+      "unlocks": ["secret_kai_debt", "monologue_kai_post_show"]
+    },
+    {
+      "stage": "stage_4",
+      "label": "心动",
+      "threshold": {"affection": 85, "trust": 70, "conflictMax": 30},
+      "unlocks": ["secret_kai_orren_letter", "romance_seed_kai"]
+    }
+  ],
+  "monologueSeeds": [
+    {
+      "id": "monologue_kai_morning_warmup",
+      "contextTags": ["morning", "tavern", "low_energy"],
+      "text": "弦还没醒透，今天的节日演出能撑住吗？我得再过一遍那段副歌。"
+    },
+    {
+      "id": "monologue_kai_morning_excited",
+      "contextTags": ["morning", "tavern", "high_mood"],
+      "text": "今天是星灯祭前夜啊——好想把整条街都唱亮起来！"
+    },
+    {
+      "id": "monologue_kai_afternoon_busy",
+      "contextTags": ["afternoon", "tavern", "pre_event"],
+      "text": "椅子要再排一排，灯绳得再绷紧些。今晚不能让任何细节绊倒大家的好心情。"
+    },
+    {
+      "id": "monologue_kai_afternoon_worry",
+      "contextTags": ["afternoon", "plaza", "low_mood"],
+      "text": "布兰娜那边的脸色越想越沉，真要在节日前夜把账翻出来吗……"
+    },
+    {
+      "id": "monologue_kai_evening_high",
+      "contextTags": ["evening", "tavern", "high_mood", "pre_event"],
+      "text": "灯一点亮我心也跟着亮——拜托今晚一切都顺，让所有人都能笑一回。"
+    },
+    {
+      "id": "monologue_kai_evening_anxious",
+      "contextTags": ["evening", "tavern", "low_mood", "pre_event"],
+      "text": "如果今天没人捧场怎么办？我是不是又把希望放得太满了？"
+    },
+    {
+      "id": "monologue_kai_late_night_doubt",
+      "contextTags": ["evening", "tavern", "low_mood", "post_event"],
+      "text": "今晚很多人笑了，可台上只剩我一个人时还是会害怕——我配得上这盏星灯吗？"
+    },
+    {
+      "id": "monologue_kai_post_show",
+      "contextTags": ["evening", "tavern", "high_mood", "post_event"],
+      "text": "副歌最后一段终于敢唱出来了。也许那首小镇之歌真的快写完了。"
+    },
+    {
+      "id": "monologue_kai_with_player",
+      "contextTags": ["any", "tavern", "social"],
+      "text": "新来的那个农场主好像愿意听我唠音乐，下次给她留个最好的位置吧。"
+    }
+  ],
+  "giftReactions": {
+    "loved": {
+      "tagAny": ["music", "festival"],
+      "itemAny": ["starlight_lantern"],
+      "deltaModifier": {"affection": 3, "trust": 2},
+      "fallbackSpeechPool": [
+        "哇——这个我超喜欢！要不要我用它写一段曲子？",
+        "你也太懂我了，今晚的曲子要献给你！",
+        "拿到这个我整个人都亮起来了，谢谢你！"
+      ]
+    },
+    "liked": {
+      "tagAny": ["flower", "sweet"],
+      "itemAny": ["farm_flower"],
+      "deltaModifier": {"affection": 1},
+      "fallbackSpeechPool": [
+        "好可爱呀，我会摆在台前一起带上场。",
+        "谢谢你，这种小心意比一桌大餐还让我开心。"
+      ]
+    },
+    "neutral": {
+      "tagAny": [],
+      "itemAny": [],
+      "deltaModifier": {},
+      "fallbackSpeechPool": [
+        "谢谢你的好意，我会好好收下的。",
+        "嗯——心意我收到啦，下次也聊聊你最近的事吧。"
+      ]
+    },
+    "disliked": {
+      "tagAny": ["silence_punishment", "ledger"],
+      "itemAny": [],
+      "deltaModifier": {"affection": -3, "trust": -1, "conflict": 2},
+      "fallbackSpeechPool": [
+        "嗯……我大概不太擅长应付这个。",
+        "你的好意我收下，但今晚先别提账本好吗？"
+      ]
+    }
+  },
+  "gossipHooks": [
+    {
+      "id": "gossip_kai_bram_debt",
+      "summary": "凯娅与布兰娜围绕酒馆欠账的长期摩擦",
+      "visibility": "town_known",
+      "spreadAffinity": ["mira", "orren", "lena"]
+    },
+    {
+      "id": "gossip_kai_song_secret",
+      "summary": "凯娅在写一首没人听过的小镇主题曲",
+      "visibility": "hidden",
+      "spreadAffinity": ["orren"]
+    }
+  ],
+  "assetRefs": {
+    "portrait": "npc_kai_neutral",
+    "expressions": {},
+    "mapSprite": "npc_kai_map_idle"
+  }
+}

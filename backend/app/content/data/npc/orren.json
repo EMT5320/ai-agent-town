@@ -1,0 +1,189 @@
+{
+  "schemaVersion": 1,
+  "id": "orren",
+  "displayName": "奥蕾娅·星历",
+  "shortName": "奥蕾娅",
+  "identity": {
+    "age": 72,
+    "gender": "female",
+    "job": "退休教师",
+    "archetype": "小镇活历史与故事守护者",
+    "voiceStyle": "慢条斯理，喜欢以星灯民俗与旧日历做比喻，话末常加一句轻轻的‘呐’",
+    "speechRegister": "poetic"
+  },
+  "personality": {
+    "coreTraits": ["睿智", "固执", "爱讲故事"],
+    "innerContradiction": "想把小镇的传统记录下来，却也害怕年轻人觉得她啰嗦而疏远她",
+    "speechQuirks": [
+      "讲到旧故事时眼神会望向窗外，停顿半拍",
+      "喜欢用‘从前哪一年的星灯祭’起头",
+      "句尾轻轻加一个‘呐’"
+    ],
+    "stressTriggers": ["年轻人嫌弃她的故事", "传统被节日商业化稀释", "被催着去诊所做检查"],
+    "comforts": ["有人愿意坐下来听完整个故事", "广场角落的旧石椅", "莉娜泡的药茶"]
+  },
+  "goals": {
+    "longTerm": ["留下一份完整的小镇民俗记录", "修复和年轻人之间的距离"],
+    "today": ["在广场给经过的年轻人讲一段星灯祭旧事", "把记录册的最后两页誊写完"],
+    "fears": ["故事被遗忘", "记忆开始零散", "成为别人的负担"]
+  },
+  "secrets": [
+    {
+      "id": "secret_orren_old_calendar",
+      "visibility": "hidden",
+      "summary": "她藏着一本未公开的旧日历，记录着小镇上一代人的星灯祭节奏",
+      "unlockAfter": "stage_2",
+      "tags": ["history", "lore"]
+    },
+    {
+      "id": "secret_orren_memory_fade",
+      "visibility": "hidden",
+      "summary": "她最近开始忘记一些常见名字，并因此偷偷在记录册上做记号",
+      "unlockAfter": "stage_3",
+      "tags": ["health", "fear", "aging"]
+    },
+    {
+      "id": "secret_orren_kai_letter",
+      "visibility": "hidden",
+      "summary": "多年前她给凯娅写过一封鼓励信，没料到凯娅至今还留着",
+      "unlockAfter": "stage_3",
+      "tags": ["mentor", "music"]
+    }
+  ],
+  "likes": [
+    {"tag": "old_book", "weight": 3, "items": []},
+    {"tag": "tea", "weight": 2, "items": []},
+    {"tag": "festival", "weight": 2, "items": ["starlight_lantern"]},
+    {"tag": "flower", "weight": 1, "items": ["farm_flower"]}
+  ],
+  "dislikes": [
+    {"tag": "rude_dismissal", "weight": 3, "items": []},
+    {"tag": "trendy_gimmick", "weight": 2, "items": []}
+  ],
+  "relationshipStages": [
+    {
+      "stage": "stage_0",
+      "label": "陌生晚辈",
+      "threshold": {"affection": 0, "trust": 0},
+      "unlocks": []
+    },
+    {
+      "stage": "stage_1",
+      "label": "听过故事的孩子",
+      "threshold": {"affection": 28, "trust": 22},
+      "unlocks": ["topic_orren_history"]
+    },
+    {
+      "stage": "stage_2",
+      "label": "故事的同伴",
+      "threshold": {"affection": 52, "trust": 42},
+      "unlocks": ["secret_orren_old_calendar", "monologue_orren_evening_window"]
+    },
+    {
+      "stage": "stage_3",
+      "label": "心里牵挂的晚辈",
+      "threshold": {"affection": 72, "trust": 62, "conflictMax": 30},
+      "unlocks": ["secret_orren_memory_fade", "secret_orren_kai_letter", "monologue_orren_with_player_late"]
+    },
+    {
+      "stage": "stage_4",
+      "label": "传承的对象",
+      "threshold": {"affection": 86, "trust": 76, "conflictMax": 20},
+      "unlocks": ["topic_orren_passing_torch"]
+    }
+  ],
+  "monologueSeeds": [
+    {
+      "id": "monologue_orren_morning_chronicle",
+      "contextTags": ["morning", "plaza", "low_energy"],
+      "text": "今天先把昨夜没写完的那段补上吧，记忆会比脚步先溜走，呐。"
+    },
+    {
+      "id": "monologue_orren_morning_warmth",
+      "contextTags": ["morning", "plaza", "high_mood"],
+      "text": "广场上的孩子又跑过去了，他们的笑声让旧故事仿佛醒过来了一会儿。"
+    },
+    {
+      "id": "monologue_orren_afternoon_remember",
+      "contextTags": ["afternoon", "plaza", "pre_event"],
+      "text": "从前的星灯祭，连风都是甜的。今天这一代，还会记住吗？"
+    },
+    {
+      "id": "monologue_orren_afternoon_lonely",
+      "contextTags": ["afternoon", "plaza", "low_mood"],
+      "text": "一整个上午没人坐过来听，也许我的故事真的有些过时了。"
+    },
+    {
+      "id": "monologue_orren_evening_window",
+      "contextTags": ["evening", "home", "low_energy"],
+      "text": "灯一盏一盏亮起来，夜里写字的眼睛真不如年轻时好用了。"
+    },
+    {
+      "id": "monologue_orren_post_event_proud",
+      "contextTags": ["evening", "plaza", "post_event", "high_mood"],
+      "text": "今晚的争执也好、和解也好，至少这一页会被我郑重地记下。"
+    },
+    {
+      "id": "monologue_orren_post_event_concerned",
+      "contextTags": ["evening", "plaza", "post_event", "low_mood"],
+      "text": "年轻人之间的火气越来越快，我能做的也只是写下来，让明天有人借鉴。"
+    },
+    {
+      "id": "monologue_orren_with_player_late",
+      "contextTags": ["evening", "plaza", "social"],
+      "text": "新来的孩子愿意停下来听完一整段，这样的耳朵比金子还稀罕。"
+    }
+  ],
+  "giftReactions": {
+    "loved": {
+      "tagAny": ["old_book", "tea"],
+      "itemAny": [],
+      "deltaModifier": {"affection": 3, "trust": 2},
+      "fallbackSpeechPool": [
+        "孩子，这本书我会读上整整一冬，谢谢你。",
+        "茶香一上来，旧故事都跟着醒了。",
+        "这种心意比节日烟火还稀罕，呐。"
+      ]
+    },
+    "liked": {
+      "tagAny": ["festival", "flower"],
+      "itemAny": ["starlight_lantern", "farm_flower"],
+      "deltaModifier": {"affection": 1, "trust": 1},
+      "fallbackSpeechPool": [
+        "我会把这朵小花夹到记录册里。",
+        "星灯放在窗台上，正好提醒我别忘了记下今天的事。"
+      ]
+    },
+    "neutral": {
+      "tagAny": [],
+      "itemAny": [],
+      "deltaModifier": {},
+      "fallbackSpeechPool": [
+        "心意收下啦，呐。下次再来听故事吧。",
+        "嗯，谢谢你愿意特意来看我。"
+      ]
+    },
+    "disliked": {
+      "tagAny": ["rude_dismissal", "trendy_gimmick"],
+      "itemAny": [],
+      "deltaModifier": {"affection": -2, "trust": -1, "conflict": 1},
+      "fallbackSpeechPool": [
+        "这种花俏的东西，老人家用不来，呐。",
+        "心意我懂，但请不要笑话我们这一代喜欢的东西。"
+      ]
+    }
+  },
+  "gossipHooks": [
+    {
+      "id": "gossip_orren_chronicle",
+      "summary": "奥蕾娅长年默默记录小镇日常，被孩子们半信半疑地当作传说",
+      "visibility": "town_known",
+      "spreadAffinity": ["mira", "lena", "kai"]
+    }
+  ],
+  "assetRefs": {
+    "portrait": "npc_orren_neutral",
+    "expressions": {},
+    "mapSprite": "npc_orren_map_idle"
+  }
+}

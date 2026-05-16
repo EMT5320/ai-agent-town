@@ -493,6 +493,11 @@ if not any(plot["id"] == "farm_plot_01" and plot["stage"] == "empty" for plot in
     raise RuntimeError("游戏状态缺少空置 farm_plot_01")
 if not any(event["id"] == "starlight_festival_shortage" for event in game_state["activeEvents"]):
     raise RuntimeError("游戏状态缺少星灯祭供应短缺事件")
+deep_card_kai = next((npc.get("deepCard") for npc in game_state["npcs"] if npc.get("id") == "kai"), None)
+if not isinstance(deep_card_kai, dict) or len(deep_card_kai.get("relationshipStages", [])) < 4:
+    raise RuntimeError("游戏状态应挂载 Kai NPC 深度卡和关系阶段")
+if not deep_card_kai.get("giftReactions", {}).get("loved", {}).get("fallbackSpeechPool"):
+    raise RuntimeError("Kai NPC 深度卡应提供送礼 fallback 台词池")
 starlight_event = next(event for event in game_state["activeEvents"] if event["id"] == "starlight_festival_shortage")
 if starlight_event.get("skillId") != STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID:
     raise RuntimeError("游戏状态中的星灯祭事件应叠加 Event Skill 数据")
@@ -595,8 +600,13 @@ if not talk["result"]["dialogue"]:
 if not any(event["type"] == "debug.turn_recorded" for event in talk["state"]["recentEvents"]):
     raise RuntimeError("玩家对话后应写入 Debug 决策记录")
 dialogue_debug = assert_feature_debug(app.get_public_state(), "dialogue")
+dialogue_prompt = "\n".join(str(message.get("content", "")) for message in dialogue_debug["messages"])
+if "voiceStyle" not in dialogue_prompt or "speechQuirks" not in dialogue_prompt:
+    raise RuntimeError("对话 Prompt 应包含 NPC 深度卡 voiceStyle 和 speechQuirks")
 if not talk["result"].get("playerProfile", {}).get("styleSummary"):
     raise RuntimeError("玩家对话后应更新 Player Profile")
+if not talk["result"].get("relationshipStage", {}).get("stage"):
+    raise RuntimeError("玩家对话后应返回 relationshipStage")
 
 gift = app.player_action({"type": "give_gift", "targetId": "kai", "locationId": "tavern", "itemId": "farm_flower"})
 assert_player_action_contract(gift, "give_gift")
@@ -606,6 +616,11 @@ if not any("player_gift" in item.get("tags", []) for item in gift["result"]["mem
     raise RuntimeError("送礼后应写入 NPC 礼物记忆")
 if "礼物" not in gift["result"].get("playerProfile", {}).get("styleSummary", ""):
     raise RuntimeError("送礼后 Player Profile 应体现礼物风格")
+gift_reaction = gift["result"].get("giftReaction", {})
+if gift_reaction.get("tier") not in {"loved", "liked", "neutral", "disliked"}:
+    raise RuntimeError("送礼后应返回 NPC 深度卡匹配出的 giftReaction.tier")
+if not gift["result"].get("relationshipStage", {}).get("label"):
+    raise RuntimeError("送礼后应返回 relationshipStage.label")
 
 inspect = app.player_action({"type": "inspect", "eventId": "starlight_festival_shortage"})
 assert_player_action_contract(inspect, "inspect")

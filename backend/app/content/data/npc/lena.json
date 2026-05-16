@@ -1,0 +1,188 @@
+{
+  "schemaVersion": 1,
+  "id": "lena",
+  "displayName": "莉娜·白桦",
+  "shortName": "莉娜",
+  "identity": {
+    "age": 27,
+    "gender": "female",
+    "job": "医生",
+    "archetype": "理性克制型小镇医生",
+    "voiceStyle": "言简意赅、用词精确，偶尔会冒出医生特有的冷面笑话",
+    "speechRegister": "clinical"
+  },
+  "personality": {
+    "coreTraits": ["理性", "共情", "疲惫"],
+    "innerContradiction": "她想守护每一个镇民的健康，却也清楚没人替她量过自己的疲劳值",
+    "speechQuirks": [
+      "习惯把名词和数字放在一起说，比如‘三天没睡’",
+      "解释病因时会下意识用左手比划尺度",
+      "听到八卦时会推一下根本没戴的眼镜"
+    ],
+    "stressTriggers": ["明显病情被忽视", "节日把老人累垮", "情绪化指责医生"],
+    "comforts": ["安静的诊所角落", "一杯不加糖的草药茶", "把白天的病例写完归档"]
+  },
+  "goals": {
+    "longTerm": ["把镇上的健康档案系统建起来", "把老人冬天的死亡风险压下去"],
+    "today": ["确认奥蕾娅的药茶配方", "提醒米娅带妮娜来检查咳嗽"],
+    "fears": ["错过早期的危险信号", "节日热闹掩盖了健康风险", "倒在病人之前先倒下"]
+  },
+  "secrets": [
+    {
+      "id": "secret_lena_own_health",
+      "visibility": "hidden",
+      "summary": "她自己最近也常常胸闷，但从不告诉任何人，怕影响病人对她的信任",
+      "unlockAfter": "stage_3",
+      "tags": ["health", "self_neglect"]
+    },
+    {
+      "id": "secret_lena_old_patient",
+      "visibility": "hidden",
+      "summary": "她在外地实习时未能救回一位老人，至今每年的星灯祭都会想起那个名字",
+      "unlockAfter": "stage_3",
+      "tags": ["regret", "memorial"]
+    },
+    {
+      "id": "secret_lena_journal",
+      "visibility": "hidden",
+      "summary": "她在日记里写下镇民每个人的脆弱细节，并下决心永远不让档案变成八卦",
+      "unlockAfter": "stage_4",
+      "tags": ["ethics", "vow"]
+    }
+  ],
+  "likes": [
+    {"tag": "herb", "weight": 3, "items": []},
+    {"tag": "tea", "weight": 2, "items": []},
+    {"tag": "fresh_produce", "weight": 2, "items": ["fresh_turnip"]},
+    {"tag": "flower", "weight": 1, "items": ["farm_flower"]}
+  ],
+  "dislikes": [
+    {"tag": "alcohol_party", "weight": 3, "items": []},
+    {"tag": "sugary_excess", "weight": 2, "items": []}
+  ],
+  "relationshipStages": [
+    {
+      "stage": "stage_0",
+      "label": "病案中的姓名",
+      "threshold": {"affection": 0, "trust": 0},
+      "unlocks": []
+    },
+    {
+      "stage": "stage_1",
+      "label": "认识的镇民",
+      "threshold": {"affection": 25, "trust": 22},
+      "unlocks": ["topic_lena_clinic"]
+    },
+    {
+      "stage": "stage_2",
+      "label": "可信的合作者",
+      "threshold": {"affection": 50, "trust": 44},
+      "unlocks": ["topic_lena_health_archive", "monologue_lena_late_clinic"]
+    },
+    {
+      "stage": "stage_3",
+      "label": "把心事说出口的对象",
+      "threshold": {"affection": 72, "trust": 64, "conflictMax": 30},
+      "unlocks": ["secret_lena_own_health", "secret_lena_old_patient", "monologue_lena_post_event"]
+    },
+    {
+      "stage": "stage_4",
+      "label": "彼此扶持的伙伴",
+      "threshold": {"affection": 86, "trust": 78, "conflictMax": 20},
+      "unlocks": ["secret_lena_journal", "romance_seed_lena"]
+    }
+  ],
+  "monologueSeeds": [
+    {
+      "id": "monologue_lena_morning_check",
+      "contextTags": ["morning", "clinic", "low_energy"],
+      "text": "六点的咖啡再苦也得喝下去，今天奥蕾娅的复诊不能拖。"
+    },
+    {
+      "id": "monologue_lena_morning_steady",
+      "contextTags": ["morning", "clinic", "high_mood"],
+      "text": "今晨的气温对老人的关节友好——说明节日不一定全是坏消息。"
+    },
+    {
+      "id": "monologue_lena_afternoon_records",
+      "contextTags": ["afternoon", "clinic", "pre_event"],
+      "text": "档案柜又满了一格，慢一点没关系，但不能漏。"
+    },
+    {
+      "id": "monologue_lena_afternoon_drained",
+      "contextTags": ["afternoon", "clinic", "low_mood"],
+      "text": "二十分钟午休变成了五分钟，胸口又有点闷——再忍一忍。"
+    },
+    {
+      "id": "monologue_lena_late_clinic",
+      "contextTags": ["evening", "clinic", "low_energy"],
+      "text": "灯下记最后两份病例，今天又比昨天晚了三十分钟。"
+    },
+    {
+      "id": "monologue_lena_post_event",
+      "contextTags": ["evening", "tavern", "post_event", "low_mood"],
+      "text": "争执之后没人再注意奥蕾娅的脸色变了几次，可我看到了。"
+    },
+    {
+      "id": "monologue_lena_high_mood",
+      "contextTags": ["evening", "clinic", "high_mood"],
+      "text": "今天没有急诊，没有胸闷，没有坏消息——这种日子值得记上一笔。"
+    },
+    {
+      "id": "monologue_lena_with_player",
+      "contextTags": ["any", "clinic", "social"],
+      "text": "新来的农场主主动问起健康话题，这个镇子又多了一个理性的耳朵。"
+    }
+  ],
+  "giftReactions": {
+    "loved": {
+      "tagAny": ["herb", "tea"],
+      "itemAny": [],
+      "deltaModifier": {"affection": 3, "trust": 2},
+      "fallbackSpeechPool": [
+        "好东西。我会泡一壶让奥蕾娅也喝。",
+        "这种东西比鲜花管用，谢谢你。"
+      ]
+    },
+    "liked": {
+      "tagAny": ["fresh_produce", "flower"],
+      "itemAny": ["fresh_turnip", "farm_flower"],
+      "deltaModifier": {"affection": 1, "trust": 1},
+      "fallbackSpeechPool": [
+        "营养均衡的好东西，谢谢。",
+        "诊所窗台上正好缺一抹绿，谢谢你。"
+      ]
+    },
+    "neutral": {
+      "tagAny": [],
+      "itemAny": [],
+      "deltaModifier": {},
+      "fallbackSpeechPool": [
+        "心意收下了。下次需要复诊就直接来。",
+        "嗯，谢谢你的好意。"
+      ]
+    },
+    "disliked": {
+      "tagAny": ["alcohol_party", "sugary_excess"],
+      "itemAny": [],
+      "deltaModifier": {"affection": -2, "trust": -2, "conflict": 1},
+      "fallbackSpeechPool": [
+        "这个我替镇民收一下，但不能多吃。",
+        "送酒给医生，是不是把我当病人安慰？"
+      ]
+    }
+  },
+  "gossipHooks": [
+    {
+      "id": "gossip_lena_overwork",
+      "summary": "莉娜常年熬夜的传闻在镇上被悄悄议论",
+      "visibility": "town_known",
+      "spreadAffinity": ["mira", "orren"]
+    }
+  ],
+  "assetRefs": {
+    "portrait": "npc_lena_neutral",
+    "expressions": {},
+    "mapSprite": "npc_lena_map_idle"
+  }
+}

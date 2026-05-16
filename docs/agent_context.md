@@ -9,6 +9,7 @@
 - 长期方向以 `docs/project_vision.md` 为准。
 - 当前事实以 `docs/current_status.md` 为准。
 - 并行写入范围以 `docs/goal_board.md` 为准。
+- 游戏内容剧本线以 `docs/game_content_storyline.md` 为准。
 - 多层 Agent 设计细节见 `docs/agentic_game_design.md`。
 - 视觉和资产细节见 `docs/art_direction.md`、`docs/asset_generation_prompts.md`、`assets/manifests/asset_manifest.json`。
 
@@ -27,6 +28,15 @@
 - Runtime 会运行规则版 Director v0，并写入 `director.digest_created`、`director.beat_created`、`director.beat_validated`、`director.beat_consumed`、`director.beat_discarded`。
 - 已有单个 Event Skill：`event.starlight_festival_shortage`，定义位于 `backend/app/skills/event_skill_registry.py`。
 - 星灯祭事件当前支持查看、选择、关系变化、记忆写入、事件反应、夜间反思和结算记录。
+
+### Content Codex / NPC 深度卡
+
+- 已新增 NPC 深度卡数据契约：`docs/npc_deep_card_spec.md`。
+- 已新增写作工作流：`.windsurf/workflows/author-npc-deep-card.md`。
+- 已新增内容数据层：`backend/app/content/`，当前包含 `kai`、`bram`、`mira`、`tomas`、`orren`、`lena` 6 份首发 NPC 深度卡。
+- Runtime 初始化会把深度卡挂到 `agent.deepCard`；玩家对话 Prompt 会读取 `voiceStyle`、`archetype`、`speechQuirks`、`innerContradiction`。
+- 送礼会根据深度卡 `giftReactions` 匹配反应档，玩家对话与送礼结果会返回 `relationshipStage`。
+- `npm.cmd run content:check` 与 `npm.cmd run check` 已覆盖 NPC 深度卡结构、seed membership、资产引用 warning 和 smoke 集成。
 
 ### LLM / Debug
 
@@ -66,6 +76,7 @@
 
 ```powershell
 npm.cmd run check
+npm.cmd run content:check
 npm.cmd run smoke
 npm.cmd run asset:check
 npm.cmd run client:run:check
@@ -82,6 +93,7 @@ git diff --check
 说明：
 
 - `npm.cmd run check` 覆盖 Python 编译、前端 JS、后端 smoke、资产 manifest、Godot 项目结构。
+- `npm.cmd run content:check` 校验 6 份 NPC 深度卡、关系阶段、送礼反应、独白种子和资产引用。
 - `npm.cmd run smoke` 重点验证后端 Runtime、Director v0、Event Skill、Debug 字段和 LLM smoke 跳过/执行状态。
 - `npm.cmd run asset:check` 校验资产路径、prompt 引用、PNG 尺寸和 Godot 引用。
 - `npm.cmd run client:env` 会用 Godot headless 打开项目，能捕获一部分脚本加载问题。
@@ -93,6 +105,7 @@ git diff --check
 1. 固定离线基线：运行 `npm.cmd run check`、`npm.cmd run smoke`、`npm.cmd run asset:check`、`npm.cmd run client:env`、`npm.cmd run client:run:check`。
 2. 人工验收 Godot：用 `npm.cmd run start` + `npm.cmd run client:run` 确认地点切换、NPC 选择、talk、事件查看、choices、事件结算展示。
 3. Godot 线：根据人工验收结果修体验问题，再推进基础地图节点、角色站位、交互区域。
-4. 后端线：把星灯祭事件的结算表、记忆模板和对话 fallback 继续收进 Event Skill 数据层，减少 Runtime 硬编码。
-5. LLM 线：配置本地 `models.local.json` 或 `DEEPSEEK_API_KEY` 后跑 1 次真实 dialogue / event_reaction / night_reflection smoke，并记录延迟、fallback、成本估计。
-6. 资产线：优先完成 batch 1b 的 `happy` / `troubled` 表情差分，再做地图小人和 UI 组件。
+4. 内容线：NPC 深度卡首批已入库，下一步可把 `monologueSeeds` 接入夜间反思/RAG，或把 `gossipHooks` 接入谣言传播原型。
+5. 后端线：把星灯祭事件的结算表、记忆模板和对话 fallback 继续收进 Event Skill 数据层，减少 Runtime 硬编码。
+6. LLM 线：配置本地 `models.local.json` 或 `DEEPSEEK_API_KEY` 后跑 1 次真实 dialogue / event_reaction / night_reflection smoke，并记录延迟、fallback、成本估计。
+7. 资产线：优先完成 batch 1b 的 `happy` / `troubled` 表情差分，再做地图小人和 UI 组件。

@@ -1,0 +1,200 @@
+{
+  "schemaVersion": 1,
+  "id": "mira",
+  "displayName": "米娅·星麦",
+  "shortName": "米娅",
+  "identity": {
+    "age": 31,
+    "gender": "female",
+    "job": "杂货铺店主",
+    "archetype": "温柔照顾系小镇店主",
+    "voiceStyle": "温和耐心，常用账本里的小数点和家里的早饭做比喻",
+    "speechRegister": "casual"
+  },
+  "personality": {
+    "coreTraits": ["务实", "照顾型", "轻微焦虑"],
+    "innerContradiction": "外人看她总是笑着张罗，自己却时常担心账本对不上，又怕家里人替她担心",
+    "speechQuirks": [
+      "话说一半会下意识擦围裙",
+      "讲到镇民近况时会轻轻哼一声像妈妈摇奶娃",
+      "提到价格时习惯说‘就当多送你一勺’"
+    ],
+    "stressTriggers": ["顾客赊账太久不还", "妮娜半夜咳嗽", "店里货架被孩子撞乱"],
+    "comforts": ["听到顾客说‘下次还来’", "下班后看到托玛准备好的热汤", "把账本最后一栏对齐"]
+  },
+  "goals": {
+    "longTerm": ["让杂货铺稳定盈利养活全家", "把妮娜带到能自己跑去广场玩的年纪"],
+    "today": ["准备星灯祭前夜的备货", "在打烊前抽空回家看一眼妮娜"],
+    "fears": ["店面亏到不能再供货", "妮娜的小毛病拖出大问题", "和邻居因为价格起冲突"]
+  },
+  "secrets": [
+    {
+      "id": "secret_mira_discount_orren",
+      "visibility": "hidden",
+      "summary": "她在账本里偷偷把奥蕾娅的常用药茶按成本价记，没告诉任何人",
+      "unlockAfter": "stage_2",
+      "tags": ["kindness", "ledger", "elder_care"]
+    },
+    {
+      "id": "secret_mira_nina_health",
+      "visibility": "hidden",
+      "summary": "她担心妮娜最近夜里咳嗽是不是更严重的征兆，但还没敢去问莉娜",
+      "unlockAfter": "stage_3",
+      "tags": ["family", "fear", "child_health"]
+    },
+    {
+      "id": "secret_mira_dream_diary",
+      "visibility": "hidden",
+      "summary": "她在柜台抽屉里有一本写着‘自己的小铺梦想’的小册子，记录想为妮娜留下什么",
+      "unlockAfter": "stage_4",
+      "tags": ["dream", "vulnerability"]
+    }
+  ],
+  "likes": [
+    {"tag": "practical_gift", "weight": 3, "items": []},
+    {"tag": "fresh_produce", "weight": 3, "items": ["fresh_turnip"]},
+    {"tag": "sweet", "weight": 2, "items": []},
+    {"tag": "flower", "weight": 1, "items": ["farm_flower"]}
+  ],
+  "dislikes": [
+    {"tag": "wasteful", "weight": 3, "items": []},
+    {"tag": "ledger_avoidance", "weight": 2, "items": []}
+  ],
+  "relationshipStages": [
+    {
+      "stage": "stage_0",
+      "label": "陌生顾客",
+      "threshold": {"affection": 0, "trust": 0},
+      "unlocks": []
+    },
+    {
+      "stage": "stage_1",
+      "label": "常客",
+      "threshold": {"affection": 25, "trust": 18},
+      "unlocks": ["topic_mira_shop"]
+    },
+    {
+      "stage": "stage_2",
+      "label": "信赖的邻居",
+      "threshold": {"affection": 50, "trust": 38},
+      "unlocks": ["topic_mira_family", "secret_mira_discount_orren", "monologue_mira_late_night_ledger"]
+    },
+    {
+      "stage": "stage_3",
+      "label": "家人般的朋友",
+      "threshold": {"affection": 70, "trust": 58, "conflictMax": 35},
+      "unlocks": ["secret_mira_nina_health", "monologue_mira_with_player_evening"]
+    },
+    {
+      "stage": "stage_4",
+      "label": "彼此扶持",
+      "threshold": {"affection": 85, "trust": 72, "conflictMax": 25},
+      "unlocks": ["secret_mira_dream_diary", "topic_mira_future_plan"]
+    }
+  ],
+  "monologueSeeds": [
+    {
+      "id": "monologue_mira_morning_inventory",
+      "contextTags": ["morning", "shop", "low_energy"],
+      "text": "今天的货还要搬两轮，先把妮娜的小袜子塞进口袋里再说。"
+    },
+    {
+      "id": "monologue_mira_morning_calm",
+      "contextTags": ["morning", "shop", "high_mood"],
+      "text": "店里干净，账也对得上，今天好像可以好好微笑一整天。"
+    },
+    {
+      "id": "monologue_mira_afternoon_busy",
+      "contextTags": ["afternoon", "shop", "pre_event"],
+      "text": "节日前总是这样忙，可大家进出脸上都笑着，我也跟着轻一点。"
+    },
+    {
+      "id": "monologue_mira_afternoon_worry",
+      "contextTags": ["afternoon", "shop", "low_mood"],
+      "text": "妮娜昨晚又咳了几声，我不应该现在分心，可手指就是不听话。"
+    },
+    {
+      "id": "monologue_mira_evening_close",
+      "contextTags": ["evening", "shop", "post_event"],
+      "text": "终于打烊了，托玛肯定又留了一碗汤，我要慢慢喝完。"
+    },
+    {
+      "id": "monologue_mira_evening_anxious",
+      "contextTags": ["evening", "shop", "low_mood"],
+      "text": "如果布兰娜明天还是不肯供货，节日的备货就只能东拼西凑了。"
+    },
+    {
+      "id": "monologue_mira_late_night_ledger",
+      "contextTags": ["evening", "shop", "low_energy", "post_event"],
+      "text": "灯下的账本看久了眼睛会疼，可不对完今晚我也睡不踏实。"
+    },
+    {
+      "id": "monologue_mira_with_player_evening",
+      "contextTags": ["evening", "shop", "social"],
+      "text": "新来的农场主愿意陪我聊几句，比一杯热茶还让我安心。"
+    },
+    {
+      "id": "monologue_mira_kid_first",
+      "contextTags": ["any", "home", "high_mood"],
+      "text": "妮娜笑起来的样子，能把账本上所有的红字都涂成橙色。"
+    }
+  ],
+  "giftReactions": {
+    "loved": {
+      "tagAny": ["practical_gift", "fresh_produce"],
+      "itemAny": ["fresh_turnip"],
+      "deltaModifier": {"affection": 3, "trust": 2},
+      "fallbackSpeechPool": [
+        "天哪，这正是店里最缺的，你比我还了解我自己！",
+        "这种实打实的心意我不会客气，谢谢你帮了大忙。",
+        "刚好今天要补这个货，真的谢谢你。"
+      ]
+    },
+    "liked": {
+      "tagAny": ["sweet", "flower"],
+      "itemAny": ["farm_flower"],
+      "deltaModifier": {"affection": 1, "trust": 1},
+      "fallbackSpeechPool": [
+        "好可爱，我会摆在柜台让大家也开心一下。",
+        "妮娜见到这个一定会笑出声，谢谢你。"
+      ]
+    },
+    "neutral": {
+      "tagAny": [],
+      "itemAny": [],
+      "deltaModifier": {},
+      "fallbackSpeechPool": [
+        "心意我收下了，下次路过也常进来坐坐。",
+        "谢谢你呀，最近店里总有点小忙乱。"
+      ]
+    },
+    "disliked": {
+      "tagAny": ["wasteful", "ledger_avoidance"],
+      "itemAny": [],
+      "deltaModifier": {"affection": -2, "trust": -1, "conflict": 1},
+      "fallbackSpeechPool": [
+        "这种东西放着会坏的，下次别破费了好吗？",
+        "心意我懂，但我们小本生意更看重实在……"
+      ]
+    }
+  },
+  "gossipHooks": [
+    {
+      "id": "gossip_mira_bram_supply",
+      "summary": "米娅与布兰娜围绕节日备货的长期协调与摩擦",
+      "visibility": "town_known",
+      "spreadAffinity": ["kai", "lena"]
+    },
+    {
+      "id": "gossip_mira_nina_concern",
+      "summary": "米娅最近常在杂货铺打瞌睡，似乎是为了照顾女儿",
+      "visibility": "town_known",
+      "spreadAffinity": ["lena", "orren"]
+    }
+  ],
+  "assetRefs": {
+    "portrait": "npc_mira_neutral",
+    "expressions": {},
+    "mapSprite": "npc_mira_map_idle"
+  }
+}

@@ -1,0 +1,188 @@
+{
+  "schemaVersion": 1,
+  "id": "tomas",
+  "displayName": "托玛·榆庭",
+  "shortName": "托玛",
+  "identity": {
+    "age": 34,
+    "gender": "male",
+    "job": "木匠",
+    "archetype": "沉默守护型工匠",
+    "voiceStyle": "话不多，常用工具与木纹做比喻；情绪上来时只会说短句",
+    "speechRegister": "blunt"
+  },
+  "personality": {
+    "coreTraits": ["可靠", "沉默", "保护欲强"],
+    "innerContradiction": "心里把家庭和小镇看得很重，却很少把这些情感说出口",
+    "speechQuirks": [
+      "回答前会先嗯一声再开口",
+      "听人讲话时手会下意识摩挲口袋里的木刨花",
+      "提到妮娜时声音会不自觉放低半度"
+    ],
+    "stressTriggers": ["有人对妮娜或米娅大声", "公共设施反复出问题没人修", "被催着开口表达情绪"],
+    "comforts": ["手里有一块没刨完的好木头", "看见米娅放心地睡着", "小镇修缮件被默默感谢"]
+  },
+  "goals": {
+    "longTerm": ["修缮小镇所有公共设施", "成为妮娜可以靠的父亲"],
+    "today": ["把酒馆门廊吱呀作响的那块板换掉", "傍晚之前回家给妮娜削一只小木鸟"],
+    "fears": ["米娅累垮", "自己沉默被误解为冷漠", "妮娜将来回想起的父亲只是背影"]
+  },
+  "secrets": [
+    {
+      "id": "secret_tomas_silent_repairs",
+      "visibility": "hidden",
+      "summary": "他经常在没人注意时偷偷修缮镇上别人不知道是谁修的小物件",
+      "unlockAfter": "stage_2",
+      "tags": ["service", "kindness"]
+    },
+    {
+      "id": "secret_tomas_nina_letters",
+      "visibility": "hidden",
+      "summary": "他给妮娜写了一沓没寄出的信，等她长大再交给她",
+      "unlockAfter": "stage_3",
+      "tags": ["family", "vulnerability"]
+    },
+    {
+      "id": "secret_tomas_old_injury",
+      "visibility": "hidden",
+      "summary": "他左手腕在年轻时受过伤，下雨前会隐隐作痛但从不告诉米娅",
+      "unlockAfter": "stage_4",
+      "tags": ["health", "stoic"]
+    }
+  ],
+  "likes": [
+    {"tag": "wood_material", "weight": 3, "items": []},
+    {"tag": "tool", "weight": 3, "items": []},
+    {"tag": "fresh_produce", "weight": 1, "items": ["fresh_turnip"]},
+    {"tag": "warm_meal", "weight": 1, "items": []}
+  ],
+  "dislikes": [
+    {"tag": "loud_show_off", "weight": 3, "items": []},
+    {"tag": "fragile_decor", "weight": 1, "items": []}
+  ],
+  "relationshipStages": [
+    {
+      "stage": "stage_0",
+      "label": "镇上面孔",
+      "threshold": {"affection": 0, "trust": 0},
+      "unlocks": []
+    },
+    {
+      "stage": "stage_1",
+      "label": "点头之交",
+      "threshold": {"affection": 22, "trust": 20},
+      "unlocks": ["topic_tomas_repair"]
+    },
+    {
+      "stage": "stage_2",
+      "label": "信得过的邻人",
+      "threshold": {"affection": 48, "trust": 42},
+      "unlocks": ["secret_tomas_silent_repairs", "monologue_tomas_workshop_evening"]
+    },
+    {
+      "stage": "stage_3",
+      "label": "默默并肩",
+      "threshold": {"affection": 70, "trust": 60, "conflictMax": 30},
+      "unlocks": ["secret_tomas_nina_letters", "monologue_tomas_after_event"]
+    },
+    {
+      "stage": "stage_4",
+      "label": "心底朋友",
+      "threshold": {"affection": 86, "trust": 76, "conflictMax": 20},
+      "unlocks": ["secret_tomas_old_injury"]
+    }
+  ],
+  "monologueSeeds": [
+    {
+      "id": "monologue_tomas_morning_check",
+      "contextTags": ["morning", "plaza", "low_energy"],
+      "text": "广场南面的木栏又松了，先去钉两钉。"
+    },
+    {
+      "id": "monologue_tomas_morning_quiet",
+      "contextTags": ["morning", "home", "high_mood"],
+      "text": "妮娜还在睡，米娅哼了一段不成调的歌——这一天就算开了个好头。"
+    },
+    {
+      "id": "monologue_tomas_afternoon_focus",
+      "contextTags": ["afternoon", "plaza", "pre_event"],
+      "text": "把这块榆木刨平了，今晚酒馆门廊就不会再吵到大家。"
+    },
+    {
+      "id": "monologue_tomas_afternoon_worried",
+      "contextTags": ["afternoon", "plaza", "low_mood"],
+      "text": "米娅又在揉太阳穴，可她不会告诉我。我得想个理由早点回家。"
+    },
+    {
+      "id": "monologue_tomas_workshop_evening",
+      "contextTags": ["evening", "plaza", "low_mood", "post_event"],
+      "text": "工棚的灯还得亮一会儿，这把椅子腿不修好我心里塞着。"
+    },
+    {
+      "id": "monologue_tomas_after_event",
+      "contextTags": ["evening", "tavern", "post_event"],
+      "text": "那一场争执听得我头疼，但我能做的只是把门廊修稳一点。"
+    },
+    {
+      "id": "monologue_tomas_high_mood",
+      "contextTags": ["evening", "home", "high_mood"],
+      "text": "妮娜抓住了我刨花，咯咯笑——这种声音，胜过任何一年的星灯。"
+    },
+    {
+      "id": "monologue_tomas_with_player",
+      "contextTags": ["any", "plaza", "social"],
+      "text": "新来的那位话不多，但手稳，挺好。"
+    }
+  ],
+  "giftReactions": {
+    "loved": {
+      "tagAny": ["wood_material", "tool"],
+      "itemAny": [],
+      "deltaModifier": {"affection": 2, "trust": 3},
+      "fallbackSpeechPool": [
+        "嗯……这块料子选得不错。谢谢。",
+        "好东西，我会用得上。"
+      ]
+    },
+    "liked": {
+      "tagAny": ["fresh_produce", "warm_meal"],
+      "itemAny": ["fresh_turnip"],
+      "deltaModifier": {"affection": 1, "trust": 1},
+      "fallbackSpeechPool": [
+        "让米娅切一切，今晚加菜。谢谢你。",
+        "实在的东西，我接了。"
+      ]
+    },
+    "neutral": {
+      "tagAny": [],
+      "itemAny": [],
+      "deltaModifier": {},
+      "fallbackSpeechPool": [
+        "嗯……心意我收着。",
+        "谢谢，下次见。"
+      ]
+    },
+    "disliked": {
+      "tagAny": ["loud_show_off", "fragile_decor"],
+      "itemAny": [],
+      "deltaModifier": {"affection": -2, "trust": -1, "conflict": 1},
+      "fallbackSpeechPool": [
+        "这个……容易碎，我怕妮娜碰到。",
+        "你的好意我懂，但这种东西我们家用不上。"
+      ]
+    }
+  },
+  "gossipHooks": [
+    {
+      "id": "gossip_tomas_quiet_repairs",
+      "summary": "镇上不少小修小补悄悄被人完成，老人猜测是托玛在做",
+      "visibility": "town_known",
+      "spreadAffinity": ["orren", "mira"]
+    }
+  ],
+  "assetRefs": {
+    "portrait": "npc_tomas_neutral",
+    "expressions": {},
+    "mapSprite": "npc_tomas_map_idle"
+  }
+}

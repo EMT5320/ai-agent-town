@@ -51,6 +51,10 @@ asset_manifest_check = subprocess.run([sys.executable, "scripts/check_asset_mani
 if asset_manifest_check.returncode != 0:
     raise SystemExit(asset_manifest_check.returncode)
 
+npc_codex_check = subprocess.run([sys.executable, "scripts/check_npc_codex.py"], cwd=ROOT)
+if npc_codex_check.returncode != 0:
+    raise SystemExit(npc_codex_check.returncode)
+
 godot_check = subprocess.run([sys.executable, "scripts/check_godot_project.py"], cwd=ROOT)
 if godot_check.returncode != 0:
     raise SystemExit(godot_check.returncode)
