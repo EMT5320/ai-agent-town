@@ -653,6 +653,14 @@ if event_result["result"]["eventResult"].get("skillId") != STARLIGHT_FESTIVAL_SH
     raise RuntimeError("星灯祭事件结算应返回 Skill ID")
 if not event_result["result"]["eventResult"].get("debugFields"):
     raise RuntimeError("星灯祭事件结算应返回 Skill Debug 字段")
+event_result_debug_fields = {
+    str(item.get("id")): str(item.get("value"))
+    for item in event_result["result"]["eventResult"].get("debugFields", [])
+    if isinstance(item, dict) and item.get("id")
+}
+for field_id in ("profileEvidence", "fallbackMemory"):
+    if field_id not in event_result_debug_fields:
+        raise RuntimeError(f"星灯祭事件结算 Debug 字段应包含 {field_id}")
 if not all(item.get("skillId") == STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID for item in event_result["result"]["memoryWrites"] if item.get("agentId") != "player"):
     raise RuntimeError("星灯祭记忆写入应记录来源 Skill")
 if "直接帮忙" not in event_result["result"].get("playerProfile", {}).get("styleSummary", "") and "实际" not in event_result["result"].get("playerProfile", {}).get("styleSummary", ""):
@@ -667,6 +675,23 @@ if event_reaction_debug.get("skillId") != STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID o
     raise RuntimeError("event_reaction Debug 应记录 Skill 字段")
 if night_reflection_debug.get("skillId") != STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID or not night_reflection_debug.get("skillDebugFields"):
     raise RuntimeError("night_reflection Debug 应记录 Skill 字段")
+night_reflection_memory = night_reflection_debug.get("memoryEvidence", {})
+if not isinstance(night_reflection_memory, dict):
+    raise RuntimeError("night_reflection Debug 应输出 memoryEvidence 对象")
+monologue_candidates = night_reflection_memory.get("monologueSeeds")
+if not isinstance(monologue_candidates, list) or not monologue_candidates:
+    raise RuntimeError("night_reflection memoryEvidence 应包含 monologueSeeds 素材")
+if not any(
+    isinstance(item, dict) and item.get("source") == "npc_monologue_seed"
+    for item in night_reflection_memory.get("items", [])
+):
+    raise RuntimeError("night_reflection memoryEvidence.items 应包含来自 npc_monologue_seed 的 compact evidence")
+if night_reflection_debug.get("provider") == "RuleNightReflectionProvider":
+    if not any("我心里还反复想着：" in str(item.get("text", "")) for item in event_result["state"]["nightReflections"]):
+        raise RuntimeError("规则夜间反思 fallback 应拼接独白素材提示语")
+event_reaction_memory = str(event_reaction_debug.get("parsed", {}).get("memory_to_save") or "")
+if event_reaction_debug.get("provider") == "RuleEventReactionProvider" and event_reaction_memory != event_result_debug_fields["fallbackMemory"]:
+    raise RuntimeError("event_reaction fallback 记忆文案应来自 Event Skill 结算模板")
 
 follow_up = app.player_action({"type": "talk", "targetId": "kai", "locationId": "tavern", "topic": "starlight_follow_up", "message": "昨晚星灯祭之后，你怎么看我的选择？"})
 assert_player_action_contract(follow_up, "follow_up")

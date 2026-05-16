@@ -1689,7 +1689,7 @@ class AgentRuntime:
         )
         profile_payload, profile_event = self._update_player_profile(
             "festivalChoice",
-            f"在星灯祭供应短缺中选择“{outcome['choiceLabel']}”，小镇会把玩家记为{self._choice_style_label(choice)}。",
+            outcome["profileEvidence"],
             tags=["player_profile_memory", "festival", skill.event_id, choice],
             choice=choice,
         )
@@ -1884,9 +1884,37 @@ class AgentRuntime:
         choice_label = self._format_skill_text(outcome_def.choice_label_template, base_context)
         summary_context = dict(base_context, choiceLabel=choice_label)
         summary = self._format_skill_text(outcome_def.summary_template, summary_context)
+        style_label_template = outcome_def.player_style_label.strip() if isinstance(outcome_def.player_style_label, str) else ""
+        if style_label_template:
+            style_label = self._format_skill_text(style_label_template, dict(summary_context, summary=summary))
+        else:
+            style_label = self._choice_style_label(option.option_id)
+        profile_evidence_template = (
+            outcome_def.profile_evidence_template.strip() if isinstance(outcome_def.profile_evidence_template, str) else ""
+        )
+        if profile_evidence_template:
+            profile_evidence = self._format_skill_text(
+                profile_evidence_template,
+                dict(summary_context, summary=summary, styleLabel=style_label),
+            )
+        else:
+            profile_evidence = f"在星灯祭供应短缺中选择“{choice_label}”，小镇会把玩家记为{style_label}。"
+        reaction_memory_template = (
+            outcome_def.reaction_memory_template.strip() if isinstance(outcome_def.reaction_memory_template, str) else ""
+        )
+        if reaction_memory_template:
+            fallback_memory = self._format_skill_text(
+                reaction_memory_template,
+                dict(summary_context, summary=summary, styleLabel=style_label),
+            )
+        else:
+            fallback_memory = f"事件结算：{summary}"
         context = dict(
             summary_context,
             summary=summary,
+            styleLabel=style_label,
+            profileEvidence=profile_evidence,
+            fallbackMemory=fallback_memory,
             memoryTemplateCount=len(outcome_def.memory_templates),
             reflectionSeedCount=len(outcome_def.reflection_seeds),
         )
@@ -1927,6 +1955,9 @@ class AgentRuntime:
             "choice": option.option_id,
             "choiceLabel": choice_label,
             "summary": summary,
+            "styleLabel": style_label,
+            "profileEvidence": profile_evidence,
+            "fallbackMemory": fallback_memory,
             "consequenceTypes": consequence_types,
             "relationDeltas": relation_deltas,
             "memoryTemplates": memory_templates,
@@ -2019,6 +2050,9 @@ class AgentRuntime:
             "choice": choice,
             "choiceLabel": outcome.get("choiceLabel") if outcome else "",
             "summary": outcome.get("summary") if outcome else skill.brief,
+            "styleLabel": outcome.get("styleLabel") if outcome else "",
+            "profileEvidence": outcome.get("profileEvidence") if outcome else "",
+            "fallbackMemory": outcome.get("fallbackMemory") if outcome else "",
             "consequenceTypes": ",".join(outcome.get("consequenceTypes", [])) if outcome else "",
             "memoryTemplateCount": len(outcome.get("memoryTemplates", [])) if outcome else 0,
             "reflectionSeedCount": len(outcome.get("reflectionSeeds", [])) if outcome else 0,
@@ -2178,10 +2212,13 @@ class AgentRuntime:
         """按 night_reflection profile 生成夜间反思摘要，失败时保留 Skill 规则种子。"""
         context = build_night_reflection_context(self.world, event, outcome, choice, self.event_store)
         context["playerProfile"] = self._player_profile_payload()
-        context["memoryRetrieval"] = rag_lite_search(self.world, query=outcome["summary"], tags=skill.event_id, limit=5)
+        context["memoryRetrieval"] = self._merge_night_reflection_memory_evidence(
+            rag_lite_search(self.world, query=outcome["summary"], tags=skill.event_id, limit=5),
+            context.get("monologueEvidence"),
+        )
         messages = build_night_reflection_messages(context)
         profile = self._structured_feature_profile(self.model_config.resolve_profile(feature=FEATURE_NIGHT_REFLECTION), FEATURE_NIGHT_REFLECTION)
-        rule_result = self._rule_night_reflection(outcome)
+        rule_result = self._rule_night_reflection(outcome, monologue_evidence=context.get("monologueEvidence"))
         provider_result, fallback_reason = self._call_profile_provider(
             feature=FEATURE_NIGHT_REFLECTION,
             agent=None,
@@ -2222,6 +2259,7 @@ class AgentRuntime:
                 "skillDebugFields": self._skill_debug_payload(skill, outcome, choice=choice),
                 "playerProfile": self._player_profile_payload(),
                 "memoryEvidence": context["memoryRetrieval"],
+                "monologueEvidence": self._compact_monologue_evidence(context.get("monologueEvidence")),
             },
         )
         events.append(self.event_store.append("debug.turn_recorded", {"agentId": "system", "agentName": event.get("title", "事件"), "debug": debug}))
@@ -2305,13 +2343,115 @@ class AgentRuntime:
     def _rule_event_reaction(self, outcome: dict[str, Any]) -> dict[str, Any]:
         """生成离线可用的事件反应 JSON，供 event_reaction fallback 使用。"""
         dialogue = [{"agentId": item["agentId"], "speech": item["speech"]} for item in outcome["fallbackDialogue"]]
-        response = {"dialogue": dialogue, "memory_to_save": f"事件结算：{outcome['summary']}"}
+        response = {"dialogue": dialogue, "memory_to_save": str(outcome.get("fallbackMemory") or f"事件结算：{outcome['summary']}")}
         return {"provider": "RuleEventReactionProvider", "rawText": json.dumps(response, ensure_ascii=False), "parsed": response, "usage": {"tokens": 0, "cost": 0, "latencyMs": 1}}
 
-    def _rule_night_reflection(self, outcome: dict[str, Any]) -> dict[str, Any]:
+    def _rule_night_reflection(
+        self,
+        outcome: dict[str, Any],
+        *,
+        monologue_evidence: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
         """生成离线可用的夜间反思 JSON，供 night_reflection fallback 使用。"""
-        response = {"reflections": outcome["reflectionSeeds"]}
+        monologue_lookup = self._night_reflection_monologue_lookup(monologue_evidence)
+        reflections: list[dict[str, Any]] = []
+        for seed in outcome["reflectionSeeds"]:
+            agent_id = str(seed.get("agentId", ""))
+            text = str(seed.get("text", "")).strip()
+            if not text:
+                continue
+            monologue_text = monologue_lookup.get(agent_id)
+            if monologue_text:
+                text = f"{text} 我心里还反复想着：{monologue_text}"
+            reflections.append({"agentId": agent_id, "text": text, "tags": list(seed.get("tags", []))})
+        response = {"reflections": reflections or outcome["reflectionSeeds"]}
         return {"provider": "RuleNightReflectionProvider", "rawText": json.dumps(response, ensure_ascii=False), "parsed": response, "usage": {"tokens": 0, "cost": 0, "latencyMs": 1}}
+
+    def _merge_night_reflection_memory_evidence(
+        self,
+        retrieval: dict[str, Any],
+        monologue_evidence: Any,
+    ) -> dict[str, Any]:
+        """把深度卡独白种子合并进夜间反思 RAG 上下文，供模型或 fallback 引用。"""
+        merged = dict(retrieval)
+        items = list(retrieval.get("items", [])) if isinstance(retrieval.get("items"), list) else []
+        monologue_items = monologue_evidence if isinstance(monologue_evidence, list) else []
+        for entry in monologue_items:
+            if not isinstance(entry, dict):
+                continue
+            agent_id = str(entry.get("agentId") or "")
+            agent_name = str(entry.get("agentName") or agent_id or "NPC")
+            for seed in entry.get("seeds", [])[:1]:
+                if not isinstance(seed, dict):
+                    continue
+                text = str(seed.get("text") or "").strip()
+                if not text:
+                    continue
+                tags = [str(tag) for tag in seed.get("contextTags", [])]
+                items.append(
+                    {
+                        "agentId": agent_id,
+                        "agentName": agent_name,
+                        "tick": self.world["clock"]["tick"],
+                        "importance": 0.55,
+                        "tags": ["monologue_seed", *tags],
+                        "text": self._short_debug_text(text, limit=72),
+                        "source": "npc_monologue_seed",
+                        "seedId": seed.get("id"),
+                        "match": {"score": 5.5, "terms": [], "tags": tags},
+                    }
+                )
+        merged["items"] = items[: max(int(merged.get("limit", 5)) + len(monologue_items), 8)]
+        merged["monologueSeeds"] = self._compact_monologue_evidence(monologue_items)
+        return merged
+
+    def _night_reflection_monologue_lookup(self, monologue_evidence: list[dict[str, Any]] | None) -> dict[str, str]:
+        """抽取每个 NPC 的首条独白文本，供 night_reflection fallback 拼接。"""
+        lookup: dict[str, str] = {}
+        for entry in monologue_evidence or []:
+            if not isinstance(entry, dict):
+                continue
+            agent_id = str(entry.get("agentId") or "")
+            if not agent_id:
+                continue
+            for seed in entry.get("seeds", []):
+                if not isinstance(seed, dict):
+                    continue
+                text = str(seed.get("text") or "").strip()
+                if text:
+                    lookup[agent_id] = self._short_debug_text(text, limit=72)
+                    break
+        return lookup
+
+    def _compact_monologue_evidence(self, monologue_evidence: Any) -> list[dict[str, Any]]:
+        """压缩独白证据，避免 Debug 里出现过长文本。"""
+        compact: list[dict[str, Any]] = []
+        items = monologue_evidence if isinstance(monologue_evidence, list) else []
+        for entry in items:
+            if not isinstance(entry, dict):
+                continue
+            seeds: list[dict[str, Any]] = []
+            for seed in entry.get("seeds", [])[:2]:
+                if not isinstance(seed, dict):
+                    continue
+                text = str(seed.get("text") or "").strip()
+                if not text:
+                    continue
+                seeds.append(
+                    {
+                        "id": str(seed.get("id") or ""),
+                        "contextTags": [str(tag) for tag in seed.get("contextTags", [])],
+                        "text": self._short_debug_text(text, limit=72),
+                    }
+                )
+            compact.append(
+                {
+                    "agentId": str(entry.get("agentId") or ""),
+                    "agentName": str(entry.get("agentName") or ""),
+                    "seeds": seeds,
+                }
+            )
+        return compact
 
     def _normalise_dialogue_payloads(self, parsed: dict[str, Any], fallback_dialogue: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """把模型输出统一整理成前端可消费的 dialogue payload。"""

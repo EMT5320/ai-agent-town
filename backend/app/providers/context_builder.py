@@ -8,6 +8,15 @@ from app.providers.provider_support import FEATURE_DIALOGUE, FEATURE_EVENT_REACT
 from app.world.world_state import get_relation, living_agents
 
 
+_PHASE_TO_MONOLOGUE_TAGS: dict[str, tuple[str, ...]] = {
+    "morning": ("morning",),
+    "noon": ("afternoon",),
+    "afternoon": ("afternoon",),
+    "evening": ("evening",),
+    "night": ("evening",),
+}
+
+
 def build_agent_context(world: dict[str, Any], agent: dict[str, Any], event_store: Any) -> dict[str, Any]:
     """构建单个 Agent 本轮决策所需上下文。"""
     nearby = [
@@ -161,6 +170,24 @@ def build_night_reflection_context(
 ) -> dict[str, Any]:
     """构建夜间反思所需上下文，用于写入长期记忆。"""
     target_ids = [agent_id for agent_id in event.get("participants", []) if agent_id in world["agents"]][:4]
+    phase = str(world.get("clock", {}).get("phase", ""))
+    event_location_id = str(event.get("locationId") or "")
+    agent_briefs = [
+        _agent_brief(
+            world["agents"][agent_id],
+            night_reflection_hints={"phase": phase, "eventLocationId": event_location_id},
+        )
+        for agent_id in target_ids
+    ]
+    monologue_evidence = [
+        {
+            "agentId": brief.get("id"),
+            "agentName": brief.get("name"),
+            "seeds": brief.get("nightReflectionMonologueSeeds", []),
+        }
+        for brief in agent_briefs
+        if brief.get("nightReflectionMonologueSeeds")
+    ]
     return {
         "feature": FEATURE_NIGHT_REFLECTION,
         "event": {
@@ -170,12 +197,14 @@ def build_night_reflection_context(
             "choiceLabel": outcome.get("choiceLabel"),
             "outcomeSummary": outcome.get("summary"),
         },
-        "agents": [_agent_brief(world["agents"][agent_id]) for agent_id in target_ids],
+        "agents": agent_briefs,
+        "monologueEvidence": monologue_evidence,
         "relationsWithPlayer": {agent_id: get_relation(world, "player", agent_id) for agent_id in target_ids},
         "clock": world["clock"],
         "recentEvents": event_store.list()[-10:],
         "expectedOutput": {
             "reflections": [{"agentId": "需要写入反思的 NPC id", "text": "一段第一人称夜间反思"}],
+            "monologue_used": "可选；如果引用了 monologueEvidence，请返回被引用的独白种子 id",
         },
     }
 
@@ -189,6 +218,7 @@ def build_night_reflection_messages(context: dict[str, Any]) -> list[dict[str, s
             "reflections 必须是数组，长度 2-4。",
             "数组项必须包含 agentId 和 text。",
             "text 需为第一人称主观反思，控制在 1-3 句。",
+            "优先参考 monologueEvidence 或 agents[].nightReflectionMonologueSeeds，让反思贴合角色内在独白。",
         ],
     )
     return [{"role": "system", "content": system_prompt}, {"role": "user", "content": json.dumps(context, ensure_ascii=False, indent=2)}]
@@ -216,7 +246,7 @@ def build_structured_system_prompt(
     return "\n".join(base)
 
 
-def _agent_brief(agent: dict[str, Any]) -> dict[str, Any]:
+def _agent_brief(agent: dict[str, Any], *, night_reflection_hints: dict[str, Any] | None = None) -> dict[str, Any]:
     """提取 Prompt 所需的 NPC 摘要，避免把完整运行态塞进 messages。"""
     brief: dict[str, Any] = {
         "id": agent["id"],
@@ -235,4 +265,67 @@ def _agent_brief(agent: dict[str, Any]) -> dict[str, Any]:
         brief["archetype"] = identity.get("archetype", "")
         brief["speechQuirks"] = list(personality.get("speechQuirks", []))
         brief["innerContradiction"] = personality.get("innerContradiction", "")
+        if night_reflection_hints is not None:
+            brief["nightReflectionMonologueSeeds"] = _select_night_reflection_monologues(
+                agent,
+                phase=str(night_reflection_hints.get("phase", "")),
+                event_location_id=str(night_reflection_hints.get("eventLocationId", "")),
+            )
     return brief
+
+
+def _select_night_reflection_monologues(
+    agent: dict[str, Any],
+    *,
+    phase: str,
+    event_location_id: str,
+    limit: int = 3,
+) -> list[dict[str, Any]]:
+    """按时段、地点和情绪筛出夜间反思可用的独白种子。"""
+    deep_card = agent.get("deepCard") if isinstance(agent.get("deepCard"), dict) else {}
+    seeds = deep_card.get("monologueSeeds") if isinstance(deep_card.get("monologueSeeds"), list) else []
+    if not seeds:
+        return []
+
+    location_id = str(agent.get("locationId") or event_location_id or "")
+    mood = str(agent.get("status", {}).get("mood", "")).lower()
+    mood_tag = "high_mood" if mood in {"happy", "excited", "calm"} else "low_mood"
+    phase_tags = set(_PHASE_TO_MONOLOGUE_TAGS.get(phase, (phase,)))
+    scored: list[tuple[int, dict[str, Any]]] = []
+    for item in seeds:
+        if not isinstance(item, dict):
+            continue
+        text = str(item.get("text") or "").strip()
+        if not text:
+            continue
+        tags = {str(tag) for tag in item.get("contextTags", [])}
+        score = 0
+        if "post_event" in tags:
+            score += 3
+        if phase_tags.intersection(tags):
+            score += 2
+        if location_id and location_id in tags:
+            score += 2
+        if mood_tag in tags:
+            score += 1
+        if "any" in tags:
+            score += 1
+        scored.append(
+            (
+                score,
+                {
+                    "id": str(item.get("id", "")),
+                    "contextTags": sorted(tags),
+                    "text": text,
+                },
+            )
+        )
+
+    if not scored:
+        return []
+
+    scored.sort(key=lambda item: (item[0], item[1].get("id", "")), reverse=True)
+    picked = [item for score, item in scored if score > 0][:limit]
+    if picked:
+        return picked
+    return [item for _, item in scored[:limit]]

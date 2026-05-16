@@ -79,7 +79,12 @@ _STARLIGHT_OUTCOME_DEBUG_FIELDS = (
     EventSkillDebugField(field_id="consequenceTypes", label="后果类型", value_template="{consequenceTypes}"),
     EventSkillDebugField(field_id="memoryTemplateCount", label="记忆模板数量", value_template="{memoryTemplateCount}"),
     EventSkillDebugField(field_id="reflectionSeedCount", label="反思种子数量", value_template="{reflectionSeedCount}"),
+    EventSkillDebugField(field_id="profileEvidence", label="玩家画像记忆模板", value_template="{profileEvidence}"),
+    EventSkillDebugField(field_id="fallbackMemory", label="事件反应记忆模板", value_template="{fallbackMemory}"),
 )
+
+_STARLIGHT_PROFILE_EVIDENCE_TEMPLATE = "在星灯祭供应短缺中选择“{choiceLabel}”，小镇会把玩家记为{styleLabel}。"
+_STARLIGHT_REACTION_MEMORY_TEMPLATE = "事件结算：{summary}"
 
 STARLIGHT_FESTIVAL_SHORTAGE_SKILL = EventSkillSchema(
     skill_id=STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID,
@@ -212,6 +217,9 @@ STARLIGHT_FESTIVAL_SHORTAGE_SKILL = EventSkillSchema(
             option_id="donate_crop",
             choice_label_template="拿出{itemName}帮酒馆渡过今晚",
             summary_template="玩家拿出{itemName}补上节日食材，凯娅松了一口气，布兰娜也承认这份帮忙很实在。",
+            player_style_label="愿意拿出资源帮忙的人",
+            profile_evidence_template=_STARLIGHT_PROFILE_EVIDENCE_TEMPLATE,
+            reaction_memory_template=_STARLIGHT_REACTION_MEMORY_TEMPLATE,
             relation_deltas=(
                 EventParticipantDelta(participant_id="kai", affection=5, trust=4, conflict=-5),
                 EventParticipantDelta(participant_id="bram", affection=2, trust=3, conflict=-4),
@@ -232,6 +240,9 @@ STARLIGHT_FESTIVAL_SHORTAGE_SKILL = EventSkillSchema(
             option_id="mediate",
             choice_label_template="调解凯娅和布兰娜的欠账冲突",
             summary_template="玩家请凯娅先确认还款安排，也帮布兰娜保住供货底线，争执被暂时压了下来。",
+            player_style_label="愿意调解冲突的人",
+            profile_evidence_template=_STARLIGHT_PROFILE_EVIDENCE_TEMPLATE,
+            reaction_memory_template=_STARLIGHT_REACTION_MEMORY_TEMPLATE,
             relation_deltas=(
                 EventParticipantDelta(participant_id="kai", affection=3, trust=4, conflict=-4),
                 EventParticipantDelta(participant_id="bram", affection=3, trust=4, conflict=-5),
@@ -251,6 +262,9 @@ STARLIGHT_FESTIVAL_SHORTAGE_SKILL = EventSkillSchema(
             option_id="support_kai",
             choice_label_template="优先支持凯娅维持节日气氛",
             summary_template="玩家站在凯娅这边让星灯祭继续热闹，但布兰娜对酒馆旧账更加不满。",
+            player_style_label="重视节日气氛的人",
+            profile_evidence_template=_STARLIGHT_PROFILE_EVIDENCE_TEMPLATE,
+            reaction_memory_template=_STARLIGHT_REACTION_MEMORY_TEMPLATE,
             relation_deltas=(
                 EventParticipantDelta(participant_id="kai", affection=5, trust=2, conflict=-2),
                 EventParticipantDelta(participant_id="bram", affection=-1, trust=-1, conflict=4),
@@ -269,6 +283,9 @@ STARLIGHT_FESTIVAL_SHORTAGE_SKILL = EventSkillSchema(
             option_id="support_bram",
             choice_label_template="优先支持布兰娜守住供货底线",
             summary_template="玩家支持布兰娜先把欠账说清，酒馆气氛短暂降温，但供货压力被认真看见了。",
+            player_style_label="尊重供货底线的人",
+            profile_evidence_template=_STARLIGHT_PROFILE_EVIDENCE_TEMPLATE,
+            reaction_memory_template=_STARLIGHT_REACTION_MEMORY_TEMPLATE,
             relation_deltas=(
                 EventParticipantDelta(participant_id="kai", affection=-1, trust=0, conflict=3),
                 EventParticipantDelta(participant_id="bram", affection=5, trust=3, conflict=-2),
@@ -287,6 +304,9 @@ STARLIGHT_FESTIVAL_SHORTAGE_SKILL = EventSkillSchema(
             option_id="observe",
             choice_label_template="先旁观并记录大家的反应",
             summary_template="玩家没有立刻介入，只观察到凯娅的焦虑、布兰娜的压力，以及旁观居民的担心。",
+            player_style_label="先观察局势的人",
+            profile_evidence_template=_STARLIGHT_PROFILE_EVIDENCE_TEMPLATE,
+            reaction_memory_template=_STARLIGHT_REACTION_MEMORY_TEMPLATE,
             relation_deltas=(
                 EventParticipantDelta(participant_id="orren", trust=1),
                 EventParticipantDelta(participant_id="lena", trust=1),

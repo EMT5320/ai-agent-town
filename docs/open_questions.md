@@ -166,8 +166,8 @@ scope: confirmed decisions, unresolved questions, and validation points
 ## 2026-05-16 Godot 窗口验收后仍需实现中验证
 
 - 主人已确认真实窗口基础体验基本可用；后续重点转向玩法深度、内容节奏和长期扩展性。
-- 当前 Godot 体验仍偏静态背景、小人展示和简单 UI 点击；需要验证可移动地图、靠近交互、行动反馈和日程可视化的最小结构。
+- 当前 Godot 已有本地移动和靠近高亮；需要验证服务端锚点契约、行动反馈和日程可视化的最小结构。
 - VN 结果面板同时展示 NPC 台词、关系变化、即时记忆和夜间反思时，是否需要拆成分页、卡片或可滚动详情。
 - 星灯祭事件 CG 与角色立绘共用当前 `portrait_rect` 是否适合演示，后续是否需要独立 CG 层。
 - `happy` / `troubled` 表情差分补齐后，Godot 表情选择策略应由后端返回字段驱动，还是由客户端根据事件结果做轻量映射。
-- 地图层引入移动、靠近和交互区域时，当前 `move` / `inspect` / `attend_event` API 是否需要补充坐标、交互半径或场景状态字段。
+- 地图层继续深入时，当前 `move` / `inspect` / `attend_event` API 是否先补 `anchorId` / `interactableId` 锚点校验，还是一步到位补坐标、交互半径或场景状态字段。

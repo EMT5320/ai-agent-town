@@ -37,6 +37,7 @@ scope: new-session entrypoint, boundaries, commands, and next steps
 - Runtime 会运行规则版 Director v0，并写入 `director.digest_created`、`director.beat_created`、`director.beat_validated`、`director.beat_consumed`、`director.beat_discarded`。
 - 已有单个 Event Skill：`event.starlight_festival_shortage`，定义位于 `backend/app/skills/event_skill_registry.py`。
 - 星灯祭事件当前支持查看、选择、关系变化、记忆写入、事件反应、夜间反思和结算记录。
+- 星灯祭 Event Skill 已承载玩家画像证据模板与事件反应记忆模板，Runtime 继续负责执行、校验和 fallback。
 
 ### Content Codex / NPC 深度卡
 
@@ -45,6 +46,7 @@ scope: new-session entrypoint, boundaries, commands, and next steps
 - 已新增内容数据层：`backend/app/content/`，当前包含 `kai`、`bram`、`mira`、`tomas`、`orren`、`lena` 6 份首发 NPC 深度卡。
 - Runtime 初始化会把深度卡挂到 `agent.deepCard`；玩家对话 Prompt 会读取 `voiceStyle`、`archetype`、`speechQuirks`、`innerContradiction`。
 - 送礼会根据深度卡 `giftReactions` 匹配反应档，玩家对话与送礼结果会返回 `relationshipStage`。
+- `monologueSeeds` 已接入夜间反思上下文和 compact memory evidence；规则 fallback 可独立引用独白素材生成反思。
 - `npm.cmd run content:check` 与 `npm.cmd run check` 已覆盖 NPC 深度卡结构、seed membership、资产引用 warning 和 smoke 集成。
 
 ### LLM / Debug
@@ -63,6 +65,7 @@ scope: new-session entrypoint, boundaries, commands, and next steps
 - 已支持地点按钮、背景切换、NPC 选择、VN 风格底部对话面板、聊天动作提交。
 - 已新增事件区：展示 `activeEvents`、调用 `inspect` 查看星灯祭事件、渲染 choices、调用 `attend_event` 并展示 NPC 台词、关系变化、记忆写入和夜间反思摘要。
 - 已接入地图角色层：玩家和 6 个首发 NPC 的 `map_idle` 小人、talk / gift / event 交互 marker、NPC 点击入口均已进入主场景。
+- 已新增本地地图移动与靠近反馈：方向键微移、点击地图设置落点、靠近 NPC / 事件后交互高亮；该坐标只用于客户端表现，不改变后端权威状态。
 - `npm.cmd run client:env` 和 `npm.cmd run client:run:check` 已通过；2026-05-16 主人已完成真实窗口人工验收，基本可用，未报告阻断问题。
 
 ### 资产与文档治理
@@ -117,9 +120,9 @@ git diff --check
 ## 6. 下一轮最短开发入口
 
 1. 固定离线基线：运行 `npm.cmd run context:check`、`npm.cmd run check`、`npm.cmd run smoke`、`npm.cmd run asset:check`、`npm.cmd run client:env`、`npm.cmd run client:run:check`。
-2. 文档收口：真实 Godot 窗口已由主人验收，状态文档需记录为 `manual accepted`，并把主要卡点切到玩法深度和内容驱动。
-3. Godot 玩法线：把当前“背景图 + 简单 UI 点击”推进为可移动地图、角色站位、靠近交互、行动反馈和日程可视化。
-4. 内容线：NPC 深度卡首批已入库，下一步优先把 `monologueSeeds` 接入夜间反思/RAG，或把 `gossipHooks` 接入谣言传播原型。
-5. 后端线：把星灯祭事件的结算表、记忆模板和对话 fallback 继续收进 Event Skill 数据层，减少 Runtime 硬编码。
+2. 当前 checkpoint：真实 Godot 窗口已由主人验收，文档已把主要卡点切到玩法深度和内容驱动。
+3. Godot 玩法线：本地移动和靠近反馈已落地，下一步推进服务端锚点契约、行动反馈卡和日程可视化。
+4. 内容线：`monologueSeeds` 已接入夜间反思/RAG，下一步可把 `gossipHooks` 接入谣言传播原型。
+5. 后端线：星灯祭画像证据与事件反应记忆模板已迁入 Skill，下一步继续迁移更多结算模板、asset hints 和复用测试。
 6. LLM / Debug 线：如切换模型、key 或 profile，重新跑真实 dialogue / event_reaction / night_reflection smoke，并记录延迟、fallback、成本估计。
 7. 资产线：优先完成 batch 1b 的 `happy` / `troubled` 表情差分、UI 组件和玩法反馈图标。

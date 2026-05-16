@@ -108,6 +108,9 @@ class EventChoiceOutcome:
     option_id: str
     choice_label_template: str
     summary_template: str
+    player_style_label: str = ""
+    profile_evidence_template: str = ""
+    reaction_memory_template: str = "事件结算：{summary}"
     relation_deltas: tuple[EventParticipantDelta, ...] = ()
     memory_templates: tuple[EventMemoryTemplate, ...] = ()
     fallback_dialogue: tuple[EventDialogueFallback, ...] = ()

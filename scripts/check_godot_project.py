@@ -49,7 +49,11 @@ checks = {
     "main asset registry": "AssetRegistryScript" in main_script,
     "main background texture": "background_rect" in main_script,
     "main map character layer": "map_character_layer" in main_script and "_render_map_characters" in main_script,
+    "main local move feedback": "player_local_target" in main_script and "_tick_local_player_motion" in main_script,
+    "main proximity feedback": "_update_map_proximity_feedback" in main_script and "MapMoveHint" in main_script,
+    "main map input move": "_unhandled_input" in main_script and "ui_left" in main_script and "ui_down" in main_script,
     "main backend interactions": "give_gift" in main_script and "find_interaction" in main_script,
+    "main no anchorId contract": "anchorId" not in main_script,
     "main portrait texture": "portrait_rect" in main_script,
     "main refresh": "_refresh_world" in main_script,
 }

@@ -22,6 +22,12 @@ const MAP_SPRITE_SIZE := 64.0
 const MAP_SPRITE_SCALE := 1.35
 const MAP_MARKER_SCALE := 0.43
 const MAP_EVENT_MARKER_SCALE := 0.68
+const PLAYER_LOCAL_MOVE_SPEED := 520.0
+const PLAYER_LOCAL_KEY_STEP := 86.0
+const PLAYER_LOCAL_STOP_DISTANCE := 3.0
+const PLAYER_LOCAL_INTERACT_RADIUS := 124.0
+const PLAYER_LOCAL_ZONE_RADIUS_X := 156.0
+const PLAYER_LOCAL_ZONE_RADIUS_Y := 126.0
 const MAP_CLUSTER_OFFSETS := [
 	Vector2(-72, -8),
 	Vector2(0, -44),
@@ -54,6 +60,11 @@ var selected_event_id := ""
 var selected_event_location_id := ""
 var ui_scale := 1.0
 var layout_viewport_size := Vector2.ZERO
+var player_local_position := Vector2.ZERO
+var player_local_target := Vector2.ZERO
+var player_local_initialized := false
+var player_local_location_id := ""
+var map_hint_label: Label
 
 
 func _ready() -> void:
@@ -75,6 +86,36 @@ func _ready() -> void:
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_RESIZED:
 		_refresh_scale_for_viewport()
+
+
+func _process(delta: float) -> void:
+	_tick_local_player_motion(delta)
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	# 本地移动只影响客户端表现层，后端权威状态仍由 action/state 接口返回。
+	if event is InputEventMouseButton:
+		var mouse_event := event as InputEventMouseButton
+		if mouse_event.pressed and mouse_event.button_index == MOUSE_BUTTON_LEFT:
+			_set_local_player_target(mouse_event.position, true)
+		return
+	if event is InputEventKey:
+		var key_event := event as InputEventKey
+		if not key_event.pressed or key_event.echo:
+			return
+		var axis := Vector2.ZERO
+		if key_event.is_action_pressed("ui_left"):
+			axis.x -= 1.0
+		if key_event.is_action_pressed("ui_right"):
+			axis.x += 1.0
+		if key_event.is_action_pressed("ui_up"):
+			axis.y -= 1.0
+		if key_event.is_action_pressed("ui_down"):
+			axis.y += 1.0
+		if axis == Vector2.ZERO:
+			return
+		_step_local_player_target(axis.normalized())
+		get_viewport().set_input_as_handled()
 
 
 func _refresh_scale_for_viewport() -> void:
@@ -499,6 +540,77 @@ func _map_node_size() -> Vector2:
 	return MAP_NODE_SIZE * ui_scale
 
 
+func _step_local_player_target(direction: Vector2) -> void:
+	if not player_local_initialized:
+		return
+	var bounds := _map_bounds()
+	var next_target := player_local_target + direction * _scaled(PLAYER_LOCAL_KEY_STEP)
+	player_local_target = _clamp_point_to_location_zone(next_target, bounds)
+	_update_map_proximity_feedback()
+
+
+func _set_local_player_target(world_point: Vector2, from_click: bool) -> void:
+	if not player_local_initialized:
+		return
+	var bounds := _map_bounds()
+	if not bounds.has_point(world_point):
+		return
+	player_local_target = _clamp_point_to_location_zone(world_point, bounds)
+	if from_click:
+		_update_map_hint("已设置地图落点，靠近居民或事件后可触发交互")
+	_update_map_proximity_feedback()
+
+
+func _tick_local_player_motion(delta: float) -> void:
+	# 地图小人平滑移动用于增强手感，不会写入或缓存权威世界坐标。
+	if not player_local_initialized or map_character_layer == null:
+		return
+	var stop_distance := _scaled(PLAYER_LOCAL_STOP_DISTANCE)
+	if player_local_position.distance_to(player_local_target) > stop_distance:
+		var move_step := _scaled(PLAYER_LOCAL_MOVE_SPEED) * delta
+		player_local_position = player_local_position.move_toward(player_local_target, move_step)
+		_apply_local_player_visual()
+	_update_map_proximity_feedback()
+
+
+func _apply_local_player_visual() -> void:
+	if map_character_layer == null:
+		return
+	var player_actor := map_character_layer.get_node_or_null("MapActor_player") as Control
+	if player_actor == null:
+		return
+	var node_size := _map_node_size()
+	player_actor.position = player_local_position - Vector2(node_size.x * 0.5, node_size.y)
+	player_actor.set_meta("anchor", player_local_position)
+
+
+func _resolve_player_anchor(player_location: String, bounds: Rect2) -> Vector2:
+	var location_anchor := _map_position_for_location(player_location, bounds)
+	if not player_local_initialized or player_local_location_id != player_location:
+		player_local_initialized = true
+		player_local_location_id = player_location
+		player_local_position = location_anchor
+		player_local_target = location_anchor
+	else:
+		player_local_position = _clamp_point_to_location_zone(player_local_position, bounds)
+		player_local_target = _clamp_point_to_location_zone(player_local_target, bounds)
+	return player_local_position
+
+
+func _clamp_point_to_location_zone(point: Vector2, bounds: Rect2) -> Vector2:
+	var center := _map_position_for_location(selected_location_id, bounds)
+	var zone_half := _scaled_vector(Vector2(PLAYER_LOCAL_ZONE_RADIUS_X, PLAYER_LOCAL_ZONE_RADIUS_Y))
+	var zone_rect := Rect2(center - zone_half, zone_half * 2.0)
+	var clamped := Vector2(
+		clamp(point.x, zone_rect.position.x, zone_rect.end.x),
+		clamp(point.y, zone_rect.position.y, zone_rect.end.y)
+	)
+	var bounds_margin := _scaled(18)
+	clamped.x = clamp(clamped.x, bounds.position.x + bounds_margin, bounds.end.x - bounds_margin)
+	clamped.y = clamp(clamped.y, bounds.position.y + bounds_margin, bounds.end.y - bounds_margin)
+	return clamped
+
+
 func _on_refresh_pressed() -> void:
 	await _refresh_world()
 
@@ -711,13 +823,18 @@ func _render_map_characters() -> void:
 	if map_character_layer == null:
 		return
 	_clear_control_children(map_character_layer)
+	map_hint_label = null
 	var bounds := _map_bounds()
+	_ensure_map_hint_label(bounds)
 	_render_map_event_markers(bounds)
 
 	var occupancy: Dictionary = {}
 	var player: Dictionary = world_sync.get_player()
 	var player_location := str(player.get("locationId", selected_location_id))
-	_add_map_actor("player", str(player.get("name", "新来的农场主")), player_location, true, occupancy, bounds)
+	var player_anchor := _resolve_player_anchor(player_location, bounds)
+	var player_actor := _create_map_actor_node("player", str(player.get("name", "新来的农场主")), player_location, true, player_anchor)
+	map_character_layer.add_child(player_actor)
+	occupancy[player_location] = 1
 	for npc in world_sync.get_npcs():
 		if not (npc is Dictionary):
 			continue
@@ -725,6 +842,7 @@ func _render_map_characters() -> void:
 		if npc_id.is_empty() or not asset_registry.has_map_sprite(npc_id):
 			continue
 		_add_map_actor(npc_id, str(npc.get("name", npc_id)), str(npc.get("locationId", selected_location_id)), false, occupancy, bounds)
+	_update_map_proximity_feedback()
 
 
 func _render_map_event_markers(bounds: Rect2) -> void:
@@ -745,11 +863,11 @@ func _render_map_event_markers(bounds: Rect2) -> void:
 		marker.position = anchor - Vector2(MAP_SPRITE_SIZE * event_marker_scale * 0.5, MAP_SPRITE_SIZE * event_marker_scale * 0.5)
 		marker.tooltip_text = "查看事件：%s" % event_title
 		marker.set_meta("eventId", event_id)
+		marker.set_meta("eventTitle", event_title)
 		marker.set_meta("locationId", event_location)
+		marker.set_meta("anchor", anchor)
 		marker.set_meta("interactable", true)
 		marker.pressed.connect(_on_map_event_marker_pressed.bind(event_id, event_location))
-		if selected_event_id == event_id:
-			marker.modulate = Color(1.0, 0.92, 0.45, 1.0)
 		map_character_layer.add_child(marker)
 
 		var label := _create_map_label(event_title, 160, 14)
@@ -773,10 +891,13 @@ func _create_map_actor_node(owner_id: String, display_name: String, location_id:
 	actor.position = anchor - Vector2(node_size.x * 0.5, node_size.y)
 	actor.size = node_size
 	actor.set_meta("agentId", owner_id)
+	actor.set_meta("displayName", display_name)
 	actor.set_meta("locationId", location_id)
+	actor.set_meta("anchor", anchor)
 	actor.set_meta("interactable", not is_player)
 
 	var halo := ColorRect.new()
+	halo.name = "Halo"
 	halo.position = _scaled_vector(Vector2(12, 34))
 	halo.size = _scaled_vector(Vector2(88, 88))
 	halo.color = Color(1.0, 0.86, 0.38, 0.22 if owner_id == selected_npc_id else 0.08)
@@ -803,13 +924,17 @@ func _create_map_actor_node(owner_id: String, display_name: String, location_id:
 		var talk_enabled := _is_interaction_enabled_or_missing(talk_interaction)
 		var gift_enabled := _is_interaction_enabled_or_missing(gift_interaction)
 		actor.set_meta("interactable", talk_enabled or gift_enabled)
+		actor.set_meta("talkEnabled", talk_enabled)
+		actor.set_meta("giftEnabled", gift_enabled)
 
 		var talk_marker := _create_actor_marker("talk", "聊天：%s" % display_name, talk_enabled)
+		talk_marker.name = "TalkMarker"
 		talk_marker.position = _scaled_vector(Vector2(6, 8))
 		talk_marker.pressed.connect(_on_map_talk_marker_pressed.bind(owner_id))
 		actor.add_child(talk_marker)
 
 		var gift_marker := _create_actor_marker("gift", "送礼：%s" % display_name, gift_enabled)
+		gift_marker.name = "GiftMarker"
 		gift_marker.position = _scaled_vector(Vector2(78, 8))
 		gift_marker.pressed.connect(_on_map_gift_marker_pressed.bind(owner_id))
 		actor.add_child(gift_marker)
@@ -865,6 +990,98 @@ func _cluster_offset(index: int) -> Vector2:
 	if index < MAP_CLUSTER_OFFSETS.size():
 		return MAP_CLUSTER_OFFSETS[index] * ui_scale
 	return Vector2((index % 4 - 1.5) * _scaled(58), _scaled(118) + int(index / 4) * _scaled(44))
+
+
+func _ensure_map_hint_label(bounds: Rect2) -> void:
+	if map_character_layer == null:
+		return
+	if map_hint_label == null or not is_instance_valid(map_hint_label):
+		map_hint_label = Label.new()
+		map_hint_label.name = "MapMoveHint"
+		map_hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		map_hint_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_style_body_label(map_hint_label, 14)
+	map_hint_label.size = Vector2(max(_scaled(300), bounds.size.x - _scaled(12)), _scaled(56))
+	map_hint_label.position = Vector2(bounds.position.x + _scaled(8), bounds.position.y + _scaled(6))
+	if map_hint_label.get_parent() != map_character_layer:
+		map_character_layer.add_child(map_hint_label)
+	_update_map_hint("方向键微移或点击地图设置落点，靠近后交互会高亮")
+
+
+func _update_map_hint(text: String) -> void:
+	if map_hint_label != null:
+		map_hint_label.text = text
+
+
+func _update_map_proximity_feedback() -> void:
+	# 靠近反馈只控制高亮与可点状态，交互提交仍走既有 talk/give_gift/inspect/attend_event。
+	if not player_local_initialized or map_character_layer == null:
+		return
+	var interact_radius := _scaled(PLAYER_LOCAL_INTERACT_RADIUS)
+	var nearest_npc_name := ""
+	var nearest_event_title := ""
+	var nearest_npc_distance := INF
+	var nearest_event_distance := INF
+	for child in map_character_layer.get_children():
+		if child is TextureButton:
+			var marker := child as TextureButton
+			if not marker.name.begins_with("MapEvent_"):
+				continue
+			var event_anchor: Vector2 = marker.get_meta("anchor", Vector2.ZERO)
+			var event_location := str(marker.get_meta("locationId", ""))
+			var same_location := event_location == selected_location_id
+			var distance := player_local_position.distance_to(event_anchor)
+			var is_near := same_location and distance <= interact_radius
+			marker.disabled = not is_near
+			if is_near and distance < nearest_event_distance:
+				nearest_event_distance = distance
+				nearest_event_title = str(marker.get_meta("eventTitle", marker.get_meta("eventId", "事件")))
+			if selected_event_id == str(marker.get_meta("eventId", "")):
+				marker.modulate = Color(1.0, 0.92, 0.45, 1.0 if is_near else 0.75)
+			else:
+				marker.modulate = Color(1.0, 1.0, 1.0, 1.0 if is_near else 0.46)
+		elif child is Control:
+			var actor := child as Control
+			if not actor.name.begins_with("MapActor_"):
+				continue
+			if actor.name == "MapActor_player":
+				continue
+			var actor_anchor: Vector2 = actor.get_meta("anchor", Vector2.ZERO)
+			var actor_location := str(actor.get_meta("locationId", ""))
+			var same_location := actor_location == selected_location_id
+			var can_interact: bool = bool(actor.get_meta("interactable", false))
+			var distance := player_local_position.distance_to(actor_anchor)
+			var is_near: bool = same_location and can_interact and distance <= interact_radius
+			if is_near and distance < nearest_npc_distance:
+				nearest_npc_distance = distance
+				nearest_npc_name = str(actor.get_meta("displayName", actor.get_meta("agentId", "居民")))
+			var halo := actor.get_node_or_null("Halo") as ColorRect
+			if halo != null:
+				var owner_id := str(actor.get_meta("agentId", ""))
+				var base_alpha := 0.22 if owner_id == selected_npc_id else 0.08
+				halo.color = Color(1.0, 0.86, 0.38, max(base_alpha, 0.34) if is_near else base_alpha)
+			var sprite_button := actor.get_node_or_null("Sprite") as TextureButton
+			if sprite_button != null:
+				sprite_button.disabled = not is_near
+				sprite_button.modulate = Color(1.0, 1.0, 1.0, 1.0 if is_near else 0.58)
+			var talk_marker := actor.get_node_or_null("TalkMarker") as TextureButton
+			if talk_marker != null:
+				var talk_enabled: bool = bool(actor.get_meta("talkEnabled", true))
+				talk_marker.disabled = not (is_near and talk_enabled)
+				talk_marker.modulate = Color(1.0, 1.0, 1.0, 1.0 if is_near and talk_enabled else 0.34)
+			var gift_marker := actor.get_node_or_null("GiftMarker") as TextureButton
+			if gift_marker != null:
+				var gift_enabled: bool = bool(actor.get_meta("giftEnabled", true))
+				gift_marker.disabled = not (is_near and gift_enabled)
+				gift_marker.modulate = Color(1.0, 1.0, 1.0, 1.0 if is_near and gift_enabled else 0.34)
+	var hint := "方向键微移或点击地图设置落点，靠近后交互会高亮"
+	if not nearest_event_title.is_empty():
+		hint = "已靠近事件：%s，点击事件标记查看细节" % nearest_event_title
+	elif not nearest_npc_name.is_empty():
+		hint = "已靠近居民：%s，可点小人或聊天 / 送礼标记" % nearest_npc_name
+	_update_map_hint(hint)
+	if map_hint_label != null and map_hint_label.get_parent() == map_character_layer:
+		map_character_layer.move_child(map_hint_label, map_character_layer.get_child_count() - 1)
 
 
 func _render_locations() -> void:

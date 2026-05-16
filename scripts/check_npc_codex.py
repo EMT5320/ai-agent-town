@@ -66,6 +66,23 @@ def _warn_missing_assets(card_id: str, refs: dict, manifest_ids: set[str]) -> li
     return warnings
 
 
+def _check_monologue_seed_readiness(cards: dict) -> None:
+    """确保每位 NPC 都有可用于夜间反思的独白素材。"""
+    for npc_id, card in cards.items():
+        seeds = list(getattr(card, "monologue_seeds", ()))
+        if not seeds:
+            raise SystemExit(f"[npc-codex-check] {npc_id} 缺少 monologueSeeds，夜间反思无素材可用")
+
+        tags = {tag for seed in seeds for tag in seed.context_tags}
+        missing_tags = [tag for tag in ("morning", "afternoon", "evening") if tag not in tags]
+        if missing_tags:
+            raise SystemExit(f"[npc-codex-check] {npc_id} monologueSeeds 缺少时段标签：{', '.join(missing_tags)}")
+        if "post_event" not in tags:
+            raise SystemExit(f"[npc-codex-check] {npc_id} monologueSeeds 缺少 post_event 标签，夜间反思素材不足")
+        if not {"high_mood", "low_mood"}.issubset(tags):
+            raise SystemExit(f"[npc-codex-check] {npc_id} monologueSeeds 需同时覆盖 high_mood 和 low_mood")
+
+
 def main() -> None:
     """串联结构校验、seed 一致性、资产引用 warning。"""
     if not NPC_CODEX_PATH.exists():
@@ -82,6 +99,7 @@ def main() -> None:
         return
 
     _check_seed_membership(set(cards))
+    _check_monologue_seed_readiness(cards)
 
     manifest_ids = _load_manifest_ids()
     warnings: list[str] = []
