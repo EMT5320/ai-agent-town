@@ -78,6 +78,7 @@ class AgentRuntime:
     def get_game_state(self) -> dict[str, Any]:
         """输出游戏客户端状态，后续 Godot 只依赖这个契约。"""
         state = public_game_world(self.world, self.event_store.list())
+        state["recentEvents"] = [self._debug_safe_event(event) for event in state.get("recentEvents", [])]
         state["activeEvents"] = self._skill_enriched_events(state.get("activeEvents", []))
         state["playerProfile"] = self._player_profile_payload()
         state["memoryEvidence"] = self._memory_evidence_payload()
@@ -754,8 +755,8 @@ class AgentRuntime:
                 "eventId": event.get("id"),
                 "eventType": event.get("type"),
                 "createdAt": event.get("createdAt"),
-                "summary": self._event_debug_summary(event),
-                "payload": event.get("payload", {}),
+                "summary": self._short_debug_text(self._event_debug_summary(event), 240),
+                "payload": self._debug_safe_event_payload(event.get("payload", {})),
             }
             for event in self.event_store.list()
             if self._event_matches_influence_filters(event, agent_id=agent_id, skill_id=skill_id, event_id=event_id)
@@ -887,7 +888,7 @@ class AgentRuntime:
                     "eventStoreId": event.get("id"),
                     "createdAt": event.get("createdAt"),
                     "summary": payload.get("summary") or payload.get("debug", {}).get("feature"),
-                    "payload": payload,
+                    "payload": self._debug_safe_event_payload(payload),
                 }
             )
         return lifecycle
@@ -917,7 +918,7 @@ class AgentRuntime:
         return None
 
     def _debug_turn_payload(self, event: dict[str, Any], debug: dict[str, Any]) -> dict[str, Any]:
-        """压缩 Provider Debug 记录，保留原始 debug 供深挖。"""
+        """压缩 Provider Debug 记录，避免 Debug API 直接暴露整段 Prompt。"""
         return {
             "eventId": event.get("id"),
             "eventType": event.get("type"),
@@ -931,9 +932,84 @@ class AgentRuntime:
             "profileName": debug.get("profileName"),
             "fallbackReason": debug.get("fallbackReason"),
             "latency": debug.get("latency"),
-            "summary": self._debug_summary(debug),
-            "debug": debug,
+            "summary": self._short_debug_text(self._debug_summary(debug), 240),
+            "debug": self._compact_debug_payload(debug),
         }
+
+    def _debug_safe_event_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """裁剪事件 payload 内的 Debug 长字段，供 Debug Console 列表稳定消费。"""
+        safe_payload = dict(payload) if isinstance(payload, dict) else {}
+        debug = safe_payload.get("debug")
+        if isinstance(debug, dict):
+            safe_payload["debug"] = self._compact_debug_payload(debug)
+        return safe_payload
+
+    def _debug_safe_event(self, event: dict[str, Any]) -> dict[str, Any]:
+        """裁剪单条事件内的 Debug 长字段，供 Godot recentEvents 安全消费。"""
+        safe_event = dict(event) if isinstance(event, dict) else {}
+        payload = safe_event.get("payload")
+        if isinstance(payload, dict):
+            safe_event["payload"] = self._debug_safe_event_payload(payload)
+        return safe_event
+
+    def _compact_debug_payload(self, debug: dict[str, Any]) -> dict[str, Any]:
+        """保留 Debug 关键诊断字段，同时把 Prompt、rawText 和嵌套文本压成预览。"""
+        compact_keys = (
+            "tick",
+            "feature",
+            "provider",
+            "providerMode",
+            "profileName",
+            "apiKeyConfigured",
+            "profile",
+            "usage",
+            "latency",
+            "fallbackReason",
+            "executed",
+            "parsed",
+            "skillId",
+            "eventId",
+            "choice",
+            "skillDebugFields",
+            "playerProfile",
+            "memoryEvidence",
+            "memoryEvidenceUsed",
+        )
+        compact = {key: self._compact_debug_value(debug[key]) for key in compact_keys if key in debug}
+
+        messages = debug.get("messages")
+        if isinstance(messages, list):
+            compact["messageCount"] = len(messages)
+            compact["messages"] = [self._compact_debug_message(message) for message in messages[:3] if isinstance(message, dict)]
+
+        raw_text = str(debug.get("rawText", ""))
+        compact["rawText"] = self._short_debug_text(raw_text, 240)
+        compact["rawTextLength"] = len(raw_text)
+        return compact
+
+    def _compact_debug_message(self, message: dict[str, Any]) -> dict[str, Any]:
+        """把单条 Provider message 转成长度可控的预览结构。"""
+        content = str(message.get("content", ""))
+        return {
+            "role": message.get("role"),
+            "contentPreview": self._short_debug_text(content, 320),
+            "contentLength": len(content),
+        }
+
+    def _compact_debug_value(self, value: Any, *, text_limit: int = 180, item_limit: int = 6) -> Any:
+        """递归裁剪 Debug 值，保留结构形状和可读摘要。"""
+        if isinstance(value, str):
+            return self._short_debug_text(value, text_limit)
+        if value is None or isinstance(value, (bool, int, float)):
+            return value
+        if isinstance(value, list):
+            compact_items = [self._compact_debug_value(item, text_limit=text_limit, item_limit=item_limit) for item in value[:item_limit]]
+            if len(value) > item_limit:
+                compact_items.append({"truncatedCount": len(value) - item_limit})
+            return compact_items
+        if isinstance(value, dict):
+            return {str(key): self._compact_debug_value(item, text_limit=text_limit, item_limit=item_limit) for key, item in value.items()}
+        return self._short_debug_text(str(value), text_limit)
 
     def _debug_summary(self, debug: dict[str, Any]) -> str:
         """从 executed / parsed 中提取一行可读摘要。"""

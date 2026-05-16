@@ -8,7 +8,7 @@ import sys
 import tempfile
 from threading import Thread
 from urllib.parse import urlencode
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "backend"))
@@ -37,12 +37,53 @@ REQUIRED_CLIENT_CONTEXT_FIELDS = {
     "availableInteractions",
 }
 
+REQUIRED_GAME_STATE_FIELDS = {
+    "clock",
+    "player",
+    "locations",
+    "npcs",
+    "activeEvents",
+    "completedEvents",
+    "nightReflections",
+    "recentEvents",
+    "slice",
+    "townStats",
+}
+
+REQUIRED_DEBUG_SNAPSHOT_FIELDS = {
+    "clock",
+    "providerMode",
+    "director",
+    "skills",
+    "debugTurns",
+    "memory",
+    "playerProfile",
+    "providerFallbacks",
+    "influenceChain",
+}
+
+REQUIRED_DEBUG_TURN_FIELDS = {
+    "eventId",
+    "eventType",
+    "createdAt",
+    "feature",
+    "providerMode",
+    "profileName",
+    "latency",
+    "summary",
+    "debug",
+}
+
+REQUIRED_MEMORY_SEARCH_FIELDS = {"query", "agentId", "tags", "limit", "items"}
+REQUIRED_MEMORY_ITEM_FIELDS = {"agentId", "agentName", "tick", "importance", "tags", "text", "match"}
+
 
 def assert_feature_debug(state: dict, feature: str) -> dict:
     """确认指定 feature 生成了本轮 LLM 验证要求的 Debug 字段。"""
+    events = state.get("recentEvents") or state.get("events") or []
     debug_events = [
         event
-        for event in state["recentEvents"]
+        for event in events
         if event["type"] == "debug.turn_recorded" and event["payload"].get("debug", {}).get("feature") == feature
     ]
     if not debug_events:
@@ -90,7 +131,92 @@ def assert_player_action_contract(response: dict, label: str) -> None:
         raise RuntimeError(f"{label} 动作应执行成功")
     assert_client_context_fields(response, f"{label} response")
     assert_client_context_fields(response["result"], f"{label} result")
-    assert_client_context_fields(response["state"], f"{label} state")
+    assert_game_state_contract(response["state"], f"{label} state")
+
+
+def assert_game_state_contract(state: dict, label: str) -> None:
+    """确认 /api/world/state 保持 Godot 可消费的稳定状态切片。"""
+    missing = sorted((REQUIRED_GAME_STATE_FIELDS | REQUIRED_CLIENT_CONTEXT_FIELDS) - set(state))
+    if missing:
+        raise RuntimeError(f"{label} 缺少状态字段：{missing}")
+    assert_client_context_fields(state, label)
+    for field in ("locations", "npcs", "activeEvents", "completedEvents", "nightReflections", "recentEvents"):
+        if not isinstance(state[field], list):
+            raise RuntimeError(f"{label}.{field} 应为数组")
+    for index, event in enumerate(state["recentEvents"]):
+        compact_debug = event.get("payload", {}).get("debug")
+        if isinstance(compact_debug, dict):
+            assert_compact_debug_payload(compact_debug, f"{label}.recentEvents[{index}]")
+    if not isinstance(state["player"], dict) or not state["player"].get("locationId"):
+        raise RuntimeError(f"{label}.player 应包含 locationId")
+    if not isinstance(state["slice"], dict) or not state["slice"].get("npcIds") or not state["slice"].get("locationIds"):
+        raise RuntimeError(f"{label}.slice 应包含 npcIds 和 locationIds")
+    active_event = next((event for event in state["activeEvents"] if event.get("id") == "starlight_festival_shortage"), None)
+    if not active_event:
+        raise RuntimeError(f"{label} 缺少星灯祭供应短缺事件")
+    for field in ("skillId", "title", "summary", "choices", "assetHints", "debugFields"):
+        if field not in active_event:
+            raise RuntimeError(f"{label}.activeEvents 星灯祭事件缺少 {field}")
+    if not all(isinstance(choice, dict) and choice.get("id") and choice.get("label") for choice in active_event["choices"]):
+        raise RuntimeError(f"{label}.activeEvents 星灯祭 choices 应包含 id 和 label")
+
+
+def assert_memory_search_contract(payload: dict, label: str) -> None:
+    """确认 /api/memory/search 返回 RAG-lite 可解释结构。"""
+    missing = sorted(REQUIRED_MEMORY_SEARCH_FIELDS - set(payload))
+    if missing:
+        raise RuntimeError(f"{label} 缺少字段：{missing}")
+    if not isinstance(payload["tags"], list):
+        raise RuntimeError(f"{label}.tags 应为数组")
+    if not isinstance(payload["items"], list):
+        raise RuntimeError(f"{label}.items 应为数组")
+    for index, item in enumerate(payload["items"]):
+        missing_item = sorted(REQUIRED_MEMORY_ITEM_FIELDS - set(item))
+        if missing_item:
+            raise RuntimeError(f"{label}.items[{index}] 缺少字段：{missing_item}")
+        match = item["match"]
+        if not isinstance(match, dict) or "score" not in match or "terms" not in match or "tags" not in match:
+            raise RuntimeError(f"{label}.items[{index}].match 应包含 score、terms 和 tags")
+
+
+def assert_compact_debug_payload(debug: dict, label: str) -> None:
+    """确认 Debug API 中的长文本已被压缩成预览字段。"""
+    if "messageCount" not in debug or "rawTextLength" not in debug:
+        raise RuntimeError(f"{label} Debug 应包含 messageCount 和 rawTextLength")
+    if len(str(debug.get("rawText", ""))) > 240:
+        raise RuntimeError(f"{label} rawText 预览过长")
+    messages = debug.get("messages")
+    if not isinstance(messages, list) or not messages:
+        raise RuntimeError(f"{label} messages 应为预览数组")
+    for index, message in enumerate(messages):
+        if "content" in message:
+            raise RuntimeError(f"{label}.messages[{index}] 不应返回完整 content")
+        if "contentPreview" not in message or "contentLength" not in message:
+            raise RuntimeError(f"{label}.messages[{index}] 应包含 contentPreview 和 contentLength")
+        if len(str(message.get("contentPreview", ""))) > 320:
+            raise RuntimeError(f"{label}.messages[{index}].contentPreview 预览过长")
+
+
+def assert_compact_debug_turns(payload: dict, label: str) -> None:
+    """确认 Debug turns 列表字段稳定，且长 Prompt 不进入列表响应。"""
+    items = payload.get("items")
+    if not isinstance(items, list) or not items:
+        raise RuntimeError(f"{label}.items 应为非空数组")
+    for index, item in enumerate(items):
+        missing = sorted(REQUIRED_DEBUG_TURN_FIELDS - set(item))
+        if missing:
+            raise RuntimeError(f"{label}.items[{index}] 缺少字段：{missing}")
+        assert_compact_debug_payload(item["debug"], f"{label}.items[{index}]")
+
+
+def assert_debug_snapshot_contract(payload: dict, label: str) -> None:
+    """确认 /api/debug 总览结构稳定，并复用压缩后的 Debug turn 契约。"""
+    missing = sorted(REQUIRED_DEBUG_SNAPSHOT_FIELDS - set(payload))
+    if missing:
+        raise RuntimeError(f"{label} 缺少字段：{missing}")
+    if not payload.get("skills", {}).get("items"):
+        raise RuntimeError(f"{label}.skills 应返回 Skill 快照")
+    assert_compact_debug_turns(payload["debugTurns"], f"{label}.debugTurns")
 
 
 def has_real_llm_config() -> bool:
@@ -111,7 +237,20 @@ def assert_http_debug_endpoints(api_app) -> dict:
         with urlopen(f"http://127.0.0.1:{server.server_port}{path}{suffix}", timeout=5) as response:  # noqa: S310 - 本地 smoke 服务
             return json.loads(response.read().decode("utf-8"))
 
+    def post(path: str, payload: dict) -> dict:
+        data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        request = Request(
+            f"http://127.0.0.1:{server.server_port}{path}",
+            data=data,
+            headers={"content-type": "application/json; charset=utf-8"},
+            method="POST",
+        )
+        with urlopen(request, timeout=5) as response:  # noqa: S310 - 本地 smoke 服务
+            return json.loads(response.read().decode("utf-8"))
+
     try:
+        world_state = fetch("/api/world/state")
+        http_action = post("/api/player/action", {"type": "talk", "targetId": "mira", "locationId": "plaza", "topic": "http_contract", "message": "请确认后端动作契约。"})
         debug = fetch("/api/debug", {"skillId": STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID, "limit": "20"})
         skill = fetch("/api/debug/skill", {"skillId": STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID})
         memory = fetch("/api/memory/search", {"query": "玩家", "tags": "night_reflection", "limit": "5"})
@@ -121,11 +260,13 @@ def assert_http_debug_endpoints(api_app) -> dict:
         server.server_close()
         thread.join(timeout=5)
 
-    if not debug.get("skills", {}).get("items"):
-        raise RuntimeError("/api/debug 应返回 Skill 快照")
+    assert_game_state_contract(world_state, "HTTP /api/world/state")
+    assert_player_action_contract(http_action, "HTTP /api/player/action")
+    assert_debug_snapshot_contract(debug, "/api/debug")
     if "attend_event" not in skill.get("actions", {}):
         raise RuntimeError("/api/debug/skill 应解释 attend_event")
-    if not memory.get("items"):
+    assert_memory_search_contract(memory, "/api/memory/search")
+    if not memory["items"]:
         raise RuntimeError("/api/memory/search 应返回 RAG-lite 命中")
     if not influence.get("memory", {}).get("retrieval", {}).get("items"):
         raise RuntimeError("/api/debug/influence 应解释相关 RAG-lite 记忆")
@@ -135,6 +276,10 @@ def assert_http_debug_endpoints(api_app) -> dict:
         raise RuntimeError("/api/debug/influence 应解释事件 Skill")
     if not influence.get("playerProfile", {}).get("styleSummary"):
         raise RuntimeError("/api/debug/influence 应返回玩家风格摘要")
+    for index, item in enumerate(influence["events"]["items"]):
+        compact_debug = item.get("payload", {}).get("debug")
+        if isinstance(compact_debug, dict):
+            assert_compact_debug_payload(compact_debug, f"/api/debug/influence.events[{index}]")
     return {"debugSkills": len(debug["skills"]["items"]), "memoryHits": len(memory["items"]), "influenceEvents": len(influence["events"]["items"])}
 
 
@@ -171,7 +316,7 @@ def assert_provider_fallback_debug() -> dict:
         try:
             fallback_app = create_town_app(provider_mode="cloud")
             fallback_talk = fallback_app.player_action({"type": "talk", "targetId": "mira", "locationId": "plaza", "topic": "fallback_check", "message": "测试无密钥兜底。"})
-            fallback_debug = assert_feature_debug(fallback_talk["state"], "dialogue")
+            fallback_debug = assert_feature_debug(fallback_app.get_public_state(), "dialogue")
             if not fallback_debug.get("fallbackReason"):
                 raise RuntimeError("cloud 无密钥时 dialogue Debug 应记录 fallbackReason")
             fallback_items = fallback_app.debug_influence({"feature": "dialogue"})["providerFallbacks"]["items"]
@@ -192,7 +337,7 @@ if len(initial["agents"]) != 10:
     raise RuntimeError(f"期望 10 个初始 Agent，实际得到 {len(initial['agents'])}")
 
 game_state = app.get_game_state()
-assert_client_context_fields(game_state, "/api/world/state")
+assert_game_state_contract(game_state, "/api/world/state")
 if game_state["player"]["locationId"] != "farm":
     raise RuntimeError("玩家初始位置应为 farm")
 if len(game_state["npcs"]) != 6:
@@ -268,7 +413,7 @@ if not talk["result"]["dialogue"]:
     raise RuntimeError("玩家对话后应返回 NPC 回复")
 if not any(event["type"] == "debug.turn_recorded" for event in talk["state"]["recentEvents"]):
     raise RuntimeError("玩家对话后应写入 Debug 决策记录")
-dialogue_debug = assert_feature_debug(talk["state"], "dialogue")
+dialogue_debug = assert_feature_debug(app.get_public_state(), "dialogue")
 if not talk["result"].get("playerProfile", {}).get("styleSummary"):
     raise RuntimeError("玩家对话后应更新 Player Profile")
 
@@ -306,8 +451,8 @@ if not event_result["state"]["nightReflections"]:
     raise RuntimeError("星灯祭事件后应生成夜间反思摘要")
 if not any(event["type"] == "town.event_resolved" for event in event_result["state"]["recentEvents"]):
     raise RuntimeError("星灯祭事件后应写入事件结算记录")
-event_reaction_debug = assert_feature_debug(event_result["state"], "event_reaction")
-night_reflection_debug = assert_feature_debug(event_result["state"], "night_reflection")
+event_reaction_debug = assert_feature_debug(app.get_public_state(), "event_reaction")
+night_reflection_debug = assert_feature_debug(app.get_public_state(), "night_reflection")
 if event_reaction_debug.get("skillId") != STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID or not event_reaction_debug.get("skillDebugFields"):
     raise RuntimeError("event_reaction Debug 应记录 Skill 字段")
 if night_reflection_debug.get("skillId") != STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID or not night_reflection_debug.get("skillDebugFields"):
@@ -324,7 +469,7 @@ if follow_up["result"]["memoryEvidenceUsed"].get("source") not in {"rag_lite", "
     raise RuntimeError("第二次对话结果应标明记忆证据来源")
 if not follow_up["result"].get("memoryEvidence", {}).get("ragHits"):
     raise RuntimeError("第二次对话结果应直出 RAG-lite 候选命中")
-follow_up_debug = assert_feature_debug(follow_up["state"], "dialogue")
+follow_up_debug = assert_feature_debug(app.get_public_state(), "dialogue")
 if not follow_up_debug.get("memoryEvidenceUsed"):
     raise RuntimeError("第二次对话 Debug 应记录实际使用的记忆证据")
 if follow_up_debug["memoryEvidenceUsed"].get("source") not in {"rag_lite", "memory_summary"}:
@@ -344,10 +489,12 @@ for required_stage in ("registered", "inspect", "attend_event", "event_reaction_
 debug_turns = app.debug_turns({"feature": "event_reaction", "skillId": STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID, "limit": "5"})
 if not debug_turns["items"] or not debug_turns["items"][-1]["summary"]:
     raise RuntimeError("Debug turns 查询应能解释 event_reaction")
+assert_compact_debug_turns(debug_turns, "app.debug_turns")
 memory_summary = app.memory_summary({"agentId": "kai", "limit": "4"})
 if not memory_summary["items"] or "星灯祭" not in memory_summary["items"][0]["summary"]:
     raise RuntimeError("Memory Summary 应包含星灯祭记忆")
 memory_search = app.memory_search({"query": "玩家", "tags": "night_reflection", "limit": "5"})
+assert_memory_search_contract(memory_search, "app.memory_search")
 if not memory_search["items"]:
     raise RuntimeError("RAG-lite 检索应能召回 night_reflection 记忆")
 http_debug_summary = assert_http_debug_endpoints(app)
@@ -380,7 +527,7 @@ print(
 if has_real_llm_config():
     llm_app = create_town_app()
     llm_talk = llm_app.player_action({"type": "talk", "targetId": "orren", "locationId": "plaza", "topic": "llm_smoke", "message": "能和我聊聊今晚的小镇吗？"})
-    llm_debug = assert_feature_debug(llm_talk["state"], "dialogue")
+    llm_debug = assert_feature_debug(llm_app.get_public_state(), "dialogue")
     print(
         "[llm-smoke]",
         {
