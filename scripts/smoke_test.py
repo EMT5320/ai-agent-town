@@ -2,8 +2,10 @@
 
 from pathlib import Path
 from http.server import ThreadingHTTPServer
+import json
 import os
 import sys
+import tempfile
 from threading import Thread
 from urllib.parse import urlencode
 from urllib.request import urlopen
@@ -66,14 +68,13 @@ def assert_http_debug_endpoints(api_app) -> dict:
     def fetch(path: str, query: dict[str, str] | None = None) -> dict:
         suffix = f"?{urlencode(query)}" if query else ""
         with urlopen(f"http://127.0.0.1:{server.server_port}{path}{suffix}", timeout=5) as response:  # noqa: S310 - 本地 smoke 服务
-            import json
-
             return json.loads(response.read().decode("utf-8"))
 
     try:
         debug = fetch("/api/debug", {"skillId": STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID, "limit": "20"})
         skill = fetch("/api/debug/skill", {"skillId": STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID})
         memory = fetch("/api/memory/search", {"query": "玩家", "tags": "night_reflection", "limit": "5"})
+        influence = fetch("/api/debug/influence", {"skillId": STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID, "agentId": "kai", "query": "星灯祭", "limit": "30"})
     finally:
         server.shutdown()
         server.server_close()
@@ -85,7 +86,63 @@ def assert_http_debug_endpoints(api_app) -> dict:
         raise RuntimeError("/api/debug/skill 应解释 attend_event")
     if not memory.get("items"):
         raise RuntimeError("/api/memory/search 应返回 RAG-lite 命中")
-    return {"debugSkills": len(debug["skills"]["items"]), "memoryHits": len(memory["items"])}
+    if not influence.get("memory", {}).get("retrieval", {}).get("items"):
+        raise RuntimeError("/api/debug/influence 应解释相关 RAG-lite 记忆")
+    if not influence.get("relations", {}).get("events"):
+        raise RuntimeError("/api/debug/influence 应解释关系变化")
+    if not influence.get("skill", {}).get("actions", {}).get("attend_event"):
+        raise RuntimeError("/api/debug/influence 应解释事件 Skill")
+    if not influence.get("playerProfile", {}).get("styleSummary"):
+        raise RuntimeError("/api/debug/influence 应返回玩家风格摘要")
+    return {"debugSkills": len(debug["skills"]["items"]), "memoryHits": len(memory["items"]), "influenceEvents": len(influence["events"]["items"])}
+
+
+def assert_provider_fallback_debug() -> dict:
+    """用临时无密钥配置强制云端转规则兜底，并确认 Debug API 可解释。"""
+    previous_env = {name: os.environ.get(name) for name in ("AGENT_TOWN_MODEL_CONFIG", "OPENAI_API_KEY", "AGENT_TOWN_NEVER_SET_API_KEY")}
+    with tempfile.TemporaryDirectory(prefix="agent-town-fallback-") as tmp_dir:
+        config_path = Path(tmp_dir) / "models.json"
+        config_path.write_text(
+            json.dumps(
+                {
+                    "activeProvider": "cloud",
+                    "defaultProfile": "no_key_cloud",
+                    "profiles": {
+                        "no_key_cloud": {
+                            "provider": "cloud",
+                            "baseUrl": "https://example.invalid",
+                            "apiKeyEnv": "AGENT_TOWN_NEVER_SET_API_KEY",
+                            "model": "debug-no-key",
+                            "timeoutSeconds": 1,
+                        },
+                        "rule_fallback": {"provider": "rule"},
+                    },
+                    "featureProfiles": {"dialogue": "no_key_cloud"},
+                    "fallbackProfile": "rule_fallback",
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        os.environ["AGENT_TOWN_MODEL_CONFIG"] = str(config_path)
+        os.environ.pop("OPENAI_API_KEY", None)
+        os.environ.pop("AGENT_TOWN_NEVER_SET_API_KEY", None)
+        try:
+            fallback_app = create_town_app(provider_mode="cloud")
+            fallback_talk = fallback_app.player_action({"type": "talk", "targetId": "mira", "locationId": "plaza", "topic": "fallback_check", "message": "测试无密钥兜底。"})
+            fallback_debug = assert_feature_debug(fallback_talk["state"], "dialogue")
+            if not fallback_debug.get("fallbackReason"):
+                raise RuntimeError("cloud 无密钥时 dialogue Debug 应记录 fallbackReason")
+            fallback_items = fallback_app.debug_influence({"feature": "dialogue"})["providerFallbacks"]["items"]
+            if not fallback_items:
+                raise RuntimeError("Debug influence 应能解释模型兜底")
+            return {"fallbackReason": fallback_debug["fallbackReason"], "fallbackItems": len(fallback_items)}
+        finally:
+            for name, value in previous_env.items():
+                if value is None:
+                    os.environ.pop(name, None)
+                else:
+                    os.environ[name] = value
 
 
 app = create_town_app(provider_mode="rule")
@@ -162,6 +219,18 @@ if not talk["result"]["dialogue"]:
 if not any(event["type"] == "debug.turn_recorded" for event in talk["state"]["recentEvents"]):
     raise RuntimeError("玩家对话后应写入 Debug 决策记录")
 dialogue_debug = assert_feature_debug(talk["state"], "dialogue")
+if not talk["result"].get("playerProfile", {}).get("styleSummary"):
+    raise RuntimeError("玩家对话后应更新 Player Profile")
+
+gift = app.player_action({"type": "give_gift", "targetId": "kai", "locationId": "tavern", "itemId": "farm_flower"})
+if not gift["ok"]:
+    raise RuntimeError("玩家送礼动作应执行成功")
+if not gift["result"]["relationshipDeltas"]:
+    raise RuntimeError("送礼后应产生关系变化")
+if not any("player_gift" in item.get("tags", []) for item in gift["result"]["memoryWrites"]):
+    raise RuntimeError("送礼后应写入 NPC 礼物记忆")
+if "礼物" not in gift["result"].get("playerProfile", {}).get("styleSummary", ""):
+    raise RuntimeError("送礼后 Player Profile 应体现礼物风格")
 
 inspect = app.player_action({"type": "inspect", "eventId": "starlight_festival_shortage"})
 if not inspect["ok"]:
@@ -182,8 +251,10 @@ if event_result["result"]["eventResult"].get("skillId") != STARLIGHT_FESTIVAL_SH
     raise RuntimeError("星灯祭事件结算应返回 Skill ID")
 if not event_result["result"]["eventResult"].get("debugFields"):
     raise RuntimeError("星灯祭事件结算应返回 Skill Debug 字段")
-if not all(item.get("skillId") == STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID for item in event_result["result"]["memoryWrites"]):
+if not all(item.get("skillId") == STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID for item in event_result["result"]["memoryWrites"] if item.get("agentId") != "player"):
     raise RuntimeError("星灯祭记忆写入应记录来源 Skill")
+if "直接帮忙" not in event_result["result"].get("playerProfile", {}).get("styleSummary", "") and "实际" not in event_result["result"].get("playerProfile", {}).get("styleSummary", ""):
+    raise RuntimeError("星灯祭选择后 Player Profile 应体现选择风格")
 if not event_result["state"]["nightReflections"]:
     raise RuntimeError("星灯祭事件后应生成夜间反思摘要")
 if not any(event["type"] == "town.event_resolved" for event in event_result["state"]["recentEvents"]):
@@ -194,6 +265,20 @@ if event_reaction_debug.get("skillId") != STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID o
     raise RuntimeError("event_reaction Debug 应记录 Skill 字段")
 if night_reflection_debug.get("skillId") != STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID or not night_reflection_debug.get("skillDebugFields"):
     raise RuntimeError("night_reflection Debug 应记录 Skill 字段")
+
+follow_up = app.player_action({"type": "talk", "targetId": "kai", "locationId": "tavern", "topic": "starlight_follow_up", "message": "昨晚星灯祭之后，你怎么看我的选择？"})
+if not follow_up["ok"]:
+    raise RuntimeError("星灯祭后的第二次对话应执行成功")
+follow_up_text = follow_up["result"]["dialogue"][0]["text"]
+if "记得" not in follow_up_text and "星灯祭" not in follow_up_text:
+    raise RuntimeError("第二次对话应引用既有记忆或星灯祭上下文")
+follow_up_debug = assert_feature_debug(follow_up["state"], "dialogue")
+if not follow_up_debug.get("memoryEvidenceUsed"):
+    raise RuntimeError("第二次对话 Debug 应记录实际使用的记忆证据")
+if follow_up_debug["memoryEvidenceUsed"].get("source") not in {"rag_lite", "memory_summary"}:
+    raise RuntimeError("第二次对话应引用 Memory Summary 或 RAG-lite 命中")
+if not follow_up_debug.get("memoryEvidence", {}).get("ragHits"):
+    raise RuntimeError("第二次对话 Debug 应保留 RAG-lite 候选命中")
 
 skill_debug = app.debug_skill_explain({"skillId": STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID})
 for action_name in ("inspect", "attend_event", "event_reaction", "night_reflection"):
@@ -214,6 +299,7 @@ memory_search = app.memory_search({"query": "玩家", "tags": "night_reflection"
 if not memory_search["items"]:
     raise RuntimeError("RAG-lite 检索应能召回 night_reflection 记忆")
 http_debug_summary = assert_http_debug_endpoints(app)
+fallback_summary = assert_provider_fallback_debug()
 
 step = app.step_simulation({"actorId": "smoke-test"})
 state = step["state"]
@@ -231,8 +317,11 @@ print(
         "dialogueProfile": dialogue_debug["profileName"],
         "eventReactionProfile": event_reaction_debug["profileName"],
         "nightReflectionProfile": night_reflection_debug["profileName"],
+        "followUpEvidence": follow_up_debug["memoryEvidenceUsed"]["source"],
         "debugSkills": http_debug_summary["debugSkills"],
         "memoryHits": http_debug_summary["memoryHits"],
+        "influenceEvents": http_debug_summary["influenceEvents"],
+        "fallbackItems": fallback_summary["fallbackItems"],
     },
 )
 

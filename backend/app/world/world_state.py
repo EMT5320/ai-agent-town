@@ -50,6 +50,11 @@ def create_player() -> dict[str, Any]:
         "knownNpcs": [],
         "questFlags": {"day1_intro": "started"},
         "actionHistory": [],
+        "profile": {
+            "styleSummary": "刚搬来晨露农场，正在通过聊天、送礼和事件选择形成小镇印象。",
+            "signals": {"talk": 0, "gift": 0, "festivalChoice": 0, "help": 0, "mediate": 0, "observe": 0, "support": 0},
+            "evidence": [],
+        },
         "memories": [{"tick": 0, "importance": 0.6, "tags": ["arrival"], "text": "我搬进了晨露农场，准备认识这座小镇。"}],
     }
 

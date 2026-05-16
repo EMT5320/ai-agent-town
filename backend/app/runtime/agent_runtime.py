@@ -7,7 +7,7 @@ from typing import Any
 from app.config.model_config import ModelConfigStore
 from app.director import DirectorBeat, DirectorQueueManager, DirectorValidator, SkillRouter, TensionDetector, WorldDigest
 from app.events.event_store import EventStore
-from app.memory.memory_store import rag_lite_search, remember, world_memory_summaries
+from app.memory.memory_store import memory_summary_payload, rag_lite_search, remember, world_memory_summaries
 from app.providers.cloud_api_provider import CloudApiProvider
 from app.providers.context_builder import (
     build_agent_context,
@@ -76,6 +76,7 @@ class AgentRuntime:
         """输出游戏客户端状态，后续 Godot 只依赖这个契约。"""
         state = public_game_world(self.world, self.event_store.list())
         state["activeEvents"] = self._skill_enriched_events(state.get("activeEvents", []))
+        state["playerProfile"] = self._player_profile_payload()
         return state
 
     def get_debug_snapshot(self, filters: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -88,6 +89,9 @@ class AgentRuntime:
             "skills": self.get_skill_lifecycle_snapshot(filters),
             "debugTurns": self.get_debug_turns(filters),
             "memory": self.get_memory_debug(filters),
+            "playerProfile": self._player_profile_payload(),
+            "providerFallbacks": self._provider_fallback_debug(filters),
+            "influenceChain": self.get_influence_chain_debug(filters),
         }
 
     def get_director_debug_snapshot(self, filters: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -154,6 +158,30 @@ class AgentRuntime:
         return {
             "summaries": world_memory_summaries(self.world, agent_id=agent_id, limit=min(limit, 12)),
             "retrieval": rag_lite_search(self.world, query=query, agent_id=agent_id, tags=tags, limit=limit),
+        }
+
+    def get_influence_chain_debug(self, filters: dict[str, Any] | None = None) -> dict[str, Any]:
+        """解释玩家动作如何影响记忆、关系、事件技能和模型兜底。"""
+        filters = filters or {}
+        skill_id = self._str_filter(filters, "skillId") or self._str_filter(filters, "skill_id")
+        event_id = self._str_filter(filters, "eventId") or self._str_filter(filters, "event_id") or DAY1_EVENT_ID
+        if not skill_id:
+            try:
+                skill_id = self._get_event_skill_for_event(event_id).skill_id
+            except ValueError:
+                skill_id = None
+        memory_filters = dict(filters)
+        memory_filters.setdefault("query", "星灯祭 玩家")
+        if event_id:
+            memory_filters.setdefault("tags", event_id)
+        return {
+            "filters": {"skillId": skill_id, "eventId": event_id, "agentId": self._str_filter(filters, "agentId") or self._str_filter(filters, "agent_id")},
+            "playerProfile": self._player_profile_payload(),
+            "memory": self.get_memory_debug(memory_filters),
+            "relations": self._relationship_debug(filters),
+            "skill": self.explain_event_skill({"skillId": skill_id}) if skill_id else None,
+            "providerFallbacks": self._provider_fallback_debug(filters),
+            "events": self._influence_event_debug(filters, skill_id=skill_id, event_id=event_id),
         }
 
     def explain_event_skill(self, filters: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -332,6 +360,160 @@ class AgentRuntime:
             "detail": payload.get("detail") or payload.get("errors"),
             "beat": beat if isinstance(beat, dict) else {},
         }
+
+    def _player_profile_payload(self) -> dict[str, Any]:
+        """输出轻量玩家风格摘要，给 NPC Prompt 和 Debug API 共用。"""
+        player = self.world.setdefault("player", {})
+        profile = player.setdefault(
+            "profile",
+            {
+                "styleSummary": "刚搬来晨露农场，正在通过聊天、送礼和事件选择形成小镇印象。",
+                "signals": {"talk": 0, "gift": 0, "festivalChoice": 0, "help": 0, "mediate": 0, "observe": 0, "support": 0},
+                "evidence": [],
+            },
+        )
+        return {
+            "playerId": player.get("id", "player"),
+            "playerName": player.get("name", "新来的农场主"),
+            "styleSummary": str(profile.get("styleSummary", "")),
+            "signals": dict(profile.get("signals", {})) if isinstance(profile.get("signals"), dict) else {},
+            "evidence": list(profile.get("evidence", []))[-8:] if isinstance(profile.get("evidence"), list) else [],
+        }
+
+    def _provider_fallback_debug(self, filters: dict[str, Any]) -> dict[str, Any]:
+        """汇总显式模型兜底事件和 Debug 记录里的兜底原因。"""
+        feature = self._str_filter(filters, "feature")
+        limit = self._int_filter(filters, "limit", 20)
+        items: list[dict[str, Any]] = []
+        for event in self.event_store.list():
+            event_type = str(event.get("type", ""))
+            payload = event.get("payload", {})
+            if event_type == "provider.fallback":
+                if feature and payload.get("feature") != feature:
+                    continue
+                items.append(
+                    {
+                        "eventId": event.get("id"),
+                        "eventType": event_type,
+                        "createdAt": event.get("createdAt"),
+                        "feature": payload.get("feature"),
+                        "agentId": payload.get("agentId"),
+                        "profileName": payload.get("profileName"),
+                        "fallbackProfile": payload.get("fallbackProfile"),
+                        "reason": payload.get("error"),
+                    }
+                )
+                continue
+            debug = payload.get("debug")
+            if isinstance(debug, dict) and debug.get("fallbackReason"):
+                if feature and debug.get("feature") != feature:
+                    continue
+                items.append(
+                    {
+                        "eventId": event.get("id"),
+                        "eventType": event_type,
+                        "createdAt": event.get("createdAt"),
+                        "feature": debug.get("feature"),
+                        "agentId": payload.get("agentId"),
+                        "profileName": debug.get("profileName"),
+                        "fallbackProfile": self.model_config.fallback_profile().get("profileName"),
+                        "reason": debug.get("fallbackReason"),
+                    }
+                )
+        return {"limit": limit, "items": items[-limit:]}
+
+    def _relationship_debug(self, filters: dict[str, Any]) -> dict[str, Any]:
+        """解释当前关系数值和本轮关系变化事件。"""
+        agent_id = self._str_filter(filters, "agentId") or self._str_filter(filters, "targetId") or self._str_filter(filters, "agent_id")
+        limit = self._int_filter(filters, "limit", 20)
+        current = []
+        for target_id, target in self.world.get("agents", {}).items():
+            if agent_id and target_id != agent_id:
+                continue
+            current.append({"targetId": target_id, "targetName": target.get("name", target_id), "relation": get_relation(self.world, "player", target_id)})
+
+        events = []
+        for event in self.event_store.list():
+            if event.get("type") != "relationship.changed":
+                continue
+            payload = event.get("payload", {})
+            if agent_id and payload.get("targetId") != agent_id and payload.get("sourceId") != agent_id:
+                continue
+            events.append({"eventId": event.get("id"), "createdAt": event.get("createdAt"), "payload": payload})
+        return {"current": current, "events": events[-limit:]}
+
+    def _influence_event_debug(self, filters: dict[str, Any], *, skill_id: str | None, event_id: str | None) -> dict[str, Any]:
+        """筛出首日影响链相关事件，供 Debug Console 一屏解释。"""
+        limit = self._int_filter(filters, "limit", 30)
+        agent_id = self._str_filter(filters, "agentId") or self._str_filter(filters, "targetId") or self._str_filter(filters, "agent_id")
+        items = [
+            {
+                "eventId": event.get("id"),
+                "eventType": event.get("type"),
+                "createdAt": event.get("createdAt"),
+                "summary": self._event_debug_summary(event),
+                "payload": event.get("payload", {}),
+            }
+            for event in self.event_store.list()
+            if self._event_matches_influence_filters(event, agent_id=agent_id, skill_id=skill_id, event_id=event_id)
+        ]
+        return {"limit": limit, "items": items[-limit:]}
+
+    def _event_matches_influence_filters(
+        self,
+        event: dict[str, Any],
+        *,
+        agent_id: str | None,
+        skill_id: str | None,
+        event_id: str | None,
+    ) -> bool:
+        """判断事件是否属于玩家首日影响链。"""
+        event_type = str(event.get("type", ""))
+        payload = event.get("payload", {})
+        debug = payload.get("debug") if isinstance(payload, dict) else None
+        tracked_types = {
+            "player.talked",
+            "player.gift_given",
+            "player.event_choice",
+            "player.profile_updated",
+            "relationship.changed",
+            "npc.memory_created",
+            "npc.night_reflection",
+            "npc.dialogue",
+            "town.event_resolved",
+            "debug.turn_recorded",
+            "provider.fallback",
+        }
+        if event_type not in tracked_types:
+            return False
+        if agent_id and agent_id not in {payload.get("agentId"), payload.get("targetId"), payload.get("sourceId")}:
+            if not (isinstance(debug, dict) and debug.get("actorId") == agent_id):
+                return False
+        if skill_id:
+            payload_skill_id = payload.get("skillId") or (debug.get("skillId") if isinstance(debug, dict) else None)
+            if payload_skill_id != skill_id and not (isinstance(debug, dict) and self._debug_matches_skill(debug, skill_id)):
+                if event_type not in {"player.talked", "player.gift_given", "player.profile_updated", "relationship.changed", "npc.dialogue", "debug.turn_recorded"}:
+                    return False
+        if event_id:
+            payload_event_id = payload.get("eventId") or (debug.get("eventId") if isinstance(debug, dict) else None)
+            if payload_event_id and payload_event_id != event_id:
+                return False
+        return True
+
+    def _event_debug_summary(self, event: dict[str, Any]) -> str:
+        """从事件载荷中提取适合 Debug 列表显示的一句话。"""
+        payload = event.get("payload", {})
+        debug = payload.get("debug") if isinstance(payload, dict) else None
+        if isinstance(debug, dict):
+            return self._debug_summary(debug)
+        for key in ("summary", "speech", "text", "message"):
+            if payload.get(key):
+                return str(payload[key])
+        if payload.get("item"):
+            return f"送出 {payload['item'].get('name', payload['item'].get('id', '礼物'))}"
+        if payload.get("delta"):
+            return f"关系变化 {payload['delta']}"
+        return str(event.get("type", ""))
 
     def _event_skill_manifest_payload(self, skill: EventSkillSchema) -> dict[str, Any]:
         """把 Skill manifest 转为 Debug 友好的只读结构。"""
@@ -611,6 +793,11 @@ class AgentRuntime:
             "player.talked",
             {"playerId": player["id"], "targetId": target["id"], "targetName": target["name"], "topic": topic, "message": message},
         )
+        profile_payload, profile_event = self._update_player_profile(
+            "talk",
+            f"主动和 {target['name']} 聊起 {topic}。",
+            tags=["player_profile_memory", "dialogue", topic],
+        )
 
         before_relation = get_relation(self.world, "player", target["id"])
         adjust_relation(self.world, "player", target["id"], {"affection": 2, "trust": 1, "conflict": -1})
@@ -625,6 +812,8 @@ class AgentRuntime:
         relation_event = self.event_store.append("relationship.changed", relationship_payload)
 
         context = build_player_dialogue_context(self.world, target, payload, self.event_store)
+        context["playerProfile"] = self._player_profile_payload()
+        context["memoryEvidence"] = self._dialogue_memory_evidence(target, payload)
         messages = build_player_dialogue_messages(context)
         provider_result, profile, fallback_reason = self._decide_player_dialogue(target, payload, context, messages)
         parsed = parse_provider_output(provider_result)
@@ -652,18 +841,22 @@ class AgentRuntime:
                 "actorId": target["id"],
                 "memoryWrites": [memory_payload],
                 "relationshipDeltas": [relationship_payload],
+                "playerProfile": self._player_profile_payload(),
+                "memoryEvidence": context["memoryEvidence"],
+                "memoryEvidenceUsed": parsed.get("memory_evidence_used"),
             },
         )
         target.setdefault("decisionHistory", []).append(debug)
         target["decisionHistory"] = target["decisionHistory"][-10:]
         debug_event = self.event_store.append("debug.turn_recorded", {"agentId": target["id"], "agentName": target["name"], "debug": debug})
 
-        event_ids = [player_event["id"], relation_event["id"], memory_event["id"], dialogue_event["id"], debug_event["id"]]
+        event_ids = [player_event["id"], profile_event["id"], relation_event["id"], memory_event["id"], dialogue_event["id"], debug_event["id"]]
         self._record_player_history("talk", payload, event_ids)
         return {
             "dialogue": [{"speakerId": target["id"], "speakerName": target["name"], "text": speech}],
             "relationshipDeltas": [relationship_payload],
-            "memoryWrites": [memory_payload],
+            "memoryWrites": [profile_payload, memory_payload],
+            "playerProfile": self._player_profile_payload(),
             "eventIds": event_ids,
         }
 
@@ -683,19 +876,25 @@ class AgentRuntime:
             "after": after_relation,
         }
         gift_event = self.event_store.append("player.gift_given", {"playerId": "player", "targetId": target["id"], "item": item})
+        profile_payload, profile_event = self._update_player_profile(
+            "gift",
+            f"把 {item['name']} 送给 {target['name']}，表现出愿意用实际物品照顾居民。",
+            tags=["player_profile_memory", "gift", item_id, target["id"]],
+        )
         relation_event = self.event_store.append("relationship.changed", relationship_payload)
         memory_text = f"新来的农场主送给我 {item['name']}，这让我对他多了一点好感。"
         remember(target, memory_text, tick=self.world["clock"]["tick"], importance=0.72, tags=["player_gift", item_id])
         memory_payload = {"agentId": target["id"], "agentName": target["name"], "text": memory_text, "tags": ["player_gift", item_id]}
         memory_event = self.event_store.append("npc.memory_created", memory_payload)
         dialogue_event = self.event_store.append("npc.dialogue", {"agentId": target["id"], "agentName": target["name"], "targetId": "player", "speech": f"谢谢你送来的{item['name']}，我会记住这份心意。", "topic": "gift"})
-        event_ids = [gift_event["id"], relation_event["id"], memory_event["id"], dialogue_event["id"]]
+        event_ids = [gift_event["id"], profile_event["id"], relation_event["id"], memory_event["id"], dialogue_event["id"]]
         self._mark_known_npc(target["id"])
         self._record_player_history("give_gift", payload, event_ids)
         return {
             "dialogue": [{"speakerId": target["id"], "speakerName": target["name"], "text": dialogue_event["payload"]["speech"]}],
             "relationshipDeltas": [relationship_payload],
-            "memoryWrites": [memory_payload],
+            "memoryWrites": [profile_payload, memory_payload],
+            "playerProfile": self._player_profile_payload(),
             "eventIds": event_ids,
         }
 
@@ -774,6 +973,12 @@ class AgentRuntime:
                 "consequenceTypes": outcome["consequenceTypes"],
             },
         )
+        profile_payload, profile_event = self._update_player_profile(
+            "festivalChoice",
+            f"在星灯祭供应短缺中选择“{outcome['choiceLabel']}”，小镇会把玩家记为{self._choice_style_label(choice)}。",
+            tags=["player_profile_memory", "festival", skill.event_id, choice],
+            choice=choice,
+        )
 
         relationship_events: list[dict[str, Any]] = []
         relationship_payloads: list[dict[str, Any]] = []
@@ -802,7 +1007,7 @@ class AgentRuntime:
         )
 
         event_ids = (
-            [choice_event["id"]]
+            [choice_event["id"], profile_event["id"]]
             + [item["id"] for item in relationship_events]
             + [item["id"] for item in memory_events]
             + [item["id"] for item in dialogue_events]
@@ -813,7 +1018,7 @@ class AgentRuntime:
         return {
             "dialogue": dialogue_payloads,
             "relationshipDeltas": relationship_payloads,
-            "memoryWrites": memory_payloads + reflection_payloads,
+            "memoryWrites": [profile_payload] + memory_payloads + reflection_payloads,
             "eventResult": {
                 "eventId": event_id,
                 "skillId": skill.skill_id,
@@ -824,7 +1029,98 @@ class AgentRuntime:
                 "debugFields": self._skill_debug_payload(skill, outcome, choice=choice),
             },
             "eventIds": event_ids,
+            "playerProfile": self._player_profile_payload(),
         }
+
+    def _update_player_profile(
+        self,
+        signal: str,
+        evidence_summary: str,
+        *,
+        tags: list[str],
+        choice: str | None = None,
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        """更新轻量玩家风格摘要，并把摘要写入玩家记忆与事件流。"""
+        player = self.world["player"]
+        profile = self._player_profile_payload()
+        raw_profile = player.setdefault("profile", {})
+        signals = raw_profile.setdefault("signals", profile.get("signals", {}))
+        signals[signal] = int(signals.get(signal, 0)) + 1
+        if signal == "gift":
+            signals["help"] = int(signals.get("help", 0)) + 1
+        if choice:
+            style_signal = self._choice_style_signal(choice)
+            signals[style_signal] = int(signals.get(style_signal, 0)) + 1
+
+        evidence = raw_profile.setdefault("evidence", [])
+        evidence.append({"tick": self.world["clock"]["tick"], "type": signal, "summary": evidence_summary, "tags": list(tags)})
+        raw_profile["evidence"] = evidence[-12:]
+        raw_profile["styleSummary"] = self._compose_player_style_summary(signals)
+
+        memory_text = f"玩家风格摘要：{raw_profile['styleSummary']} 最新依据：{evidence_summary}"
+        remember(player, memory_text, tick=self.world["clock"]["tick"], importance=0.74, tags=tags)
+        memory_payload = {
+            "agentId": player.get("id", "player"),
+            "agentName": player.get("name", "玩家"),
+            "text": memory_text,
+            "tags": tags,
+            "profile": self._player_profile_payload(),
+        }
+        event = self.event_store.append("player.profile_updated", memory_payload)
+        return memory_payload, event
+
+    def _compose_player_style_summary(self, signals: dict[str, Any]) -> str:
+        """把玩家行为计数压缩成 NPC 可引用的一句话风格摘要。"""
+        parts: list[str] = []
+        if int(signals.get("talk", 0)) > 0:
+            parts.append("愿意主动认识居民")
+        if int(signals.get("gift", 0)) > 0:
+            parts.append("会用礼物表达善意")
+        if int(signals.get("mediate", 0)) > 0:
+            parts.append("遇到冲突时倾向调解")
+        if int(signals.get("help", 0)) > 0 and int(signals.get("mediate", 0)) == 0:
+            parts.append("遇到困难时倾向直接帮忙")
+        if int(signals.get("support", 0)) > 0:
+            parts.append("会在关键争执里明确站队")
+        if int(signals.get("observe", 0)) > 0:
+            parts.append("面对复杂局势会先观察")
+        if not parts:
+            parts.append("刚搬来晨露农场，风格仍在形成")
+        return "；".join(parts) + "。"
+
+    def _choice_style_signal(self, choice: str) -> str:
+        """把星灯祭选项归类为玩家风格信号。"""
+        if choice == "mediate":
+            return "mediate"
+        if choice in {"support_kai", "support_bram"}:
+            return "support"
+        if choice == "observe":
+            return "observe"
+        return "help"
+
+    def _choice_style_label(self, choice: str) -> str:
+        """给事件结果提供自然语言风格标签。"""
+        return {
+            "mediate": "愿意调解冲突的人",
+            "support_kai": "重视节日气氛的人",
+            "support_bram": "尊重供货底线的人",
+            "observe": "先观察局势的人",
+            "donate_crop": "愿意拿出资源帮忙的人",
+        }.get(choice, "愿意参与小镇事务的人")
+
+    def _dialogue_memory_evidence(self, target: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
+        """为玩家二次对话准备 Memory Summary 与 RAG-lite 证据。"""
+        topic = str(payload.get("topic") or "")
+        message = str(payload.get("message") or "")
+        query = " ".join(part for part in (topic, message) if part).strip()
+        if not query and self.world["player"].get("questFlags", {}).get(DAY1_EVENT_ID):
+            query = "星灯祭 玩家"
+        summary = memory_summary_payload(target["id"], target, limit=8)
+        retrieval = rag_lite_search(self.world, query=query, agent_id=target["id"], limit=5)
+        if not retrieval["items"] and self.world["player"].get("questFlags", {}).get(DAY1_EVENT_ID):
+            query = "星灯祭"
+            retrieval = rag_lite_search(self.world, query=query, agent_id=target["id"], limit=5)
+        return {"query": query, "summary": summary, "ragHits": retrieval["items"]}
 
     def _get_active_event(self, event_id: str) -> dict[str, Any]:
         """按 id 读取当前可交互事件。"""
@@ -1103,6 +1399,8 @@ class AgentRuntime:
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         """按 event_reaction profile 生成事件结算时玩家能看到的关键 NPC 台词。"""
         context = build_event_reaction_context(self.world, event, outcome, choice, self.event_store)
+        context["playerProfile"] = self._player_profile_payload()
+        context["memoryRetrieval"] = rag_lite_search(self.world, query=outcome["summary"], tags=skill.event_id, limit=5)
         messages = build_event_reaction_messages(context)
         profile = self.model_config.resolve_profile(feature="event_reaction")
         rule_result = self._rule_event_reaction(outcome)
@@ -1144,6 +1442,8 @@ class AgentRuntime:
                 "skillId": skill.skill_id,
                 "choice": choice,
                 "skillDebugFields": self._skill_debug_payload(skill, outcome, choice=choice),
+                "playerProfile": self._player_profile_payload(),
+                "memoryEvidence": context["memoryRetrieval"],
             },
         )
         events.append(self.event_store.append("debug.turn_recorded", {"agentId": "system", "agentName": event.get("title", "事件"), "debug": debug}))
@@ -1158,6 +1458,8 @@ class AgentRuntime:
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         """按 night_reflection profile 生成夜间反思摘要，失败时保留 Skill 规则种子。"""
         context = build_night_reflection_context(self.world, event, outcome, choice, self.event_store)
+        context["playerProfile"] = self._player_profile_payload()
+        context["memoryRetrieval"] = rag_lite_search(self.world, query=outcome["summary"], tags=skill.event_id, limit=5)
         messages = build_night_reflection_messages(context)
         profile = self.model_config.resolve_profile(feature="night_reflection")
         rule_result = self._rule_night_reflection(outcome)
@@ -1194,6 +1496,8 @@ class AgentRuntime:
                 "skillId": skill.skill_id,
                 "choice": choice,
                 "skillDebugFields": self._skill_debug_payload(skill, outcome, choice=choice),
+                "playerProfile": self._player_profile_payload(),
+                "memoryEvidence": context["memoryRetrieval"],
             },
         )
         events.append(self.event_store.append("debug.turn_recorded", {"agentId": "system", "agentName": event.get("title", "事件"), "debug": debug}))
@@ -1208,7 +1512,7 @@ class AgentRuntime:
             context=context,
             messages=messages,
             profile=profile,
-            rule_call=lambda: self._rule_player_dialogue(target, payload),
+            rule_call=lambda: self._rule_player_dialogue(target, payload, context),
         )
         return provider_result, profile, fallback_reason
 
@@ -1368,11 +1672,37 @@ class AgentRuntime:
                 message = message.replace(secret, "[REDACTED_SECRET]")
         return message
 
-    def _rule_player_dialogue(self, target: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
+    def _select_dialogue_memory_evidence(self, memory_evidence: dict[str, Any]) -> dict[str, Any] | None:
+        """优先选择 RAG-lite 命中，其次选择 Memory Summary 中的星灯祭记忆。"""
+        hits = memory_evidence.get("ragHits") if isinstance(memory_evidence.get("ragHits"), list) else []
+        for hit in hits:
+            tags = [str(tag) for tag in hit.get("tags", [])]
+            if "starlight_festival_shortage" in tags or "night_reflection" in tags or "player_gift" in tags:
+                return {"source": "rag_lite", "text": hit.get("text", ""), "tags": tags, "score": hit.get("match", {}).get("score")}
+        summary = memory_evidence.get("summary") if isinstance(memory_evidence.get("summary"), dict) else {}
+        summary_text = str(summary.get("summary", ""))
+        if "星灯祭" in summary_text:
+            return {"source": "memory_summary", "text": summary_text, "tags": ["memory_summary"], "score": None}
+        return None
+
+    def _short_debug_text(self, text: str, limit: int = 80) -> str:
+        """压缩 Debug 和规则台词里的证据文本，避免单句过长。"""
+        normalized = " ".join(str(text).split())
+        return normalized if len(normalized) <= limit else normalized[: limit - 1] + "…"
+
+    def _rule_player_dialogue(self, target: dict[str, Any], payload: dict[str, Any], context: dict[str, Any] | None = None) -> dict[str, Any]:
         """生成离线可用的 NPC 回复，方便没有云端密钥时继续开发游戏流程。"""
+        context = context or {}
         topic = str(payload.get("topic") or "free_talk")
         message = str(payload.get("message") or "你好，我刚搬到小镇。")
-        if "医生" in target["job"]:
+        memory_evidence = context.get("memoryEvidence") if isinstance(context.get("memoryEvidence"), dict) else {}
+        evidence_used = self._select_dialogue_memory_evidence(memory_evidence)
+        player_profile = context.get("playerProfile") if isinstance(context.get("playerProfile"), dict) else self._player_profile_payload()
+        if evidence_used:
+            reference = self._short_debug_text(str(evidence_used.get("text", "")), 64)
+            profile_hint = self._short_debug_text(str(player_profile.get("styleSummary", "")), 36)
+            speech = f"我还记得这件事：{reference} 你给我的印象是{profile_hint}"
+        elif "医生" in target["job"]:
             speech = "欢迎来到小镇。刚搬家别太劳累，如果农场生活让你不适应，可以来白桦诊所找我。"
         elif "酒馆" in target["job"] or target["id"] == "kai":
             speech = "新来的农场主？太好了，月猫酒馆今晚也许会有新故事。等你有空，来听我弹一曲吧。"
@@ -1382,7 +1712,14 @@ class AgentRuntime:
             speech = "欢迎你，农场主。需要种子、食材或生活用品时，可以来星露杂货铺找我。"
         else:
             speech = f"欢迎来到 Agent Valley。我听见你说“{message}”，之后我们可以慢慢熟悉。"
-        response = {"speech": speech, "action": "talkTo", "args": {"npc": "player", "topic": topic, "message": speech}, "memory_to_save": f"新来的农场主和我聊了 {topic}，他说：{message[:60]}"}
+        response = {
+            "speech": speech,
+            "action": "talkTo",
+            "args": {"npc": "player", "topic": topic, "message": speech},
+            "memory_to_save": f"新来的农场主和我聊了 {topic}，他说：{message[:60]}",
+        }
+        if evidence_used:
+            response["memory_evidence_used"] = evidence_used
         return {"provider": "RuleDialogueProvider", "rawText": json.dumps(response, ensure_ascii=False), "parsed": response, "usage": {"tokens": 0, "cost": 0, "latencyMs": 1}}
 
     def _sync_player_location(self, payload: dict[str, Any]) -> None:

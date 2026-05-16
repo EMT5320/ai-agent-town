@@ -18,13 +18,16 @@ def memory_summary(agent: dict[str, Any]) -> str:
 def memory_summary_payload(agent_id: str, agent: dict[str, Any], limit: int = 6) -> dict[str, Any]:
     """输出 Debug Console 可直接展示的单个 Agent 记忆摘要。"""
     memories = list(agent.get("memories", []))[-limit:]
-    return {
+    payload = {
         "agentId": agent_id,
         "agentName": agent.get("name", agent_id),
         "memoryCount": len(agent.get("memories", [])),
         "summary": "\n".join(f"D{item.get('tick', 0)}: {item.get('text', '')}" for item in memories),
         "recent": [_memory_payload(agent_id, agent, item) for item in memories],
     }
+    if isinstance(agent.get("profile"), dict):
+        payload["profile"] = _profile_payload(agent["profile"])
+    return payload
 
 
 def world_memory_summaries(world: dict[str, Any], agent_id: str | None = None, limit: int = 6) -> dict[str, Any]:
@@ -92,6 +95,15 @@ def _memory_payload(agent_id: str, agent: dict[str, Any], memory: dict[str, Any]
         "importance": float(memory.get("importance", 0.0)),
         "tags": [str(tag) for tag in memory.get("tags", [])],
         "text": str(memory.get("text", "")),
+    }
+
+
+def _profile_payload(profile: dict[str, Any]) -> dict[str, Any]:
+    """把玩家风格摘要压缩成 Debug 安全结构。"""
+    return {
+        "styleSummary": str(profile.get("styleSummary", "")),
+        "signals": dict(profile.get("signals", {})) if isinstance(profile.get("signals"), dict) else {},
+        "evidence": list(profile.get("evidence", []))[-6:] if isinstance(profile.get("evidence"), list) else [],
     }
 
 
