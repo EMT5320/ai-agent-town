@@ -84,6 +84,7 @@ scope: lane board, write boundaries, and handoff format
 
 | 开发线 | 当前状态 | 下一步 | 主要写入范围 | 禁止/谨慎范围 | 验收命令 |
 | --- | --- | --- | --- | --- | --- |
+| Phase 1 sprint · 活着的世界 | pending | 以 `docs/production_roadmap.md` 为阶段 1 路线源，先落 D1：`LifeActionExecutor` 雏形、`/api/world/tick` 前置设计、`world_clock.gd`、`event_bus.gd`、`world_main.tscn` 骨架；事件通道先用 tick response events，SSE 后置；寻路先用 anchor graph + 直线插值，Navigation2D 后置 | `docs/production_roadmap.md`、`backend/app/simulation/`、必要 `backend/app/runtime/agent_runtime.py` / `backend/app/main.py`、`clients/godot/scenes/`、`clients/godot/scripts/core/`、`clients/godot/scripts/world/`、必要检查脚本 | 不移动旧 `main.tscn` / `main.gd` 原路径；不把世界权威事实放进 GDScript；阶段 1 不让 LLM 驱动 NPC 高频自主行动；不把 SSE 作为 D1-D7 硬依赖 | `npm.cmd run context:check`、后端 tick 单测、`npm.cmd run smoke`、`npm.cmd run client:env`、`npm.cmd run client:run:check`、`git diff --check`，人工录屏验收 |
 | Godot 玩法客户端 | partial | WASD、地图层空地点击、落点标记、单目标高亮、当前场景过滤、动态移动范围、UI 点击穿透、焦点收紧、玩家 / NPC 分离站位槽、玩家出生点上移、收紧交互半径、点击边界修正、靠近滞回、地图上下文候选、`E`/`Space` 执行、`Tab`/`Q` 切换、服务端锚点、`scene_action` 和 `actionFeedback` 已落地；下一步主人复验三场景手感、地图候选动作、农场行动与行动反馈，再推进日程可视化 | `clients/godot/`、必要时 `clients/godot/assets/`、`scripts/check_godot_project.py` | 不在客户端保存权威世界状态；不把后端结算规则复制进 GDScript | `npm.cmd run client:env`、`npm.cmd run client:run:check`、`npm.cmd run check`，人工 `client:run` |
 | Content Codex / NPC 深度卡 | partial | `monologueSeeds` 已接入夜间反思/RAG，`gossipHooks` 已进入对话 `gossipEvidence`、`propagationDraft`、validator 与运行时校验事件，`lifeActionSeeds` / `dailyRumorBeats` / `relationshipBeatSeeds` 已进入 `npcSchedules` / `lifeActionPlan` 快照；下一步用快照驱动 NPC 实际工具行动，并把谣言证据写入记忆 / 关系传播 | `backend/app/content/`、`backend/app/simulation/`、`scripts/check_npc_codex.py`、`backend/app/providers/context_builder.py`、必要 runtime glue、相关 docs | 不写固定剧情节点；不让内容卡直接改世界状态；不伪造资产 id | `npm.cmd run content:check`、`npm.cmd run smoke`、`npm.cmd run check` |
 | 后端 Director / Event Skill | partial | 画像证据、`styleSignal`、事件反应记忆、asset hints、通用 fallback 台词、`event_skill_outcome.v1` outcomeRecord、`npcSchedules` 与 `lifeActionPlan` 只读快照已进入 Skill / Runtime 协作链路；下一步继续迁移结算模板，补 Skill 复用测试 | `backend/app/director/`、`backend/app/skills/`、`backend/app/runtime/agent_runtime.py`、`backend/app/simulation/`、相关测试 | 不让 LLM 直接改世界状态；不破坏旧 `/api/state` 与 Debug 观察台 | `npm.cmd run smoke`、`npm.cmd run check` |
@@ -126,10 +127,11 @@ scope: lane board, write boundaries, and handoff format
 ## 8. 下一轮推荐排程
 
 1. 文档与治理：保持本轮状态收紧后的 checkpoint，后续只记录已验证变化。
-2. Godot 玩法客户端：先复验三场景移动稳定性、地图上下文候选、农场行动和行动反馈，再推进 `lifeActionPlan` 日程可视化。
-3. Content Codex：让生活行动快照驱动 NPC 实际工具行动，再把 `gossip.propagation_validated` 扩展为记忆 / 关系层的第一版谣言传播。
-4. 后端：星灯祭 Skill 数据化下一步继续减少 Runtime 结算硬编码，并保持 Debug 事件证据。
-5. LLM / Debug：保持当前真实 smoke 证据；切换模型、key 或 profile 后再刷新延迟、fallback 和输出质量。
-6. 资产：按 `docs/asset_batches/prompt_ready_export.md` 推进表情差分、生活 UI 组件和行动反馈图标。
+2. Phase 1 sprint：按 `docs/production_roadmap.md` 启动"活着的世界"路线，优先完成 D1-D2 的 tick 闭环和新 `world_main.tscn` 骨架。
+3. Godot 玩法客户端：旧 `main.tscn` / `main.gd` 冻结为 legacy 回滚入口；新体验默认在 `world_main.tscn` 上推进。
+4. Content Codex：阶段 1 只把 `lifeActionSeeds` 作为规则 NPC 行动素材输入；谣言记忆 / 关系扩散留到阶段 2。
+5. 后端：围绕 `LifeActionExecutor`、`runtime.tick(delta_seconds)` 和 `POST /api/world/tick` 做最小增量，不扩写新的复杂 Director 能力。
+6. LLM / Debug：保持当前真实 smoke 证据；阶段 1 不让 LLM 进入高频 NPC 自主 tick。
+7. 资产：按 `docs/asset_batches/prompt_ready_export.md` 推进表情差分、生活 UI 组件和行动反馈图标，但不阻塞阶段 1 的 NPC 行动体感闭环。
 
 白天整合后的详细交接和可直接投喂的 goal 见 `docs/daytime_integration_handoff.md`。

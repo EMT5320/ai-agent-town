@@ -21,6 +21,7 @@ scope: 文档分层索引与渐进式读取路线
 ## 2. 决策源文档
 
 - [`project_vision.md`](./project_vision.md)：最高优先级产品愿景，定义长期方向、体验目标和成功标准。
+- [`production_roadmap.md`](./production_roadmap.md)：生产化阶段路线和阶段 1 "活着的世界"执行依据，取代旧执行计划的路线源角色。
 - [`open_questions.md`](./open_questions.md)：已确认决策、剩余问题和实现中验证点。
 - [`vertical_slice_spec.md`](./vertical_slice_spec.md)：第一版可玩切片规格、数据契约、验收边界和扩展性要求。
 
@@ -35,6 +36,7 @@ scope: 文档分层索引与渐进式读取路线
 ### Godot 客户端
 
 - [`gameplay_system_architecture.md`](./gameplay_system_architecture.md)：游戏本体架构、地图主循环、软日程 NPC、玩法系统闭环和 Godot / 后端边界。
+- [`production_roadmap.md`](./production_roadmap.md)：阶段 1 客户端推翻范围、`world_main.tscn` 并行策略、tick 事件通道和 30 秒验收标尺。
 - [`game_client_environment.md`](./game_client_environment.md)：Godot 客户端环境、启动方式和检查命令。
 - [`../clients/godot/README.md`](../clients/godot/README.md)：Godot 工程本地说明。
 
@@ -92,6 +94,7 @@ scope: 文档分层索引与渐进式读取路线
 | [`model_profile_template_guide.md`](./model_profile_template_guide.md) | active | llm-debug | on-demand | true |
 | [`npc_deep_card_spec.md`](./npc_deep_card_spec.md) | active | content-codex | on-demand | true |
 | [`open_questions.md`](./open_questions.md) | active | decisions | on-demand | true |
+| [`production_roadmap.md`](./production_roadmap.md) | active | planning | on-demand | true |
 | [`project_vision.md`](./project_vision.md) | active | vision | on-demand | true |
 | [`README.md`](./README.md) | active | context-governance | index | true |
 | [`skill_strategy.md`](./skill_strategy.md) | active | context-governance | on-demand | false |
@@ -104,6 +107,7 @@ scope: 文档分层索引与渐进式读取路线
 - 项目方向升级为“LLM 驱动 NPC 的二次元轻幻想轻异世界田园生活模拟 RPG 垂直切片”。
 - 核心系统定调为“多层 Agent 游戏系统”：World / Simulation 层持有权威状态，Director System 低频规划节奏和事件 Skill，NPC Agents 在自身记忆与 brief 内自主行动。
 - 游戏本体定调为“涌现式田园生活模拟”：玩家在地图上移动、靠近对象并触发交互；NPC 出现和行动由软日程权重、世界约束、导演层节奏、Event Skill 和 NPC 自主判断共同生成。
+- 生产化执行轴已切到 `production_roadmap.md`：阶段 1 目标是"活着的世界"，通过并行新建 `world_main.tscn`、客户端驱动 tick、tick response events、anchor graph + 直线插值，让玩家在 30 秒内看到 NPC 迁徙和行动。
 - 项目按正式游戏骨架推进，重要节点需要考虑后续 NPC、地点、事件、资产、系统玩法和 Debug 能力扩展。
 - Python Agent Runtime 继续承担世界、Agent、记忆、事件、Provider 与调试记录。
 - 事件按 Skill 渐进式加载：平时只暴露触发条件，满足条件后加载完整事件 brief、工具、约束、后果类型和资产提示。

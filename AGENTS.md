@@ -7,7 +7,7 @@
 - 项目名：`Agent Valley`。
 - 当前方向：二次元轻幻想轻异世界田园生活模拟 RPG。
 - 技术骨架：Godot 4.x 客户端 + Python Agent Server + Web Debug / 研究控制台。
-- 当前阶段：第一版垂直切片收束，重点是把可运行原型收紧成可人工验收的一天游戏闭环。
+- 当前阶段：生产化阶段 1 启动，重点是把 UI 看板式原型纠偏为可演示的"活着的世界"。
 
 ## 2. 新会话启动协议
 
@@ -30,12 +30,13 @@
 ### 决策源
 
 - `docs/project_vision.md`：产品愿景、长期方向和成功标准。
+- `docs/production_roadmap.md`：生产化阶段路线、Phase 1 sprint 执行依据和 30 秒玩家体感验收标尺。
 - `docs/open_questions.md`：已确认决策、剩余问题和实现中验证点。
 
 ### 按任务线读取
 
 - 后端 / Director / Event Skill：`docs/agentic_game_design.md`、`docs/vertical_slice_spec.md`、`backend/`、`scripts/check.py`。
-- Godot 客户端：`docs/gameplay_system_architecture.md`、`docs/game_client_environment.md`、`clients/godot/README.md`、`clients/godot/`。
+- Godot 客户端 / Phase 1 sprint：`docs/production_roadmap.md`、`docs/gameplay_system_architecture.md`、`docs/game_client_environment.md`、`clients/godot/README.md`、`clients/godot/`。
 - 内容 / NPC 深度卡：`docs/game_content_storyline.md`、`docs/npc_deep_card_spec.md`、`backend/app/content/`。
 - LLM / Debug：`docs/model_profile_template_guide.md`、`config/`、`backend/app/providers/`、Debug API 相关代码。
 - 资产管线：`docs/art_direction.md`、`docs/asset_generation_prompts.md`、`docs/initial_asset_generation_plan.md`、`assets/manifests/asset_manifest.json`。

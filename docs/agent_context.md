@@ -16,6 +16,7 @@ scope: new-session entrypoint, boundaries, commands, and next steps
 
 - 先读本文，再按任务线读取源文档。
 - 长期方向以 `docs/project_vision.md` 为准。
+- 生产化阶段路线与阶段 1 执行轴以 `docs/production_roadmap.md` 为准。
 - 当前事实以 `docs/current_status.md` 为准。
 - 并行写入范围以 `docs/goal_board.md` 为准。
 - 游戏内容剧本线以 `docs/game_content_storyline.md` 为准。
@@ -24,7 +25,7 @@ scope: new-session entrypoint, boundaries, commands, and next steps
 
 ## 2. 一句话定位
 
-`Agent Valley` 是一个由 Godot 承担玩家体验、Python Agent Server 承担权威世界状态与 LLM NPC 的二次元轻幻想田园生活模拟 RPG。当前目标是把早期多 Agent 观察台收束成可玩、可扩展、可调试的第一天垂直切片。
+`Agent Valley` 是一个由 Godot 承担玩家体验、Python Agent Server 承担权威世界状态与 LLM NPC 的二次元轻幻想田园生活模拟 RPG。当前生产化主轴是把早期 UI 看板式体验纠偏为"活着的世界"：玩家能在地图中观察 NPC 迁徙、行动和社会连锁反应。
 
 ## 3. 当前已验证事实
 
@@ -131,9 +132,9 @@ git diff --check
 ## 6. 下一轮最短开发入口
 
 1. 固定离线基线：运行 `npm.cmd run context:check`、`npm.cmd run check`、`npm.cmd run smoke`、`npm.cmd run asset:check`、`npm.cmd run client:env`、`npm.cmd run client:run:check`。
-2. 当前 checkpoint：真实 Godot 窗口上一版已由主人验收，点击落点已由主人确认正常；本轮新增地图上下文动作、快捷键执行、场景行动和行动反馈，仍需主人窗口复验。
-3. Godot 玩法线：WASD 独立移动、当前场景空地点落点、落点标记、单个最近交互目标高亮、当前场景角色/事件过滤、动态舞台移动范围、玩家 / NPC 分离站位、玩家出生点上移、收紧交互半径、靠近滞回、地图上下文候选、服务端锚点、场景行动和行动反馈卡已落地，下一步推进日程可视化。
-4. 内容线：`monologueSeeds` 已接入夜间反思 RAG，`gossipHooks` 已进入对话 `gossipEvidence`、传播草案、validator 与运行时校验事件；Day 1 生活行动 / 谣言 / 关系节拍素材已进入 `npcSchedules` / `lifeActionPlan` 快照，下一步驱动 NPC 行动与实际谣言传播记忆 / 关系扩散。
-5. 后端线：星灯祭画像证据、`styleSignal`、事件反应记忆、asset hints 和通用 fallback 台词模板已迁入 Skill，下一步继续迁移更多结算模板并补复用测试。
-6. LLM / Debug 线：真实 smoke 已跑通；如切换模型、key 或 profile，再重新记录 dialogue / event_reaction / night_reflection 延迟、fallback 和成本估计。
-7. 资产线：按 `docs/asset_batches/prompt_ready_export.md` 生成并筛选 `happy` / `troubled` 表情差分、生活 UI 组件和行动反馈图标。
+2. 生产化计划入口：读取 `docs/production_roadmap.md`，确认阶段 1 "活着的世界"关键决策未变化；阶段 1 内该文档是路线源。
+3. Phase 1 sprint 主线：并行新建 `world_main.tscn`，旧 `main.tscn` / `main.gd` 保留原路径并标记 legacy；默认不继续扩写旧 UI 主导布局。
+4. D1 第一动作：新建 `backend/app/simulation/life_action_executor.py` 雏形与单元测试；并行新建 `clients/godot/scripts/core/world_clock.gd`、`event_bus.gd` 和 `world_main.tscn` 骨架。
+5. 阶段 1 事件通道：先用 `/api/world/tick` 响应里的 events 驱动 Godot `EventBus`；SSE 作为独立长连接增强，完成基础 tick 闭环后再接。
+6. 阶段 1 表现通道：NPC Controller 先使用 anchor graph + 直线插值、头顶动作图标和 idle bobbing；Navigation2D 进入后置增强清单。
+7. 30 秒验收标尺：玩家不操作时能看到至少 3 个 NPC 在大地图上走动或做事，玩家可暂停 / 恢复世界时间，并能靠近 NPC 按 `E` 弹出 VN 对话。
