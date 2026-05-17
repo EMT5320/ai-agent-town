@@ -1,7 +1,7 @@
 ---
 status: active
 owner_lane: context-governance
-last_verified: 2026-05-16
+last_verified: 2026-05-17
 startup_load: first-read
 source_of_truth: true
 scope: new-session entrypoint, boundaries, commands, and next steps
@@ -37,7 +37,7 @@ scope: new-session entrypoint, boundaries, commands, and next steps
 - Runtime 会运行规则版 Director v0，并写入 `director.digest_created`、`director.beat_created`、`director.beat_validated`、`director.beat_consumed`、`director.beat_discarded`。
 - 已有单个 Event Skill：`event.starlight_festival_shortage`，定义位于 `backend/app/skills/event_skill_registry.py`。
 - 星灯祭事件当前支持查看、选择、关系变化、记忆写入、事件反应、夜间反思和结算记录。
-- 星灯祭 Event Skill 已承载玩家画像证据模板、事件反应记忆模板、asset hints 与通用 fallback 台词模板，Runtime 继续负责执行、校验和格式化。
+- 星灯祭 Event Skill 已承载玩家画像证据模板、玩家风格信号 `styleSignal`、事件反应记忆模板、asset hints 与通用 fallback 台词模板，Runtime 继续负责执行、校验和格式化。
 
 ### Content Codex / NPC 深度卡
 
@@ -47,7 +47,7 @@ scope: new-session entrypoint, boundaries, commands, and next steps
 - Runtime 初始化会把深度卡挂到 `agent.deepCard`；玩家对话 Prompt 会读取 `voiceStyle`、`archetype`、`speechQuirks`、`innerContradiction`。
 - 送礼会根据深度卡 `giftReactions` 匹配反应档，玩家对话与送礼结果会返回 `relationshipStage`。
 - `monologueSeeds` 已接入夜间反思上下文和 compact memory evidence；规则 fallback 可独立引用独白素材生成反思。
-- `gossipHooks` 已完成首版可消费闭环：内容校验加严，玩家对话上下文会提供 `gossipEvidence`，smoke 已覆盖 prompt 注入。
+- `gossipHooks` 已完成首版可消费闭环：内容校验加严，玩家对话上下文会提供 `gossipEvidence`、选择理由、传播草案和 `gossip_propagation` 输出契约，smoke 已覆盖 prompt 注入。
 - `npm.cmd run content:check` 与 `npm.cmd run check` 已覆盖 NPC 深度卡结构、seed membership、gossip hooks 可用性、资产引用 warning 和 smoke 集成。
 
 ### LLM / Debug
@@ -66,10 +66,11 @@ scope: new-session entrypoint, boundaries, commands, and next steps
 - 已支持地点按钮、背景切换、NPC 选择、VN 风格底部对话面板、聊天动作提交。
 - 已新增事件区：展示 `activeEvents`、调用 `inspect` 查看星灯祭事件、渲染 choices、调用 `attend_event` 并展示 NPC 台词、关系变化、记忆写入和夜间反思摘要。
 - 已接入地图角色层：玩家和 6 个首发 NPC 的 `map_idle` 小人、talk / gift / event 交互 marker、NPC 点击入口均已进入主场景。
-- 已新增本地地图移动与靠近反馈：WASD 独立连续移动、当前场景空地点击落点、落点标记、靠近 NPC / 事件后交互高亮；该坐标只用于客户端表现，不改变后端权威状态。
+- 已新增本地地图移动与靠近反馈：WASD 独立连续移动、当前场景空地点击落点、落点标记、靠近最近 NPC / 事件后交互高亮；该坐标只用于客户端表现，不改变后端权威状态。
 - 角色小人的淡黄色矩形背景已移除，靠近反馈改用 sprite tint 与 marker 状态表达。
 - 地图角色层按当前 `selected_location_id` 过滤 NPC 和事件 marker，玩家可移动范围已扩大到当前舞台主体区域，避开左右 UI 和底部 VN 面板。
-- `npm.cmd run client:env` 和 `npm.cmd run client:run:check` 已通过；2026-05-16 主人已完成上一版真实窗口人工验收，本轮 WASD、落点标记、场景过滤和移动范围仍需主人复验。
+- 地图层已补 UI 点击穿透和按钮禁用键盘焦点，降低空地点击被透明 UI 吃掉、移动键被按钮焦点干扰的概率。
+- `npm.cmd run client:env` 和 `npm.cmd run client:run:check` 已通过；2026-05-16 主人已完成上一版真实窗口人工验收，2026-05-17 本轮点击落点、单目标高亮和移动稳定性仍需主人复验。
 
 ### 资产与文档治理
 
@@ -123,9 +124,9 @@ git diff --check
 ## 6. 下一轮最短开发入口
 
 1. 固定离线基线：运行 `npm.cmd run context:check`、`npm.cmd run check`、`npm.cmd run smoke`、`npm.cmd run asset:check`、`npm.cmd run client:env`、`npm.cmd run client:run:check`。
-2. 当前 checkpoint：真实 Godot 窗口上一版已由主人验收，本轮修复了 WASD、地图层点击、当前场景过滤和移动范围，仍需主人窗口复验。
-3. Godot 玩法线：WASD 独立移动、当前场景空地点落点、落点标记、当前场景角色/事件过滤和更大舞台移动范围已落地，下一步推进服务端锚点契约、行动反馈卡和日程可视化。
-4. 内容线：`monologueSeeds` 已接入夜间反思 RAG，`gossipHooks` 已进入对话 `gossipEvidence`，下一步做实际谣言传播事件/记忆写入。
-5. 后端线：星灯祭画像证据、事件反应记忆、asset hints 和通用 fallback 台词模板已迁入 Skill，下一步继续迁移更多结算模板并补复用测试。
+2. 当前 checkpoint：真实 Godot 窗口上一版已由主人验收，本轮继续修复空地点击被 UI 吃掉、近距离多 NPC 高亮抖动和移动键焦点干扰，仍需主人窗口复验。
+3. Godot 玩法线：WASD 独立移动、当前场景空地点落点、落点标记、单个最近交互目标高亮、当前场景角色/事件过滤和更大舞台移动范围已落地，下一步推进服务端锚点契约、行动反馈卡和日程可视化。
+4. 内容线：`monologueSeeds` 已接入夜间反思 RAG，`gossipHooks` 已进入对话 `gossipEvidence` 与传播草案，下一步做实际谣言传播事件/记忆写入。
+5. 后端线：星灯祭画像证据、`styleSignal`、事件反应记忆、asset hints 和通用 fallback 台词模板已迁入 Skill，下一步继续迁移更多结算模板并补复用测试。
 6. LLM / Debug 线：真实 smoke 已跑通；如切换模型、key 或 profile，再重新记录 dialogue / event_reaction / night_reflection 延迟、fallback 和成本估计。
 7. 资产线：优先完成 batch 1b 的 `happy` / `troubled` 表情差分、UI 组件和玩法反馈图标。

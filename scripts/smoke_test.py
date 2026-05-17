@@ -16,6 +16,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "backend"))
 from app.director import DirectorBeat, WorldDigest  # noqa: E402
 from app.config.model_config import ModelConfigStore  # noqa: E402
 from app.main import create_handler, create_town_app  # noqa: E402
+from app.providers.context_builder import build_player_dialogue_context  # noqa: E402
 from app.skills import STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID  # noqa: E402
 
 REQUIRED_DEBUG_FIELDS = {
@@ -147,6 +148,47 @@ def assert_feature_debug(state: dict, feature: str) -> dict:
     if not isinstance(debug["usage"], dict):
         raise RuntimeError(f"{feature} Debug usage 应为对象")
     return debug
+
+
+def assert_gossip_propagation_contract(app) -> None:
+    """确认 gossipEvidence 已提供最小传播闭环的调试契约。"""
+    world = app.runtime.world
+    npc = world["agents"]["kai"]
+    context = build_player_dialogue_context(
+        world,
+        npc,
+        {
+            "type": "talk",
+            "topic": "festival_debt_rumor",
+            "message": "昨晚酒馆账单和星灯祭准备是不是又有新消息？",
+        },
+        app.runtime.event_store,
+    )
+    gossip = context.get("gossipEvidence")
+    if not isinstance(gossip, dict):
+        raise RuntimeError("gossipEvidence 应为对象")
+    if not isinstance(gossip.get("selectionMeta"), dict):
+        raise RuntimeError("gossipEvidence.selectionMeta 应为对象")
+    contract = gossip.get("propagationRecordContract")
+    if not isinstance(contract, dict):
+        raise RuntimeError("gossipEvidence.propagationRecordContract 应为对象")
+    for field in ("recordVersion", "requiredFields", "directionEnum"):
+        if field not in contract:
+            raise RuntimeError(f"gossipEvidence.propagationRecordContract 缺少字段：{field}")
+    items = gossip.get("items")
+    if not isinstance(items, list) or not items:
+        raise RuntimeError("gossipEvidence.items 应为非空数组")
+    first = items[0]
+    if not isinstance(first.get("selectionReasons"), list) or not first["selectionReasons"]:
+        raise RuntimeError("gossipEvidence.items[].selectionReasons 应提供选中理由")
+    draft = first.get("propagationDraft")
+    if not isinstance(draft, dict):
+        raise RuntimeError("gossipEvidence.items[].propagationDraft 应为对象")
+    for field in ("recordVersion", "hookId", "targetNpcIds", "direction", "allowedDirections"):
+        if field not in draft:
+            raise RuntimeError(f"gossipEvidence.items[].propagationDraft 缺少字段：{field}")
+    if not isinstance(draft.get("targetNpcIds"), list):
+        raise RuntimeError("gossipEvidence.items[].propagationDraft.targetNpcIds 应为数组")
 
 
 def assert_client_context_fields(payload: dict, label: str) -> None:
@@ -480,6 +522,7 @@ app = create_town_app(provider_mode="rule")
 initial = app.get_public_state()
 if len(initial["agents"]) != 10:
     raise RuntimeError(f"期望 10 个初始 Agent，实际得到 {len(initial['agents'])}")
+assert_gossip_propagation_contract(app)
 
 game_state = app.get_game_state()
 assert_game_state_contract(game_state, "/api/world/state")
@@ -623,6 +666,10 @@ if "voiceStyle" not in dialogue_prompt or "speechQuirks" not in dialogue_prompt:
     raise RuntimeError("对话 Prompt 应包含 NPC 深度卡 voiceStyle 和 speechQuirks")
 if "gossipEvidence" not in dialogue_prompt:
     raise RuntimeError("对话 Prompt 应包含 gossipEvidence，便于谣言传播原型提供上下文素材")
+if "propagationRecordContract" not in dialogue_prompt or "selectionReasons" not in dialogue_prompt:
+    raise RuntimeError("对话 Prompt 应包含谣言传播契约与选中理由，便于最小传播闭环调试")
+if "gossip_propagation" not in dialogue_prompt:
+    raise RuntimeError("对话 Prompt 应声明 gossip_propagation 输出字段")
 if not talk["result"].get("playerProfile", {}).get("styleSummary"):
     raise RuntimeError("玩家对话后应更新 Player Profile")
 if not talk["result"].get("relationshipStage", {}).get("stage"):
@@ -670,9 +717,11 @@ event_result_debug_fields = {
     for item in event_result["result"]["eventResult"].get("debugFields", [])
     if isinstance(item, dict) and item.get("id")
 }
-for field_id in ("profileEvidence", "fallbackMemory"):
+for field_id in ("styleSignal", "profileEvidence", "fallbackMemory"):
     if field_id not in event_result_debug_fields:
         raise RuntimeError(f"星灯祭事件结算 Debug 字段应包含 {field_id}")
+if event_result_debug_fields["styleSignal"] != "help":
+    raise RuntimeError("星灯祭 donate_crop 结算应透出 Skill 声明的 styleSignal=help")
 if not all(item.get("skillId") == STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID for item in event_result["result"]["memoryWrites"] if item.get("agentId") != "player"):
     raise RuntimeError("星灯祭记忆写入应记录来源 Skill")
 if "直接帮忙" not in event_result["result"].get("playerProfile", {}).get("styleSummary", "") and "实际" not in event_result["result"].get("playerProfile", {}).get("styleSummary", ""):
@@ -737,6 +786,19 @@ skill_debug = app.debug_skill_explain({"skillId": STARLIGHT_FESTIVAL_SHORTAGE_SK
 for action_name in ("inspect", "attend_event", "event_reaction", "night_reflection"):
     if action_name not in skill_debug["actions"]:
         raise RuntimeError(f"Skill 解释接口应覆盖 {action_name}")
+mediate_preview = next(
+    (item for item in skill_debug["actions"]["attend_event"]["outcomes"] if item.get("choice") == "mediate"),
+    None,
+)
+if not mediate_preview:
+    raise RuntimeError("Skill 解释接口应包含 mediate 结算预览")
+mediate_debug_fields = {
+    str(item.get("id")): str(item.get("value"))
+    for item in mediate_preview.get("debugFields", [])
+    if isinstance(item, dict) and item.get("id")
+}
+if mediate_debug_fields.get("styleSignal") != "mediate":
+    raise RuntimeError("Skill 解释接口应返回 registry 声明的 mediate styleSignal")
 skill_lifecycle_stages = {item["stage"] for item in app.debug_skills({"skillId": STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID})["items"][0]["lifecycle"]}
 for required_stage in ("registered", "inspect", "attend_event", "event_reaction_debug", "night_reflection_debug"):
     if required_stage not in skill_lifecycle_stages:

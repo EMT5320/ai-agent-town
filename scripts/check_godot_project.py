@@ -54,6 +54,8 @@ checks = {
     "main proximity feedback": "_update_map_proximity_feedback" in main_script and "MapMoveHint" in main_script,
     "main wasd input move": "_ensure_local_input_actions" in main_script and "move_left" in main_script and "move_down" in main_script,
     "main direct map click target": "_on_map_character_layer_gui_input" in main_script and "gui_input.connect" in main_script,
+    "main ui click-through": "mouse_filter = Control.MOUSE_FILTER_IGNORE" in main_script and "Control.FOCUS_NONE" in main_script,
+    "main single proximity target": "nearest_npc_actor" in main_script and "nearest_event_marker" in main_script,
     "main current-scene actor filter": "npc_location != selected_location_id" in main_script and "event_location != selected_location_id" in main_script,
     "main wider walk area": "_clamp_point_to_walk_area" in main_script and "PLAYER_LOCAL_ZONE_RADIUS" not in main_script,
     "main click target marker": "PlayerMoveTarget" in main_script,

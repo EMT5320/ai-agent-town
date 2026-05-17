@@ -94,6 +94,7 @@ def _check_gossip_hook_readiness(cards: dict) -> None:
 
         seen_hook_ids: set[str] = set()
         has_town_known = False
+        has_multi_target_hook = False
         for hook in hooks:
             hook_id = str(getattr(hook, "hook_id", "")).strip()
             summary = str(getattr(hook, "summary", "")).strip()
@@ -112,6 +113,8 @@ def _check_gossip_hook_readiness(cards: dict) -> None:
                 raise SystemExit(f"[npc-codex-check] {npc_id}.{hook_id} gossipHooks.visibility 非法：{visibility}")
             if visibility == "town_known":
                 has_town_known = True
+            if len(spread_affinity) >= 2:
+                has_multi_target_hook = True
 
             if not spread_affinity:
                 raise SystemExit(f"[npc-codex-check] {npc_id}.{hook_id} gossipHooks.spreadAffinity 至少 1 项")
@@ -125,6 +128,8 @@ def _check_gossip_hook_readiness(cards: dict) -> None:
 
         if not has_town_known:
             raise SystemExit(f"[npc-codex-check] {npc_id} gossipHooks 至少需要 1 条 town_known 话题")
+        if not has_multi_target_hook:
+            raise SystemExit(f"[npc-codex-check] {npc_id} gossipHooks 至少需要 1 条 spreadAffinity>=2 的话题")
 
 
 def main() -> None:

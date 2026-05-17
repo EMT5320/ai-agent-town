@@ -1693,6 +1693,7 @@ class AgentRuntime:
             outcome["profileEvidence"],
             tags=["player_profile_memory", "festival", skill.event_id, choice],
             choice=choice,
+            style_signal=outcome.get("styleSignal"),
         )
 
         relationship_events: list[dict[str, Any]] = []
@@ -1754,6 +1755,7 @@ class AgentRuntime:
         *,
         tags: list[str],
         choice: str | None = None,
+        style_signal: str | None = None,
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         """更新轻量玩家风格摘要，并把摘要写入玩家记忆与事件流。"""
         player = self.world["player"]
@@ -1763,9 +1765,11 @@ class AgentRuntime:
         signals[signal] = int(signals.get(signal, 0)) + 1
         if signal == "gift":
             signals["help"] = int(signals.get("help", 0)) + 1
-        if choice:
-            style_signal = self._choice_style_signal(choice)
-            signals[style_signal] = int(signals.get(style_signal, 0)) + 1
+        resolved_style_signal = style_signal.strip() if isinstance(style_signal, str) else ""
+        if not resolved_style_signal and choice:
+            resolved_style_signal = self._choice_style_signal_from_choice(choice)
+        if resolved_style_signal:
+            signals[resolved_style_signal] = int(signals.get(resolved_style_signal, 0)) + 1
 
         evidence = raw_profile.setdefault("evidence", [])
         evidence.append({"tick": self.world["clock"]["tick"], "type": signal, "summary": evidence_summary, "tags": list(tags)})
@@ -1803,25 +1807,26 @@ class AgentRuntime:
             parts.append("刚搬来晨露农场，风格仍在形成")
         return "；".join(parts) + "。"
 
-    def _choice_style_signal(self, choice: str) -> str:
-        """把星灯祭选项归类为玩家风格信号。"""
-        if choice == "mediate":
+    def _choice_style_signal_from_choice(self, choice: str) -> str:
+        """给旧数据兼容保留的选项到风格信号映射。"""
+        return {
+            "mediate": "mediate",
+            "support_kai": "support",
+            "support_bram": "support",
+            "observe": "observe",
+            "donate_crop": "help",
+        }.get(choice, "help")
+
+    def _choice_style_signal_from_option(self, option: EventPlayerOption) -> str:
+        """从选项后果类型推断玩家风格信号，降低 Runtime 对固定选项 id 的依赖。"""
+        consequence_types = {str(consequence.consequence_type) for consequence in option.consequences}
+        if "mediate" in consequence_types:
             return "mediate"
-        if choice in {"support_kai", "support_bram"}:
+        if "support" in consequence_types or "stability" in consequence_types:
             return "support"
-        if choice == "observe":
+        if "observe" in consequence_types:
             return "observe"
         return "help"
-
-    def _choice_style_label(self, choice: str) -> str:
-        """给事件结果提供自然语言风格标签。"""
-        return {
-            "mediate": "愿意调解冲突的人",
-            "support_kai": "重视节日气氛的人",
-            "support_bram": "尊重供货底线的人",
-            "observe": "先观察局势的人",
-            "donate_crop": "愿意拿出资源帮忙的人",
-        }.get(choice, "愿意参与小镇事务的人")
 
     def _dialogue_memory_evidence(self, target: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
         """为玩家二次对话准备 Memory Summary 与 RAG-lite 证据。"""
@@ -1885,34 +1890,40 @@ class AgentRuntime:
         choice_label = self._format_skill_text(outcome_def.choice_label_template, base_context)
         summary_context = dict(base_context, choiceLabel=choice_label)
         summary = self._format_skill_text(outcome_def.summary_template, summary_context)
+        style_signal_template = outcome_def.player_style_signal.strip() if isinstance(outcome_def.player_style_signal, str) else ""
+        style_signal = style_signal_template or self._choice_style_signal_from_option(option)
         style_label_template = outcome_def.player_style_label.strip() if isinstance(outcome_def.player_style_label, str) else ""
         if style_label_template:
-            style_label = self._format_skill_text(style_label_template, dict(summary_context, summary=summary))
+            style_label = self._format_skill_text(
+                style_label_template,
+                dict(summary_context, summary=summary, styleSignal=style_signal),
+            )
         else:
-            style_label = self._choice_style_label(option.option_id)
+            style_label = "愿意参与小镇事务的人"
         profile_evidence_template = (
             outcome_def.profile_evidence_template.strip() if isinstance(outcome_def.profile_evidence_template, str) else ""
         )
         if profile_evidence_template:
             profile_evidence = self._format_skill_text(
                 profile_evidence_template,
-                dict(summary_context, summary=summary, styleLabel=style_label),
+                dict(summary_context, summary=summary, styleLabel=style_label, styleSignal=style_signal),
             )
         else:
-            profile_evidence = f"在星灯祭供应短缺中选择“{choice_label}”，小镇会把玩家记为{style_label}。"
+            profile_evidence = f"在事件“{skill.title}”中选择“{choice_label}”，小镇会把玩家记为{style_label}。"
         reaction_memory_template = (
             outcome_def.reaction_memory_template.strip() if isinstance(outcome_def.reaction_memory_template, str) else ""
         )
         if reaction_memory_template:
             fallback_memory = self._format_skill_text(
                 reaction_memory_template,
-                dict(summary_context, summary=summary, styleLabel=style_label),
+                dict(summary_context, summary=summary, styleLabel=style_label, styleSignal=style_signal),
             )
         else:
             fallback_memory = f"事件结算：{summary}"
         context = dict(
             summary_context,
             summary=summary,
+            styleSignal=style_signal,
             styleLabel=style_label,
             profileEvidence=profile_evidence,
             fallbackMemory=fallback_memory,
@@ -1950,6 +1961,7 @@ class AgentRuntime:
             "choice": option.option_id,
             "choiceLabel": choice_label,
             "summary": summary,
+            "styleSignal": style_signal,
             "styleLabel": style_label,
             "profileEvidence": profile_evidence,
             "fallbackMemory": fallback_memory,
@@ -2076,6 +2088,7 @@ class AgentRuntime:
             "choice": choice,
             "choiceLabel": outcome.get("choiceLabel") if outcome else "",
             "summary": outcome.get("summary") if outcome else skill.brief,
+            "styleSignal": outcome.get("styleSignal") if outcome else "",
             "styleLabel": outcome.get("styleLabel") if outcome else "",
             "profileEvidence": outcome.get("profileEvidence") if outcome else "",
             "fallbackMemory": outcome.get("fallbackMemory") if outcome else "",

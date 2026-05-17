@@ -1,7 +1,7 @@
 ---
 status: active
 owner_lane: decisions
-last_verified: 2026-05-16
+last_verified: 2026-05-17
 startup_load: on-demand
 source_of_truth: true
 scope: confirmed decisions, unresolved questions, and validation points
@@ -91,7 +91,7 @@ scope: confirmed decisions, unresolved questions, and validation points
 ### Godot Spike 验证
 
 - 2026-05-16 主人已完成上一版真实 Godot 窗口人工验收，基础通信、地点切换、NPC 选择、对话和事件展示基本可用。
-- 本轮代码已补 WASD 独立移动、地图层直接点击当前场景空地落点、落点标记、当前场景角色/事件过滤和更大舞台移动范围；这些体验仍需主人窗口复验。
+- 本轮代码已补 WASD 独立移动、地图层直接点击当前场景空地落点、落点标记、当前场景角色/事件过滤、更大舞台移动范围、UI 点击穿透和单个最近目标高亮；这些体验仍需主人窗口复验。
 - 下一轮验证重点：服务端锚点契约、靠近交互、行动反馈和日程可视化是否能把体验推进到可玩的生活模拟。
 - Godot 与后端状态同步在新增坐标、交互半径、行动冷却和日程状态后是否仍顺手。
 
@@ -110,7 +110,7 @@ scope: confirmed decisions, unresolved questions, and validation points
 - WorldDigest、事件摘要、关系记忆和 RAG 检索能否让导演层避免读取全量日志。
 - Validator 是否能拦住越权工具调用、过期 Beat 和不符合世界状态的规划。
 - Event Skill 数据结构是否能复用到后续节日、委托、危机和恋爱铺垫事件。
-- `gossipEvidence` 目前只进入对话上下文，后续是否写入公共事件、NPC 记忆或关系网络扩散。
+- `gossipEvidence` 目前进入对话上下文并提供传播草案，后续是否写入公共事件、NPC 记忆或关系网络扩散。
 
 ### 视觉资产验证
 
@@ -150,7 +150,7 @@ scope: confirmed decisions, unresolved questions, and validation points
 
 当前信息已经足够进入正式开发。后续讨论可以围绕实现中出现的具体分歧展开：
 
-1. 复验 Godot WASD 移动、空地落点、当前场景过滤和移动范围后，确认地图表现方案和同步频率。
+1. 复验 Godot 空地点击落点、单目标高亮、当前场景过滤和移动稳定性后，确认地图表现方案和同步频率。
 2. 规则版 Director v0 跑通后确认 Director Beat schema、过期策略和队列消费方式。
 3. 星灯祭事件继续迁移为 Event Skill 数据后确认事件系统是否足以扩展到后续节日、委托和危机事件。
 4. LLM 首轮实测后确认模型名、成本、延迟和 fallback 策略。
@@ -160,16 +160,16 @@ scope: confirmed decisions, unresolved questions, and validation points
 
 - Godot 真实窗口里，背景切换、NPC 选择、聊天提交、错误提示和同步频率是否适合首版演示。
 - Godot 事件 UI 如何展示 `inspect`、`attend_event`、事件选择结果和关系/记忆变化。
-- 星灯祭 Event Skill 的选项、后果、记忆模板、fallback 台词和 asset hints 已继续迁入数据层；剩余结算模板是否能继续减少 Runtime 硬编码。
+- 星灯祭 Event Skill 的选项、后果、`styleSignal`、记忆模板、fallback 台词和 asset hints 已继续迁入数据层；剩余结算模板是否能继续减少 Runtime 硬编码。
 - 单个 Event Skill 的结构是否足以复用到后续节日、委托、危机和恋爱铺垫事件。
-- `gossipEvidence` 对话证据后续是否写入公共事件、NPC 记忆或关系网络扩散。
+- `gossipEvidence.propagationDraft` 后续是否写入公共事件、NPC 记忆或关系网络扩散。
 - 切换模型、key、profile 或 Prompt 后，dialogue、event_reaction、night_reflection 三条 LLM profile 的延迟、成本、失败率和 fallback 表现。
 - 表情差分、地图小人、UI 组件入库后，角色一致性和 Godot registry 维护方式是否稳定。
 
 ## 2026-05-16 Godot 窗口验收后仍需实现中验证
 
 - 主人已确认真实窗口基础体验基本可用；后续重点转向玩法深度、内容节奏和长期扩展性。
-- 当前 Godot 已有 WASD 独立移动、地图层空地点击落点、落点标记、当前场景过滤、更大舞台移动范围和靠近高亮；需要主人复验手感，并继续验证服务端锚点契约、行动反馈和日程可视化的最小结构。
+- 当前 Godot 已有 WASD 独立移动、地图层空地点击落点、落点标记、当前场景过滤、更大舞台移动范围、UI 点击穿透和单目标靠近高亮；需要主人复验手感，并继续验证服务端锚点契约、行动反馈和日程可视化的最小结构。
 - VN 结果面板同时展示 NPC 台词、关系变化、即时记忆和夜间反思时，是否需要拆成分页、卡片或可滚动详情。
 - 星灯祭事件 CG 与角色立绘共用当前 `portrait_rect` 是否适合演示，后续是否需要独立 CG 层。
 - `happy` / `troubled` 表情差分补齐后，Godot 表情选择策略应由后端返回字段驱动，还是由客户端根据事件结果做轻量映射。

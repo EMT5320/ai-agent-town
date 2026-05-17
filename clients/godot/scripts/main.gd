@@ -97,12 +97,13 @@ func _ensure_local_input_actions() -> void:
 		var keycode: int = int(bindings[action_name])
 		var has_binding := false
 		for event in InputMap.action_get_events(action_name):
-			if event is InputEventKey and (event as InputEventKey).physical_keycode == keycode:
+			if event is InputEventKey and ((event as InputEventKey).physical_keycode == keycode or (event as InputEventKey).keycode == keycode):
 				has_binding = true
 				break
 		if not has_binding:
 			var key_event := InputEventKey.new()
 			key_event.physical_keycode = keycode
+			key_event.keycode = keycode
 			InputMap.action_add_event(action_name, key_event)
 
 
@@ -169,6 +170,7 @@ func _build_background() -> void:
 	background_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
 	background_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	background_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	background_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	background_rect.texture = asset_registry.get_location_background(selected_location_id)
 	add_child(background_rect)
 
@@ -188,13 +190,14 @@ func _on_map_character_layer_gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		var mouse_event := event as InputEventMouseButton
 		if mouse_event.pressed and mouse_event.button_index == MOUSE_BUTTON_LEFT:
-			_set_local_player_target(mouse_event.position, true)
-			get_viewport().set_input_as_handled()
+			if _set_local_player_target(mouse_event.position, true):
+				get_viewport().set_input_as_handled()
 
 
 func _build_top_layer() -> void:
 	var margin := MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	margin.add_theme_constant_override("margin_left", _scaled_int(28))
 	margin.add_theme_constant_override("margin_right", _scaled_int(28))
 	margin.add_theme_constant_override("margin_top", _scaled_int(22))
@@ -204,6 +207,7 @@ func _build_top_layer() -> void:
 	var columns := HBoxContainer.new()
 	columns.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	columns.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	columns.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	columns.add_theme_constant_override("separation", _scaled_int(22))
 	margin.add_child(columns)
 
@@ -240,6 +244,7 @@ func _build_top_layer() -> void:
 
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	columns.add_child(spacer)
 
 	var right_panel_frame := _create_panel(columns, Vector2(360, 0), "✦ 小镇观察")
@@ -498,6 +503,7 @@ func _style_section_label(label: Label, base_font_size: int = 18) -> void:
 
 func _style_button(button: Button, min_width: float = 0.0) -> void:
 	button.custom_minimum_size = Vector2(_scaled(min_width), _scaled(42))
+	button.focus_mode = Control.FOCUS_NONE
 	button.add_theme_font_size_override("font_size", _font_size(16))
 
 
@@ -553,22 +559,23 @@ func _map_node_size() -> Vector2:
 	return MAP_NODE_SIZE * ui_scale
 
 
-func _set_local_player_target(world_point: Vector2, from_click: bool) -> void:
+func _set_local_player_target(world_point: Vector2, from_click: bool) -> bool:
 	if not player_local_initialized:
-		return
+		return false
 	var bounds := _map_bounds()
 	if not bounds.has_point(world_point):
-		return
+		return false
 	player_local_target = _clamp_point_to_walk_area(world_point, bounds)
 	player_local_has_click_target = true
 	_update_player_target_marker()
 	if from_click:
 		_update_map_hint("已设置当前场景落点，可继续 WASD 移动或靠近交互")
 	_update_map_proximity_feedback()
+	return true
 
 
 func _tick_local_player_motion(delta: float) -> void:
-	# 按住方向键时每帧读取输入，保证移动手感连续；点击落点仍保留自动走向目标点。
+	# 按住 WASD 时每帧读取输入，保证移动手感连续；点击落点仍保留自动走向目标点。
 	if not player_local_initialized or map_character_layer == null:
 		return
 	var bounds := _map_bounds()
@@ -885,6 +892,7 @@ func _render_map_event_markers(bounds: Rect2) -> void:
 		var event_marker_scale := MAP_EVENT_MARKER_SCALE * ui_scale
 		var marker := TextureButton.new()
 		marker.name = "MapEvent_%s" % event_id
+		marker.focus_mode = Control.FOCUS_NONE
 		marker.texture_normal = asset_registry.get_interaction_marker("event")
 		marker.scale = Vector2(event_marker_scale, event_marker_scale)
 		marker.position = anchor - Vector2(MAP_SPRITE_SIZE * event_marker_scale * 0.5, MAP_SPRITE_SIZE * event_marker_scale * 0.5)
@@ -915,6 +923,7 @@ func _create_map_actor_node(owner_id: String, display_name: String, location_id:
 	var node_size := _map_node_size()
 	var sprite_scale := MAP_SPRITE_SCALE * ui_scale
 	actor.name = "MapActor_%s" % owner_id
+	actor.mouse_filter = Control.MOUSE_FILTER_PASS
 	actor.position = anchor - Vector2(node_size.x * 0.5, node_size.y)
 	actor.size = node_size
 	actor.set_meta("agentId", owner_id)
@@ -925,6 +934,7 @@ func _create_map_actor_node(owner_id: String, display_name: String, location_id:
 
 	var sprite_button := TextureButton.new()
 	sprite_button.name = "Sprite"
+	sprite_button.focus_mode = Control.FOCUS_NONE
 	sprite_button.texture_normal = asset_registry.get_map_sprite(owner_id)
 	sprite_button.scale = Vector2(sprite_scale, sprite_scale)
 	sprite_button.position = Vector2((node_size.x - MAP_SPRITE_SIZE * sprite_scale) * 0.5, _scaled(38))
@@ -967,6 +977,7 @@ func _create_map_actor_node(owner_id: String, display_name: String, location_id:
 
 func _create_actor_marker(marker_id: String, tooltip: String, enabled: bool) -> TextureButton:
 	var marker := TextureButton.new()
+	marker.focus_mode = Control.FOCUS_NONE
 	marker.texture_normal = asset_registry.get_interaction_marker(marker_id)
 	var marker_scale := MAP_MARKER_SCALE * ui_scale
 	marker.scale = Vector2(marker_scale, marker_scale)
@@ -980,6 +991,7 @@ func _create_actor_marker(marker_id: String, tooltip: String, enabled: bool) -> 
 func _create_map_label(text: String, width: int, font_size: int) -> Label:
 	var label := Label.new()
 	label.text = text
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	label.size = Vector2(_scaled(width), _scaled(26))
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.add_theme_font_size_override("font_size", _font_size(font_size))
@@ -1069,6 +1081,8 @@ func _update_map_proximity_feedback() -> void:
 	var nearest_event_title := ""
 	var nearest_npc_distance := INF
 	var nearest_event_distance := INF
+	var nearest_npc_actor: Control = null
+	var nearest_event_marker: TextureButton = null
 	for child in map_character_layer.get_children():
 		if child is TextureButton:
 			var marker := child as TextureButton
@@ -1078,15 +1092,10 @@ func _update_map_proximity_feedback() -> void:
 			var event_location := str(marker.get_meta("locationId", ""))
 			var same_location := event_location == selected_location_id
 			var distance := player_local_position.distance_to(event_anchor)
-			var is_near := same_location and distance <= interact_radius
-			marker.disabled = not is_near
-			if is_near and distance < nearest_event_distance:
+			if same_location and distance <= interact_radius and distance < nearest_event_distance:
 				nearest_event_distance = distance
 				nearest_event_title = str(marker.get_meta("eventTitle", marker.get_meta("eventId", "事件")))
-			if selected_event_id == str(marker.get_meta("eventId", "")):
-				marker.modulate = Color(1.0, 0.92, 0.45, 1.0 if is_near else 0.75)
-			else:
-				marker.modulate = Color(1.0, 1.0, 1.0, 1.0 if is_near else 0.46)
+				nearest_event_marker = marker
 		elif child is Control:
 			var actor := child as Control
 			if not actor.name.begins_with("MapActor_"):
@@ -1098,10 +1107,30 @@ func _update_map_proximity_feedback() -> void:
 			var same_location := actor_location == selected_location_id
 			var can_interact: bool = bool(actor.get_meta("interactable", false))
 			var distance := player_local_position.distance_to(actor_anchor)
-			var is_near: bool = same_location and can_interact and distance <= interact_radius
-			if is_near and distance < nearest_npc_distance:
+			if same_location and can_interact and distance <= interact_radius and distance < nearest_npc_distance:
 				nearest_npc_distance = distance
 				nearest_npc_name = str(actor.get_meta("displayName", actor.get_meta("agentId", "居民")))
+				nearest_npc_actor = actor
+
+	# 同一时间只激活最近的 NPC / 事件，避免多人重叠时焦点在多个 marker 之间抖动。
+	for child in map_character_layer.get_children():
+		if child is TextureButton:
+			var marker := child as TextureButton
+			if not marker.name.begins_with("MapEvent_"):
+				continue
+			var is_near := marker == nearest_event_marker
+			marker.disabled = not is_near
+			if selected_event_id == str(marker.get_meta("eventId", "")):
+				marker.modulate = Color(1.0, 0.92, 0.45, 1.0 if is_near else 0.75)
+			else:
+				marker.modulate = Color(1.0, 1.0, 1.0, 1.0 if is_near else 0.46)
+		elif child is Control:
+			var actor := child as Control
+			if not actor.name.begins_with("MapActor_"):
+				continue
+			if actor.name == "MapActor_player":
+				continue
+			var is_near: bool = actor == nearest_npc_actor
 			var sprite_button := actor.get_node_or_null("Sprite") as TextureButton
 			if sprite_button != null:
 				sprite_button.disabled = not is_near

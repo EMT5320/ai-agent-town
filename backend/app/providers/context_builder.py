@@ -17,6 +17,8 @@ _PHASE_TO_MONOLOGUE_TAGS: dict[str, tuple[str, ...]] = {
     "night": ("evening",),
 }
 _GOSSIP_VISIBILITY_SCORES: dict[str, int] = {"town_known": 3, "hidden": 1}
+_GOSSIP_PROPAGATION_TRUST_GATE = 55
+_GOSSIP_PROPAGATION_MAX_TARGETS = 3
 
 
 def build_agent_context(world: dict[str, Any], agent: dict[str, Any], event_store: Any) -> dict[str, Any]:
@@ -102,6 +104,7 @@ def build_player_dialogue_context(world: dict[str, Any], npc: dict[str, Any], pl
             "speech": "NPC 对玩家说的话",
             "memory_to_save": "NPC 应写入的一句话主观记忆",
             "memory_evidence_used": "可选；如果引用了 memoryEvidence，请返回被引用的来源、文本摘要和标签",
+            "gossip_propagation": "可选；如果引用了 gossipEvidence，请返回 {\"hookId\":\"谣言 id\",\"targetNpcIds\":[\"mira\"],\"direction\":\"seed|amplify|contain\",\"reason\":\"一句话理由\"}",
         },
     }
 
@@ -115,6 +118,7 @@ def build_player_dialogue_messages(context: dict[str, Any]) -> list[dict[str, st
             "speech 需像 NPC 当下直接说的话，长度控制在 1-3 句。",
             "memory_to_save 需是 NPC 第一人称主观记忆，长度控制在 1 句。",
             "如果使用了 memoryEvidence，请额外返回 memory_evidence_used，便于客户端展示 NPC 记忆影响。",
+            "如果使用了 gossipEvidence，请额外返回 gossip_propagation，字段按 expectedOutput 约定，且 hookId 与 targetNpcIds 只能取自 gossipEvidence。",
         ],
     )
     return [{"role": "system", "content": system_prompt}, {"role": "user", "content": json.dumps(context, ensure_ascii=False, indent=2)}]
@@ -125,6 +129,60 @@ def _extract_gossip_keywords(topic: str, message: str) -> set[str]:
     raw = f"{topic} {message}".lower()
     parts = re.split(r"[^\w\u4e00-\u9fff]+", raw)
     return {part for part in parts if len(part.strip()) >= 2}
+
+
+def _build_gossip_selection_reasons(
+    *,
+    visibility: str,
+    trust: int,
+    matched_known_npcs: list[str],
+    keyword_hits: list[str],
+) -> list[str]:
+    """生成稳定可读的选中理由，便于 debug 与后续传播记录解释。"""
+    reasons: list[str] = []
+    if visibility == "town_known":
+        reasons.append("town_known_public_signal")
+    elif visibility == "hidden" and trust >= _GOSSIP_PROPAGATION_TRUST_GATE:
+        reasons.append("hidden_but_trust_unlocked")
+    elif visibility == "hidden":
+        reasons.append("hidden_low_trust_risk")
+    if matched_known_npcs:
+        reasons.append(f"known_npc_overlap:{','.join(matched_known_npcs)}")
+    if keyword_hits:
+        reasons.append(f"keyword_hits:{','.join(keyword_hits)}")
+    if not reasons:
+        reasons.append("fallback_rank_by_visibility")
+    return reasons
+
+
+def _build_gossip_propagation_draft(
+    *,
+    npc_id: str,
+    hook_id: str,
+    visibility: str,
+    spread_affinity: list[str],
+    matched_known_npcs: list[str],
+    keyword_hits: list[str],
+    trust: int,
+) -> dict[str, Any]:
+    """生成谣言传播最小闭环的记录草案，供模型按后端约束填写。"""
+    primary_targets = matched_known_npcs or spread_affinity
+    target_npc_ids = primary_targets[:_GOSSIP_PROPAGATION_MAX_TARGETS]
+    direction = "seed"
+    if visibility == "town_known":
+        direction = "amplify"
+    elif trust < _GOSSIP_PROPAGATION_TRUST_GATE:
+        direction = "contain"
+    return {
+        "recordVersion": "gossip-spread-v0",
+        "hookId": hook_id,
+        "sourceNpcId": npc_id,
+        "targetNpcIds": target_npc_ids,
+        "direction": direction,
+        "trustSnapshot": trust,
+        "triggerKeywords": keyword_hits,
+        "allowedDirections": ["seed", "amplify", "contain"],
+    }
 
 
 def _select_gossip_evidence(
@@ -149,6 +207,7 @@ def _select_gossip_evidence(
     trust = int(relation.get("trust", 0))
 
     scored: list[tuple[int, dict[str, Any]]] = []
+    npc_id = str(npc.get("id") or "")
     for hook in hooks:
         if not isinstance(hook, dict):
             continue
@@ -166,12 +225,29 @@ def _select_gossip_evidence(
         score = _GOSSIP_VISIBILITY_SCORES.get(visibility, 0)
         matched_known_npcs = sorted(spread_affinity.intersection(known_npcs))
         score += min(len(matched_known_npcs), 2)
-        if visibility == "hidden" and trust >= 55:
+        if visibility == "hidden" and trust >= _GOSSIP_PROPAGATION_TRUST_GATE:
             score += 1
 
         haystack = f"{hook_id} {summary}".lower()
         keyword_hits = sorted(keyword for keyword in keywords if keyword in haystack)
         score += min(len(keyword_hits), 3)
+
+        selection_reasons = _build_gossip_selection_reasons(
+            visibility=visibility,
+            trust=trust,
+            matched_known_npcs=matched_known_npcs,
+            keyword_hits=keyword_hits,
+        )
+        spread_affinity_sorted = sorted(spread_affinity)
+        propagation_draft = _build_gossip_propagation_draft(
+            npc_id=npc_id,
+            hook_id=hook_id,
+            visibility=visibility,
+            spread_affinity=spread_affinity_sorted,
+            matched_known_npcs=matched_known_npcs,
+            keyword_hits=keyword_hits,
+            trust=trust,
+        )
         scored.append(
             (
                 score,
@@ -179,22 +255,53 @@ def _select_gossip_evidence(
                     "id": hook_id,
                     "summary": summary,
                     "visibility": visibility,
-                    "spreadAffinity": sorted(spread_affinity),
+                    "spreadAffinity": spread_affinity_sorted,
                     "matchedKnownNpcs": matched_known_npcs,
                     "keywordHits": keyword_hits,
+                    "selectionReasons": selection_reasons,
+                    "propagationDraft": propagation_draft,
                     "score": score,
                 },
             )
         )
 
+    query = " ".join(part for part in (topic, message) if part).strip()
+    contract = {
+        "recordVersion": "gossip-spread-v0",
+        "requiredFields": ["hookId", "targetNpcIds", "direction", "reason"],
+        "directionEnum": ["seed", "amplify", "contain"],
+        "notes": [
+            "hookId 只能使用 gossipEvidence.items 中提供的 id",
+            "targetNpcIds 只能从对应条目的 propagationDraft.targetNpcIds 中选择",
+        ],
+    }
+    selection_meta = {
+        "trustWithPlayer": trust,
+        "knownNpcCount": len(known_npcs),
+        "keywordCount": len(keywords),
+        "contractVersion": contract["recordVersion"],
+    }
+
     if not scored:
-        return {"query": " ".join(part for part in (topic, message) if part).strip(), "items": []}
+        return {
+            "query": query,
+            "keywords": sorted(keywords),
+            "selectionMeta": selection_meta,
+            "propagationRecordContract": contract,
+            "items": [],
+        }
 
     scored.sort(key=lambda item: (item[0], item[1].get("id", "")), reverse=True)
     picked = [item for score, item in scored if score > 0][:limit]
     if not picked:
         picked = [item for _, item in scored[:limit]]
-    return {"query": " ".join(part for part in (topic, message) if part).strip(), "items": picked}
+    return {
+        "query": query,
+        "keywords": sorted(keywords),
+        "selectionMeta": selection_meta,
+        "propagationRecordContract": contract,
+        "items": picked,
+    }
 
 
 def build_event_reaction_context(
