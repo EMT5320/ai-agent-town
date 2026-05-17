@@ -14,15 +14,18 @@ from typing import Any, Iterable
 from app.content.codex_schema import (
     AssetRefs,
     CURRENT_SCHEMA_VERSION,
+    DailyRumorBeat,
     GiftReactionTier,
     GiftReactions,
     Goals,
     GossipHook,
     Identity,
+    LifeActionSeed,
     MonologueSeed,
     NpcDeepCard,
     Personality,
     Preference,
+    RelationshipBeatSeed,
     RelationshipStage,
     Secret,
     StageThreshold,
@@ -54,6 +57,8 @@ _MIN_STAGES = 4
 _MAX_STAGES = 6
 _MIN_FALLBACK_PER_TIER = 2
 _VALID_GOSSIP_VISIBILITY = {"hidden", "town_known"}
+_VALID_TIME_WINDOWS = {"morning", "afternoon", "evening", "night"}
+_VALID_RELATIONSHIP_DIRECTIONS = {"up", "steady", "down"}
 
 
 class CodexValidationError(ValueError):
@@ -262,6 +267,71 @@ def _build_asset_refs(raw: Any, context: str) -> AssetRefs:
     )
 
 
+def _build_life_action_seed(raw: Any, context: str) -> LifeActionSeed:
+    """构造 Day 1 日常行动素材。"""
+    _require(isinstance(raw, dict), f"{context} 必须是对象")
+    _ensure_keys(raw, ("id", "timeWindow", "summary", "intentTags"), context)
+    action_id = str(raw["id"]).strip()
+    time_window = str(raw["timeWindow"]).strip()
+    summary = str(raw["summary"]).strip()
+    _require(action_id != "", f"{context}.id 不能为空")
+    _require(time_window in _VALID_TIME_WINDOWS, f"{context}.timeWindow 非法：{time_window}")
+    _require(summary != "", f"{context}.summary 不能为空")
+    return LifeActionSeed(
+        action_id=action_id,
+        time_window=time_window,
+        summary=summary,
+        intent_tags=_as_str_tuple(raw["intentTags"], f"{context}.intentTags"),
+        location_hints=_as_str_tuple(raw.get("locationHints", []), f"{context}.locationHints"),
+        related_npc_ids=_as_str_tuple(raw.get("relatedNpcIds", []), f"{context}.relatedNpcIds"),
+    )
+
+
+def _build_daily_rumor_beat(raw: Any, context: str) -> DailyRumorBeat:
+    """构造 Day 1 谣言节拍素材。"""
+    _require(isinstance(raw, dict), f"{context} 必须是对象")
+    _ensure_keys(raw, ("id", "visibility", "cue", "spreadTargets"), context)
+    beat_id = str(raw["id"]).strip()
+    visibility = str(raw["visibility"]).strip()
+    cue = str(raw["cue"]).strip()
+    _require(beat_id != "", f"{context}.id 不能为空")
+    _require(visibility in _VALID_GOSSIP_VISIBILITY, f"{context}.visibility 非法：{visibility}")
+    _require(cue != "", f"{context}.cue 不能为空")
+    spread_targets = _as_str_tuple(raw["spreadTargets"], f"{context}.spreadTargets")
+    _require(len(spread_targets) >= 1, f"{context}.spreadTargets 至少 1 项")
+    return DailyRumorBeat(
+        beat_id=beat_id,
+        visibility=visibility,
+        cue=cue,
+        spread_targets=spread_targets,
+        tags=_as_str_tuple(raw.get("tags", []), f"{context}.tags"),
+    )
+
+
+def _build_relationship_beat_seed(raw: Any, context: str) -> RelationshipBeatSeed:
+    """构造 Day 1 关系节拍素材。"""
+    _require(isinstance(raw, dict), f"{context} 必须是对象")
+    _ensure_keys(raw, ("id", "stageHint", "trigger", "direction", "summary"), context)
+    beat_id = str(raw["id"]).strip()
+    stage_hint = str(raw["stageHint"]).strip()
+    trigger = str(raw["trigger"]).strip()
+    direction = str(raw["direction"]).strip()
+    summary = str(raw["summary"]).strip()
+    _require(beat_id != "", f"{context}.id 不能为空")
+    _require(stage_hint != "", f"{context}.stageHint 不能为空")
+    _require(trigger != "", f"{context}.trigger 不能为空")
+    _require(direction in _VALID_RELATIONSHIP_DIRECTIONS, f"{context}.direction 非法：{direction}")
+    _require(summary != "", f"{context}.summary 不能为空")
+    return RelationshipBeatSeed(
+        beat_id=beat_id,
+        stage_hint=stage_hint,
+        trigger=trigger,
+        direction=direction,
+        summary=summary,
+        tags=_as_str_tuple(raw.get("tags", []), f"{context}.tags"),
+    )
+
+
 def _validate_stages(stages: tuple[RelationshipStage, ...], context: str) -> None:
     """关系阶段必须按 affection 升序，stage_0 阈值为 0。"""
     _require(
@@ -387,6 +457,27 @@ def parse_npc_deep_card(data: dict[str, Any], *, source: str = "<inline>") -> Np
         _build_gossip_hook(item, f"{context}.gossipHooks[{i}]") for i, item in enumerate(raw_hooks)
     )
 
+    raw_life_action_seeds = data.get("lifeActionSeeds", [])
+    _require(isinstance(raw_life_action_seeds, list), f"{context}.lifeActionSeeds 必须是数组")
+    life_action_seeds = tuple(
+        _build_life_action_seed(item, f"{context}.lifeActionSeeds[{i}]")
+        for i, item in enumerate(raw_life_action_seeds)
+    )
+
+    raw_daily_rumor_beats = data.get("dailyRumorBeats", [])
+    _require(isinstance(raw_daily_rumor_beats, list), f"{context}.dailyRumorBeats 必须是数组")
+    daily_rumor_beats = tuple(
+        _build_daily_rumor_beat(item, f"{context}.dailyRumorBeats[{i}]")
+        for i, item in enumerate(raw_daily_rumor_beats)
+    )
+
+    raw_relationship_beat_seeds = data.get("relationshipBeatSeeds", [])
+    _require(isinstance(raw_relationship_beat_seeds, list), f"{context}.relationshipBeatSeeds 必须是数组")
+    relationship_beat_seeds = tuple(
+        _build_relationship_beat_seed(item, f"{context}.relationshipBeatSeeds[{i}]")
+        for i, item in enumerate(raw_relationship_beat_seeds)
+    )
+
     asset_refs = _build_asset_refs(data["assetRefs"], f"{context}.assetRefs")
 
     _validate_secret_unlocks(secrets, stages, f"{context}.secrets")
@@ -408,6 +499,9 @@ def parse_npc_deep_card(data: dict[str, Any], *, source: str = "<inline>") -> Np
         gift_reactions=gift_reactions,
         gossip_hooks=gossip_hooks,
         asset_refs=asset_refs,
+        life_action_seeds=life_action_seeds,
+        daily_rumor_beats=daily_rumor_beats,
+        relationship_beat_seeds=relationship_beat_seeds,
     )
 
 
@@ -526,6 +620,38 @@ def to_runtime_dict(card: NpcDeepCard) -> dict[str, Any]:
                 "spreadAffinity": list(hook["spread_affinity"]),
             }
             for hook in raw["gossip_hooks"]
+        ],
+        "lifeActionSeeds": [
+            {
+                "id": item["action_id"],
+                "timeWindow": item["time_window"],
+                "summary": item["summary"],
+                "intentTags": list(item["intent_tags"]),
+                "locationHints": list(item["location_hints"]),
+                "relatedNpcIds": list(item["related_npc_ids"]),
+            }
+            for item in raw["life_action_seeds"]
+        ],
+        "dailyRumorBeats": [
+            {
+                "id": item["beat_id"],
+                "visibility": item["visibility"],
+                "cue": item["cue"],
+                "spreadTargets": list(item["spread_targets"]),
+                "tags": list(item["tags"]),
+            }
+            for item in raw["daily_rumor_beats"]
+        ],
+        "relationshipBeatSeeds": [
+            {
+                "id": item["beat_id"],
+                "stageHint": item["stage_hint"],
+                "trigger": item["trigger"],
+                "direction": item["direction"],
+                "summary": item["summary"],
+                "tags": list(item["tags"]),
+            }
+            for item in raw["relationship_beat_seeds"]
         ],
         "assetRefs": {
             "portrait": raw["asset_refs"]["portrait"],

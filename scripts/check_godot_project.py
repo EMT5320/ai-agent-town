@@ -77,7 +77,7 @@ checks = {
     "main click target marker": "PlayerMoveTarget" in main_script,
     "main no sprite halo background": '"Halo"' not in main_script,
     "main backend interactions": "give_gift" in main_script and "find_interaction" in main_script,
-    "main no anchorId contract": "anchorId" not in main_script,
+    "main scene anchor contract": "anchorId" in main_script and "_on_move_to_anchor_pressed" in main_script and "_render_scene_actions" in main_script,
     "main portrait texture": "portrait_rect" in main_script,
     "main refresh": "_refresh_world" in main_script,
 }

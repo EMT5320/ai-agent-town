@@ -1,7 +1,7 @@
 ---
 status: active
 owner_lane: content-codex
-last_verified: 2026-05-16
+last_verified: 2026-05-17
 startup_load: on-demand
 source_of_truth: true
 scope: storyline, first-day content, NPC roles, and narrative system plan
@@ -9,7 +9,7 @@ scope: storyline, first-day content, NPC roles, and narrative system plan
 
 # 游戏内容剧本线工作台
 
-> 更新时间：2026-05-16  
+> 更新时间：2026-05-17
 > 用途：沉淀主人与 Windsurf 的内容扩充讨论、当前 Codex 收尾结果，以及后续把“游戏内容剧本线”拆成独立开发主线时的入口。
 
 ## 1. 主人原始需求
@@ -91,7 +91,12 @@ scope: storyline, first-day content, NPC roles, and narrative system plan
 - `monologueSeeds`：8 条以上独白种子。
 - `giftReactions`：loved / liked / neutral / disliked 四档送礼反应。
 - `gossipHooks`：谣言传播钩子。
+- `lifeActionSeeds`：Day 1 生活行动素材（时段覆盖 + 关联 NPC）。
+- `dailyRumorBeats`：Day 1 谣言节拍素材（hidden/town_known 双可见性）。
+- `relationshipBeatSeeds`：Day 1 关系节拍素材（up/steady/down 反馈锚点）。
 - `assetRefs`：manifest 中真实存在的 portrait / mapSprite 引用。
+
+新增字段只承载“可触发素材”，不写固定剧情节点，也不直接改世界状态。
 
 ### 4.2 写作工作流
 

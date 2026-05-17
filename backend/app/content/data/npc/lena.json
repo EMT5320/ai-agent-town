@@ -184,5 +184,123 @@
     "portrait": "npc_lena_neutral",
     "expressions": {},
     "mapSprite": "npc_lena_map_idle"
-  }
+  },
+  "lifeActionSeeds": [
+    {
+      "id": "life_lena_morning_routine",
+      "timeWindow": "morning",
+      "summary": "Dawn prep routine; watch the town mood before work starts.",
+      "intentTags": [
+        "routine",
+        "day1",
+        "observation"
+      ],
+      "locationHints": [
+        "home",
+        "work_spot"
+      ],
+      "relatedNpcIds": [
+        "bram"
+      ]
+    },
+    {
+      "id": "life_lena_afternoon_coordination",
+      "timeWindow": "afternoon",
+      "summary": "Handle daytime workload and reprioritize tasks from nearby feedback.",
+      "intentTags": [
+        "workload",
+        "coordination",
+        "day1"
+      ],
+      "locationHints": [
+        "town_center",
+        "work_spot"
+      ],
+      "relatedNpcIds": [
+        "kai"
+      ]
+    },
+    {
+      "id": "life_lena_evening_wrapup",
+      "timeWindow": "evening",
+      "summary": "Wrap up interactions and choose who to respond to first at night.",
+      "intentTags": [
+        "reflection",
+        "social",
+        "day1"
+      ],
+      "locationHints": [
+        "work_spot",
+        "tavern"
+      ],
+      "relatedNpcIds": [
+        "mira"
+      ]
+    }
+  ],
+  "dailyRumorBeats": [
+    {
+      "id": "rumor_lena_public_tension",
+      "visibility": "town_known",
+      "cue": "A public friction around daily duties can quickly attract commentary.",
+      "spreadTargets": [
+        "bram",
+        "kai"
+      ],
+      "tags": [
+        "day1",
+        "public",
+        "tension"
+      ]
+    },
+    {
+      "id": "rumor_lena_private_guess",
+      "visibility": "hidden",
+      "cue": "A private guess says this NPC is holding back a plan for tonight.",
+      "spreadTargets": [
+        "mira"
+      ],
+      "tags": [
+        "day1",
+        "private",
+        "speculation"
+      ]
+    }
+  ],
+  "relationshipBeatSeeds": [
+    {
+      "id": "relation_lena_assist_small_help",
+      "stageHint": "stage_1",
+      "trigger": "Player offers practical help and respects the NPC pace.",
+      "direction": "up",
+      "summary": "NPC shares clearer preferences and low-risk collaboration hints.",
+      "tags": [
+        "day1",
+        "trust_building"
+      ]
+    },
+    {
+      "id": "relation_lena_boundary_push",
+      "stageHint": "stage_2",
+      "trigger": "Player pushes sensitive questions or interrupts active work.",
+      "direction": "down",
+      "summary": "NPC narrows responses and protects immediate boundaries.",
+      "tags": [
+        "day1",
+        "boundary",
+        "pressure"
+      ]
+    },
+    {
+      "id": "relation_lena_steady_checkin",
+      "stageHint": "stage_3",
+      "trigger": "Player keeps stable check-ins and follows through on promises.",
+      "direction": "steady",
+      "summary": "NPC keeps cooperative tone and releases small verifiable details.",
+      "tags": [
+        "day1",
+        "steady_progress"
+      ]
+    }
+  ]
 }

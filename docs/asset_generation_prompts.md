@@ -1,7 +1,7 @@
 ---
 status: active
 owner_lane: asset-pipeline
-last_verified: 2026-05-16
+last_verified: 2026-05-17
 startup_load: on-demand
 source_of_truth: true
 scope: asset prompt pack and manifest registration examples
@@ -249,6 +249,61 @@ visual novel UI asset for anime light fantasy farming life sim, transparent back
 - `relationship_delta_badge.png`：`small relationship change badge, heart and trust star motifs, readable icon shape`
 - `memory_card_anime.png`：`small memory card panel, diary paper, star dust, blank area for text`
 - `night_diary_panel_anime.png`：`night diary panel, dark blue translucent frame, tiny lantern and moon cat motif, blank area for text`
+
+## 生成批次 8：表情差分 + 行动反馈图标 + 生活行动 UI 小组件（backlog）
+
+> 本批次仅写入可校验的 prompt 计划，尚未生成源图。对应 manifest 条目统一使用 `status=prompt_ready`。
+
+### 表情差分（`happy` / `troubled`）
+<a id="batch-8-expression-delta"></a>
+
+统一追加：
+```text
+same character, same outfit, same hairstyle, same accessories, preserve neutral identity, expression-only delta, transparent background
+```
+
+- `player_farmer_happy`：主角放松微笑，肩线放松，眼神更温暖。
+- `player_farmer_troubled`：主角轻度困惑和担忧，眉心收紧，嘴角收敛。
+- `npc_mira_happy`：米娅如释重负的营业微笑，亲和感增强。
+- `npc_mira_troubled`：米娅担忧供货和家庭开销，眼神更谨慎。
+- `npc_tomas_happy`：托玛克制的淡笑，姿态略微放松。
+- `npc_tomas_troubled`：托玛想表达关心却犹豫，眉眼更紧。
+- `npc_orren_happy`：奥蕾娅讲述传统时的自豪笑意。
+- `npc_orren_troubled`：奥蕾娅对传统断层的严肃担忧。
+- `npc_lena_happy`：莉娜罕见放松微笑，疲态下降。
+- `npc_lena_troubled`：莉娜疲惫但坚持，眼神更锐利。
+- `npc_kai_happy`：凯娅舞台感增强，笑意外放。
+- `npc_kai_troubled`：凯娅在节日压力下强撑笑容。
+- `npc_bram_happy`：布兰娜认可玩家后出现的干脆笑意。
+- `npc_bram_troubled`：布兰娜因欠账与收成压力而明显焦躁。
+
+### 行动反馈图标（action feedback）
+<a id="batch-8-action-feedback-icons"></a>
+
+统一追加：
+```text
+anime UI feedback icon, transparent background, centered symbol, readable at 32x32 and 64x64, one accent color + one outline color, no text, no watermark
+```
+
+- `action_feedback_move`：小靴印 + 轨迹弧线，表示移动已确认。
+- `action_feedback_talk`：对话气泡 + 星点，表示对话触发。
+- `action_feedback_gift`：礼物盒 + 叶片，表示送礼成功或可送礼。
+- `action_feedback_inspect`：放大镜 + 星纹，表示观察/调查反馈。
+- `action_feedback_event`：星灯 + 感叹记号，表示事件交互反馈。
+
+### 生活行动 UI 小组件（life action widgets）
+<a id="batch-8-life-ui-widgets"></a>
+
+统一追加：
+```text
+anime life-sim UI widget, rounded panel, warm cream + amber + soft green palette, subtle starlight motif, transparent background, blank text-safe area, no watermark
+```
+
+- `ui_life_action_button_farm`：生活行动按钮（农务）。
+- `ui_life_action_button_chat`：生活行动按钮（社交）。
+- `ui_life_action_button_rest`：生活行动按钮（休息）。
+- `ui_life_action_schedule_strip`：日程条组件（早/午/晚三个段位容器）。
+- `ui_life_action_result_toast`：行动结果浮层组件（图标位 + 简短文本位）。
 
 ## 生成后登记模板
 

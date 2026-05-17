@@ -69,7 +69,7 @@ scope: lane board, write boundaries, and handoff format
 
 - Content Codex 首批数据已可用；`monologueSeeds` 已接入夜间反思/RAG，`gossipHooks` 已进入对话证据选择、传播草案、validator 和运行时校验事件，后续需要扩展为记忆 / 关系扩散。
 - Godot 事件交互、地图角色层、本地移动与靠近反馈已通过代码检查、headless 检查和 dry-run；上一版真实窗口已由主人验收，本轮空地点击与移动稳定性修复仍待主人窗口复验。
-- Godot 已从纯背景图和简单 UI 点击推进到可移动舞台层；后续缺口转为服务端锚点契约、行动反馈、生活行动按钮和日程可视化。
+- Godot 已从纯背景图和简单 UI 点击推进到可移动舞台层，并已接入服务端锚点、生活场景行动按钮和行动反馈；后续缺口转为日程可视化与更自然的生活节奏。
 - Event Skill 仍只有星灯祭单技能，部分结算逻辑仍有 Runtime 硬编码。
 - LLM profile 可配置，Web 观察台已追加配置查看、热重载和对话 smoke 入口；当前本机 `config/models.json` 已跑通真实云端 smoke，切换模型、key 或 profile 后需要刷新。
 - 资产批次完成到首批背景、事件 CG、neutral 立绘、地图小人候选和交互标记；batch 1b 表情差分尚未入库。
@@ -84,10 +84,10 @@ scope: lane board, write boundaries, and handoff format
 
 | 开发线 | 当前状态 | 下一步 | 主要写入范围 | 禁止/谨慎范围 | 验收命令 |
 | --- | --- | --- | --- | --- | --- |
-| Godot 玩法客户端 | partial | WASD、地图层空地点击、落点标记、单目标高亮、当前场景过滤、动态移动范围、UI 点击穿透、焦点收紧、玩家 / NPC 分离站位槽、玩家出生点上移、收紧交互半径、点击边界修正和靠近滞回已落地；下一步主人复验三场景手感，再推进服务端锚点契约、行动反馈、生活行动按钮和日程可视化 | `clients/godot/`、必要时 `clients/godot/assets/`、`scripts/check_godot_project.py` | 不在客户端保存权威世界状态；不把后端结算规则复制进 GDScript | `npm.cmd run client:env`、`npm.cmd run client:run:check`、`npm.cmd run check`，人工 `client:run` |
-| Content Codex / NPC 深度卡 | partial | `monologueSeeds` 已接入夜间反思/RAG，`gossipHooks` 已进入对话 `gossipEvidence`、`propagationDraft`、validator 与运行时校验事件；下一步把谣言证据写入记忆 / 关系传播，再启动 `/author-event-skill` | `backend/app/content/`、`scripts/check_npc_codex.py`、`backend/app/providers/context_builder.py`、必要 runtime glue、相关 docs | 不写固定剧情节点；不让内容卡直接改世界状态；不伪造资产 id | `npm.cmd run content:check`、`npm.cmd run smoke`、`npm.cmd run check` |
+| Godot 玩法客户端 | partial | WASD、地图层空地点击、落点标记、单目标高亮、当前场景过滤、动态移动范围、UI 点击穿透、焦点收紧、玩家 / NPC 分离站位槽、玩家出生点上移、收紧交互半径、点击边界修正、靠近滞回、服务端锚点、`scene_action` 和 `actionFeedback` 已落地；下一步主人复验三场景手感、农场行动与行动反馈，再推进日程可视化 | `clients/godot/`、必要时 `clients/godot/assets/`、`scripts/check_godot_project.py` | 不在客户端保存权威世界状态；不把后端结算规则复制进 GDScript | `npm.cmd run client:env`、`npm.cmd run client:run:check`、`npm.cmd run check`，人工 `client:run` |
+| Content Codex / NPC 深度卡 | partial | `monologueSeeds` 已接入夜间反思/RAG，`gossipHooks` 已进入对话 `gossipEvidence`、`propagationDraft`、validator 与运行时校验事件，`lifeActionSeeds` / `dailyRumorBeats` / `relationshipBeatSeeds` 已准备 Day 1 素材；下一步接入运行时日程，并把谣言证据写入记忆 / 关系传播 | `backend/app/content/`、`scripts/check_npc_codex.py`、`backend/app/providers/context_builder.py`、必要 runtime glue、相关 docs | 不写固定剧情节点；不让内容卡直接改世界状态；不伪造资产 id | `npm.cmd run content:check`、`npm.cmd run smoke`、`npm.cmd run check` |
 | 后端 Director / Event Skill | partial | 画像证据、`styleSignal`、事件反应记忆、asset hints、通用 fallback 台词和 `event_skill_outcome.v1` outcomeRecord 已迁入 Skill / Runtime 协作链路；下一步继续迁移结算模板，补 Skill 复用测试 | `backend/app/director/`、`backend/app/skills/`、`backend/app/runtime/agent_runtime.py`、相关测试 | 不让 LLM 直接改世界状态；不破坏旧 `/api/state` 与 Debug 观察台 | `npm.cmd run smoke`、`npm.cmd run check` |
-| 资产管线 | partial | 按玩法需要推进 batch 1b 表情差分、UI 组件、道具图标和行动反馈图标；地图小人晋级等待主人筛选 | `assets/source/`、`assets/processed/`、`assets/manifests/`、`clients/godot/assets/` | 不覆盖原图；不提交来源不清的资产；不把未人工确认的小人标成 `source_selected` | `npm.cmd run asset:check`、`npm.cmd run check` |
+| 资产管线 | partial | 24 条 `prompt_ready` backlog 已登记，下一步生成并筛选表情差分、生活 UI 组件和行动反馈图标；地图小人晋级等待主人筛选 | `assets/source/`、`assets/processed/`、`assets/manifests/`、`clients/godot/assets/` | 不覆盖原图；不提交来源不清的资产；不把未人工确认的小人标成 `source_selected` | `npm.cmd run asset:check`、`npm.cmd run check` |
 | LLM / Debug | partial | 当前真实 smoke 已跑通；切换模型、key 或 profile 后用 `AGENT_TOWN_REQUIRE_REAL_LLM_SMOKE=1` 刷新 dialogue / event_reaction / night_reflection 证据 | `backend/app/providers/`、`backend/app/providers/context_builder.py`、Debug 记录结构、迁移期 `frontend/`、相关 docs | 不提交密钥；不隐藏 token、延迟、错误；不把跳过或 fallback 的 live smoke 写成通过 | `npm.cmd run model:check`、`npm.cmd run smoke`、真实 LLM 手动记录 |
 | Web Debug Console | watch | 等事件 UI 和 Skill 链路更稳定后展示 Director 队列、Skill、fallback、成本 | 迁移期 `frontend/`，后续 `web-admin/` | 不阻塞 Godot 主体验；不泄漏玩家叙事视角 | `npm.cmd run check` |
 | 文档与治理 | done | 每轮结束只更新入口、状态、下一步和仍需验证问题 | `AGENTS.md`、`CLAUDE.md`、`docs/README.md`、`docs/agent_context.md`、`docs/goal_board.md`、`docs/current_status.md`、`docs/open_questions.md`、`scripts/build_agent_context.py` | 不复制源设计长文；不把未验证能力写成完成 | `npm.cmd run context:check`、`npm.cmd run check`、`git diff --check` |
@@ -126,8 +126,8 @@ scope: lane board, write boundaries, and handoff format
 ## 8. 下一轮推荐排程
 
 1. 文档与治理：保持本轮状态收紧后的 checkpoint，后续只记录已验证变化。
-2. Godot 玩法客户端：先复验空地点击落点、单目标高亮和移动稳定性，再推进服务端锚点契约、行动反馈和日程可视化。
-3. Content Codex：把 `gossip.propagation_validated` 继续扩展为记忆 / 关系层的第一版谣言传播。
+2. Godot 玩法客户端：先复验三场景移动稳定性、锚点按钮、农场行动和行动反馈，再推进日程可视化。
+3. Content Codex：把生活行动种子接入日程，再把 `gossip.propagation_validated` 扩展为记忆 / 关系层的第一版谣言传播。
 4. 后端：星灯祭 Skill 数据化下一步继续减少 Runtime 结算硬编码，并保持 Debug 事件证据。
 5. LLM / Debug：保持当前真实 smoke 证据；切换模型、key 或 profile 后再刷新延迟、fallback 和输出质量。
 6. 资产：推进 batch 1b 表情差分、UI 组件、道具图标和行动反馈图标。

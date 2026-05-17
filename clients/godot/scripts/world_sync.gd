@@ -27,6 +27,25 @@ func get_player() -> Dictionary:
 	return current_state.get("player", {})
 
 
+func get_player_anchor() -> Dictionary:
+	var anchor = current_state.get("playerAnchor", {})
+	if anchor is Dictionary:
+		return anchor
+	return {}
+
+
+func get_anchors() -> Array:
+	return current_state.get("anchors", [])
+
+
+func get_interactables() -> Array:
+	return current_state.get("interactables", [])
+
+
+func get_farm_plots() -> Array:
+	return current_state.get("farmPlots", [])
+
+
 func get_npcs() -> Array:
 	return current_state.get("npcs", [])
 
@@ -68,6 +87,33 @@ func find_interaction(action_type: String, target_kind: String, target_id: Strin
 			continue
 		if str(target.get("kind", "")) == target_kind and str(target.get("id", "")) == target_id:
 			return interaction
+	return {}
+
+
+func find_interaction_by_id(interaction_id: String) -> Dictionary:
+	for interaction in get_available_interactions():
+		if not (interaction is Dictionary):
+			continue
+		if str(interaction.get("id", "")) == interaction_id:
+			return interaction
+	return {}
+
+
+func find_anchor(anchor_id: String) -> Dictionary:
+	for anchor in get_anchors():
+		if not (anchor is Dictionary):
+			continue
+		if str(anchor.get("id", "")) == anchor_id:
+			return anchor
+	return {}
+
+
+func find_interactable(interactable_id: String) -> Dictionary:
+	for interactable in get_interactables():
+		if not (interactable is Dictionary):
+			continue
+		if str(interactable.get("id", "")) == interactable_id:
+			return interactable
 	return {}
 
 

@@ -5,6 +5,7 @@
 2. 交叉校验 NPC id 必须存在于 backend/app/world/seed_data.AGENTS。
 3. 交叉校验 assetRefs 引用 id 是否落在 assets/manifests/asset_manifest.json，
    缺失只产生 warning，不阻塞 CI（resemble check_asset_manifest.py 的友好策略）。
+4. 校验 Day 1 内容素材字段（lifeActionSeeds / dailyRumorBeats / relationshipBeatSeeds）。
 """
 
 from __future__ import annotations
@@ -143,6 +144,98 @@ def _check_gossip_hook_readiness(cards: dict) -> None:
             raise SystemExit(f"[npc-codex-check] {npc_id} gossipHooks 至少需要 1 条 spreadAffinity>=2 的话题")
 
 
+def _check_day1_seed_readiness(cards: dict) -> None:
+    """校验 Day 1 行动/谣言/关系素材，确保后续玩法扩展有可消费输入。"""
+    seed_ids = {agent["id"] for agent in AGENTS}
+    required_windows = {"morning", "afternoon", "evening"}
+    valid_visibility = {"hidden", "town_known"}
+    valid_direction = {"up", "steady", "down"}
+
+    for npc_id, card in cards.items():
+        stage_ids = {stage.stage for stage in getattr(card, "relationship_stages", ())}
+
+        life_action_seeds = list(getattr(card, "life_action_seeds", ()))
+        if len(life_action_seeds) < 3:
+            raise SystemExit(f"[npc-codex-check] {npc_id} lifeActionSeeds 至少需要 3 条")
+        action_windows = {str(item.time_window).strip() for item in life_action_seeds}
+        if not required_windows.issubset(action_windows):
+            missing = sorted(required_windows - action_windows)
+            raise SystemExit(f"[npc-codex-check] {npc_id} lifeActionSeeds 缺少时段覆盖：{', '.join(missing)}")
+        seen_action_ids: set[str] = set()
+        for item in life_action_seeds:
+            action_id = str(item.action_id).strip()
+            if not action_id:
+                raise SystemExit(f"[npc-codex-check] {npc_id} lifeActionSeeds 存在空 id")
+            if action_id in seen_action_ids:
+                raise SystemExit(f"[npc-codex-check] {npc_id} lifeActionSeeds.id 重复：{action_id}")
+            seen_action_ids.add(action_id)
+            if not action_id.startswith(f"life_{npc_id}_"):
+                raise SystemExit(f"[npc-codex-check] {npc_id}.{action_id} 需使用 life_{npc_id}_ 前缀")
+            related_ids = {str(target).strip() for target in item.related_npc_ids if str(target).strip()}
+            if npc_id in related_ids:
+                raise SystemExit(f"[npc-codex-check] {npc_id}.{action_id} relatedNpcIds 不应包含自己")
+            unknown_related = sorted(related_ids - seed_ids)
+            if unknown_related:
+                raise SystemExit(
+                    f"[npc-codex-check] {npc_id}.{action_id} relatedNpcIds 包含未知 NPC：{', '.join(unknown_related)}"
+                )
+
+        daily_rumor_beats = list(getattr(card, "daily_rumor_beats", ()))
+        if len(daily_rumor_beats) < 2:
+            raise SystemExit(f"[npc-codex-check] {npc_id} dailyRumorBeats 至少需要 2 条")
+        rumor_visibility = {str(item.visibility).strip() for item in daily_rumor_beats}
+        if not {"hidden", "town_known"}.issubset(rumor_visibility):
+            raise SystemExit(f"[npc-codex-check] {npc_id} dailyRumorBeats 需同时覆盖 hidden 与 town_known")
+        seen_rumor_ids: set[str] = set()
+        for item in daily_rumor_beats:
+            beat_id = str(item.beat_id).strip()
+            visibility = str(item.visibility).strip()
+            spread_targets = {str(target).strip() for target in item.spread_targets if str(target).strip()}
+            if not beat_id:
+                raise SystemExit(f"[npc-codex-check] {npc_id} dailyRumorBeats 存在空 id")
+            if beat_id in seen_rumor_ids:
+                raise SystemExit(f"[npc-codex-check] {npc_id} dailyRumorBeats.id 重复：{beat_id}")
+            seen_rumor_ids.add(beat_id)
+            if not beat_id.startswith(f"rumor_{npc_id}_"):
+                raise SystemExit(f"[npc-codex-check] {npc_id}.{beat_id} 需使用 rumor_{npc_id}_ 前缀")
+            if visibility not in valid_visibility:
+                raise SystemExit(f"[npc-codex-check] {npc_id}.{beat_id} dailyRumorBeats.visibility 非法：{visibility}")
+            if not spread_targets:
+                raise SystemExit(f"[npc-codex-check] {npc_id}.{beat_id} spreadTargets 至少 1 项")
+            if npc_id in spread_targets:
+                raise SystemExit(f"[npc-codex-check] {npc_id}.{beat_id} spreadTargets 不应包含自己")
+            unknown_targets = sorted(spread_targets - seed_ids)
+            if unknown_targets:
+                raise SystemExit(
+                    f"[npc-codex-check] {npc_id}.{beat_id} spreadTargets 包含未知 NPC：{', '.join(unknown_targets)}"
+                )
+            if len(spread_targets) > 3:
+                raise SystemExit(f"[npc-codex-check] {npc_id}.{beat_id} spreadTargets 需 <=3")
+
+        relationship_beats = list(getattr(card, "relationship_beat_seeds", ()))
+        if len(relationship_beats) < 2:
+            raise SystemExit(f"[npc-codex-check] {npc_id} relationshipBeatSeeds 至少需要 2 条")
+        directions = {str(item.direction).strip() for item in relationship_beats}
+        if "up" not in directions or not ({"steady", "down"} & directions):
+            raise SystemExit(f"[npc-codex-check] {npc_id} relationshipBeatSeeds 至少覆盖 1 条 up 与 1 条 steady/down")
+        seen_relation_ids: set[str] = set()
+        for item in relationship_beats:
+            beat_id = str(item.beat_id).strip()
+            stage_hint = str(item.stage_hint).strip()
+            direction = str(item.direction).strip()
+            if not beat_id:
+                raise SystemExit(f"[npc-codex-check] {npc_id} relationshipBeatSeeds 存在空 id")
+            if beat_id in seen_relation_ids:
+                raise SystemExit(f"[npc-codex-check] {npc_id} relationshipBeatSeeds.id 重复：{beat_id}")
+            seen_relation_ids.add(beat_id)
+            if not beat_id.startswith(f"relation_{npc_id}_"):
+                raise SystemExit(f"[npc-codex-check] {npc_id}.{beat_id} 需使用 relation_{npc_id}_ 前缀")
+            if stage_hint not in stage_ids:
+                raise SystemExit(f"[npc-codex-check] {npc_id}.{beat_id} stageHint 未命中 relationshipStages：{stage_hint}")
+            if direction not in valid_direction:
+                raise SystemExit(f"[npc-codex-check] {npc_id}.{beat_id} direction 非法：{direction}")
+
+
 def main() -> None:
     """串联结构校验、seed 一致性、资产引用 warning。"""
     if not NPC_CODEX_PATH.exists():
@@ -161,6 +254,7 @@ def main() -> None:
     _check_seed_membership(set(cards))
     _check_monologue_seed_readiness(cards)
     _check_gossip_hook_readiness(cards)
+    _check_day1_seed_readiness(cards)
 
     manifest_ids = _load_manifest_ids()
     warnings: list[str] = []

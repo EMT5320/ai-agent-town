@@ -1,7 +1,7 @@
 ---
 status: active
 owner_lane: content-codex
-last_verified: 2026-05-16
+last_verified: 2026-05-17
 startup_load: on-demand
 source_of_truth: true
 scope: NPC deep-card schema, writing rules, and validation contract
@@ -65,6 +65,9 @@ backend/app/content/
   "monologueSeeds": [ ... ],
   "giftReactions": { ... },
   "gossipHooks": [ ... ],
+  "lifeActionSeeds": [ ... ],
+  "dailyRumorBeats": [ ... ],
+  "relationshipBeatSeeds": [ ... ],
   "assetRefs": { ... }
 }
 ```
@@ -246,6 +249,64 @@ backend/app/content/
 - 所有 id 必须存在于 `assets/manifests/asset_manifest.json`，loader 会做交叉校验。
 - 缺失资产可用空字符串占位，但校验脚本会给出 warning。
 
+### 5.11 `lifeActionSeeds`
+
+```jsonc
+[
+  {
+    "id": "life_kai_morning_routine",
+    "timeWindow": "morning",
+    "summary": "凯娅在开工前确认酒馆乐手相关准备，并观察镇上早晨氛围。",
+    "intentTags": ["routine", "day1", "observation"],
+    "locationHints": ["home", "work_spot"],
+    "relatedNpcIds": ["bram"]
+  }
+]
+```
+
+- `lifeActionSeeds` 用于 Day 1 日常行动素材预留，给后续低层玩法做可消费输入。
+- `timeWindow` 取值：`morning / afternoon / evening / night`。
+- 每位 NPC 至少 3 条，并覆盖 `morning / afternoon / evening`。
+- 仅描述“行为倾向与动机”，不写固定剧情节点，不直接改世界状态。
+
+### 5.12 `dailyRumorBeats`
+
+```jsonc
+[
+  {
+    "id": "rumor_kai_public_tension",
+    "visibility": "town_known",
+    "cue": "凯娅在公开场合与熟人围绕日常分工出现小摩擦，旁人容易接话扩散。",
+    "spreadTargets": ["mira", "orren"],
+    "tags": ["day1", "public", "tension"]
+  }
+]
+```
+
+- `dailyRumorBeats` 是 Day 1 谣言节拍素材，后续可直接喂给传播玩法。
+- 每位 NPC 至少 2 条，并覆盖 `hidden` 与 `town_known` 两种可见性。
+- `spreadTargets` 引用 `seed_data.AGENTS` 中存在的其他 NPC，数量建议 1-3。
+
+### 5.13 `relationshipBeatSeeds`
+
+```jsonc
+[
+  {
+    "id": "relation_kai_assist_small_help",
+    "stageHint": "stage_1",
+    "trigger": "玩家在日常互动中主动帮忙并尊重对方节奏。",
+    "direction": "up",
+    "summary": "凯娅愿意给出更明确的偏好与轻量协作线索。",
+    "tags": ["day1", "trust_building"]
+  }
+]
+```
+
+- `relationshipBeatSeeds` 用于关系反馈措辞与素材锚点，避免把关系变化写死成剧情节点。
+- `direction` 取值：`up / steady / down`。
+- 每位 NPC 至少覆盖 1 条 `up` 与 1 条 `steady/down`。
+- `stageHint` 必须命中该 NPC 自己的 `relationshipStages[].stage`。
+
 ## 6. 运行时集成点
 
 | 位置 | 改动 | 风险 |
@@ -268,6 +329,9 @@ backend/app/content/
 - `giftReactions` 四档齐全。
 - `assetRefs` 所有 id 命中 `asset_manifest.json`（缺失给 warning，不阻塞）。
 - `monologueSeeds` 至少 8 条。
+- `lifeActionSeeds` 至少 3 条并覆盖 morning/afternoon/evening，`relatedNpcIds` 仅引用其他合法 NPC。
+- `dailyRumorBeats` 至少 2 条且覆盖 hidden/town_known，`spreadTargets` 仅引用其他合法 NPC。
+- `relationshipBeatSeeds` 至少 2 条且覆盖 up 与 steady/down，`stageHint` 命中本卡关系阶段。
 - 校验通过后打印 `[npc-codex-check] ok`，挂入 `npm.cmd run content:check` 与 `scripts/check.py` 流水线。
 
 ## 8. 写作 Workflow（`.windsurf/workflows/author-npc-deep-card.md`）
@@ -295,7 +359,8 @@ backend/app/content/
 4. `monologueSeeds` 至少 8 条，覆盖三时段 + 高低情绪。
 5. `giftReactions` 四档齐全，每档 fallback 至少 2 条，符合 `voiceStyle`。
 6. `gossipHooks` 至少 1 条，引用现有冲突或秘密。
-7. JSON 必须能通过 `python scripts/check_npc_codex.py`。
+7. `lifeActionSeeds / dailyRumorBeats / relationshipBeatSeeds` 满足 Day 1 素材最小条数与引用合法性。
+8. JSON 必须能通过 `python scripts/check_npc_codex.py`。
 
 ## 9. 验收
 

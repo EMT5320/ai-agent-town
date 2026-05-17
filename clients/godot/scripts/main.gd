@@ -49,6 +49,7 @@ var map_character_layer: Control
 var status_label: Label
 var player_label: Label
 var location_list: VBoxContainer
+var scene_action_list: VBoxContainer
 var npc_list: VBoxContainer
 var event_list: VBoxContainer
 var event_choice_list: VBoxContainer
@@ -68,6 +69,7 @@ var player_local_target := Vector2.ZERO
 var player_local_has_click_target := false
 var player_local_initialized := false
 var player_local_location_id := ""
+var player_local_anchor_id := ""
 var current_near_npc_id := ""
 var current_near_event_id := ""
 var map_hint_label: Label
@@ -258,6 +260,16 @@ func _build_top_layer() -> void:
 	location_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	location_list.add_theme_constant_override("separation", _scaled_int(7))
 	left_panel.add_child(location_list)
+
+	var scene_action_title := Label.new()
+	scene_action_title.text = "场景行动"
+	_style_section_label(scene_action_title)
+	left_panel.add_child(scene_action_title)
+
+	scene_action_list = VBoxContainer.new()
+	scene_action_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scene_action_list.add_theme_constant_override("separation", _scaled_int(7))
+	left_panel.add_child(scene_action_list)
 
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -685,14 +697,17 @@ func _get_player_actor_node() -> Control:
 
 
 func _resolve_player_anchor(player_location: String, bounds: Rect2) -> Vector2:
-	var location_anchor := _player_spawn_for_location(player_location, bounds)
-	if not player_local_initialized or player_local_location_id != player_location:
+	var player: Dictionary = world_sync.get_player()
+	var state_anchor_id := str(player.get("anchorId", ""))
+	var location_anchor := _position_for_anchor_id(state_anchor_id, bounds, _player_spawn_for_location(player_location, bounds))
+	if not player_local_initialized or player_local_location_id != player_location or player_local_anchor_id != state_anchor_id:
 		player_local_initialized = true
 		player_local_location_id = player_location
+		player_local_anchor_id = state_anchor_id
 		player_local_position = location_anchor
 		player_local_target = location_anchor
 		player_local_has_click_target = false
-		last_location_debug = "本地出生点：%s pos=%s" % [player_location, _debug_vector(location_anchor)]
+		last_location_debug = "权威锚点：%s anchor=%s pos=%s" % [player_location, state_anchor_id, _debug_vector(location_anchor)]
 		_push_map_debug_note(last_location_debug)
 	else:
 		player_local_position = _clamp_point_to_walk_area(player_local_position, bounds)
@@ -734,6 +749,55 @@ func _on_location_pressed(location_id: String) -> void:
 	_apply_authoritative_state(response["data"]["state"])
 	_render_world()
 	_set_status("已到达：%s" % _get_location_name(selected_location_id))
+
+
+func _on_move_to_anchor_pressed(anchor_id: String, location_id: String) -> void:
+	var interaction: Dictionary = world_sync.find_interaction("move_to_anchor", "anchor", anchor_id)
+	if not interaction.is_empty() and not _is_interaction_enabled(interaction):
+		_set_status("暂时不能移动到锚点：%s" % _interaction_reason(interaction))
+		return
+	var payload := _payload_from_interaction(interaction)
+	if payload.is_empty():
+		payload = {"type": "move_to_anchor", "locationId": location_id, "anchorId": anchor_id}
+	await _submit_player_action_with_feedback("移动到锚点", payload)
+
+
+func _on_scene_interaction_pressed(interaction_id: String) -> void:
+	var interaction: Dictionary = world_sync.find_interaction_by_id(interaction_id)
+	if interaction.is_empty():
+		_set_status("场景行动已失效，请刷新世界状态。")
+		return
+	if not _is_interaction_enabled(interaction):
+		_set_status("暂时不能执行场景行动：%s" % _interaction_reason(interaction))
+		return
+	var payload := _payload_from_interaction(interaction)
+	if payload.is_empty():
+		_set_status("场景行动缺少后端 payload：%s" % interaction_id)
+		return
+	await _submit_player_action_with_feedback(str(interaction.get("label", "场景行动")), payload)
+
+
+func _on_end_phase_pressed() -> void:
+	var interaction: Dictionary = world_sync.find_interaction_by_id("end_phase")
+	if not interaction.is_empty() and not _is_interaction_enabled(interaction):
+		_set_status("暂时不能结束时段：%s" % _interaction_reason(interaction))
+		return
+	var payload := _payload_from_interaction(interaction)
+	if payload.is_empty():
+		payload = {"type": "end_phase"}
+	await _submit_player_action_with_feedback("结束时段", payload)
+
+
+func _submit_player_action_with_feedback(action_label: String, payload: Dictionary) -> void:
+	_set_status("正在执行：%s ..." % action_label)
+	var response = await api_client.post_player_action(payload)
+	if not _is_action_response_ok(response):
+		_set_status("动作失败：%s" % _response_error(response))
+		return
+	_apply_authoritative_state(response["data"]["state"])
+	_render_world()
+	_render_action_feedback_result(action_label, response["data"].get("result", {}))
+	_set_status("动作完成：%s · %s" % [action_label, world_sync.get_clock_label()])
 
 
 func _on_talk_pressed() -> void:
@@ -928,6 +992,7 @@ func _render_world() -> void:
 	_render_background()
 	_render_map_characters()
 	_render_locations()
+	_render_scene_actions()
 	_render_npcs()
 	_render_events()
 	_render_focus_visual()
@@ -951,6 +1016,8 @@ func _render_map_characters() -> void:
 	player_target_marker = null
 	var bounds := _map_bounds()
 	_ensure_map_hint_label(bounds)
+	_render_map_anchor_markers(bounds)
+	_render_map_scene_actions(bounds)
 	_render_map_event_markers(bounds)
 
 	var occupancy: Dictionary = {}
@@ -1007,6 +1074,69 @@ func _render_map_event_markers(bounds: Rect2) -> void:
 		var label := _create_map_label(event_title, 160, 14)
 		label.position = marker.position + Vector2(-_scaled(58), _scaled(44))
 		map_character_layer.add_child(label)
+
+
+func _render_map_anchor_markers(bounds: Rect2) -> void:
+	var player: Dictionary = world_sync.get_player()
+	var player_anchor_id := str(player.get("anchorId", ""))
+	for anchor in world_sync.get_anchors():
+		if not (anchor is Dictionary):
+			continue
+		var anchor_id := str(anchor.get("id", ""))
+		var anchor_location := str(anchor.get("locationId", ""))
+		if anchor_id.is_empty() or anchor_location != selected_location_id:
+			continue
+		var interaction: Dictionary = world_sync.find_interaction("move_to_anchor", "anchor", anchor_id)
+		var button := Button.new()
+		button.name = "MapAnchor_%s" % _safe_node_suffix(anchor_id)
+		button.text = _anchor_display_label(anchor)
+		button.focus_mode = Control.FOCUS_NONE
+		button.tooltip_text = "移动到锚点：%s" % anchor_id
+		button.disabled = anchor_id == player_anchor_id or (not interaction.is_empty() and not _is_interaction_enabled(interaction))
+		if button.disabled and anchor_id == player_anchor_id:
+			button.tooltip_text = "当前所在锚点：%s" % anchor_id
+		elif button.disabled and not interaction.is_empty():
+			button.tooltip_text = _interaction_reason(interaction)
+		_style_button(button, 92)
+		button.size = Vector2(_scaled(112), _scaled(38))
+		button.position = _position_for_anchor_id(anchor_id, bounds, _scene_stage_center(bounds)) - Vector2(button.size.x * 0.5, _scaled(20))
+		button.z_index = 8
+		button.pressed.connect(_on_move_to_anchor_pressed.bind(anchor_id, anchor_location))
+		map_character_layer.add_child(button)
+
+
+func _render_map_scene_actions(bounds: Rect2) -> void:
+	var offsets_by_anchor: Dictionary = {}
+	for interaction in world_sync.get_available_interactions():
+		if not (interaction is Dictionary):
+			continue
+		if str(interaction.get("type", "")) != "scene_action":
+			continue
+		var target = interaction.get("target", {})
+		if not (target is Dictionary):
+			continue
+		var target_data: Dictionary = target
+		var location_id := str(target_data.get("locationId", ""))
+		if location_id != selected_location_id:
+			continue
+		var anchor_id := str(target_data.get("anchorId", ""))
+		var index := int(offsets_by_anchor.get(anchor_id, 0))
+		offsets_by_anchor[anchor_id] = index + 1
+		var button := Button.new()
+		button.name = "MapSceneAction_%s" % _safe_node_suffix(str(interaction.get("id", "")))
+		button.text = _scene_action_short_label(interaction)
+		button.focus_mode = Control.FOCUS_NONE
+		button.disabled = not _is_interaction_enabled(interaction)
+		button.tooltip_text = str(interaction.get("label", "场景行动"))
+		if button.disabled:
+			button.tooltip_text = _interaction_reason(interaction)
+		_style_button(button, 86)
+		button.size = Vector2(_scaled(104), _scaled(36))
+		var anchor_pos := _position_for_anchor_id(anchor_id, bounds, _scene_stage_center(bounds))
+		button.position = anchor_pos + Vector2(-button.size.x * 0.5, _scaled(24 + index * 40))
+		button.z_index = 18
+		button.pressed.connect(_on_scene_interaction_pressed.bind(str(interaction.get("id", ""))))
+		map_character_layer.add_child(button)
 
 
 func _add_map_actor(owner_id: String, display_name: String, location_id: String, is_player: bool, occupancy: Dictionary, bounds: Rect2) -> void:
@@ -1120,6 +1250,24 @@ func _map_position_for_location(location_id: String, bounds: Rect2) -> Vector2:
 	var x_ratio := float(location.get("x", 50.0)) / 100.0 if not location.is_empty() else 0.5
 	var y_ratio := float(location.get("y", 55.0)) / 100.0 if not location.is_empty() else 0.55
 	return Vector2(bounds.position.x + bounds.size.x * x_ratio, bounds.position.y + bounds.size.y * y_ratio)
+
+
+func _position_for_anchor_id(anchor_id: String, bounds: Rect2, fallback: Vector2) -> Vector2:
+	if anchor_id.is_empty():
+		return fallback
+	var anchor: Dictionary = world_sync.find_anchor(anchor_id)
+	if anchor.is_empty():
+		return fallback
+	return _position_for_anchor(anchor, bounds, fallback)
+
+
+func _position_for_anchor(anchor: Dictionary, bounds: Rect2, fallback: Vector2) -> Vector2:
+	var screen_position = anchor.get("screenPosition", {})
+	if not (screen_position is Dictionary):
+		return fallback
+	var screen_data: Dictionary = screen_position
+	var ratio := Vector2(float(screen_data.get("x", 0.5)), float(screen_data.get("y", 0.5)))
+	return _scene_anchor_from_ratio(bounds, ratio)
 
 
 func _scene_stage_center(bounds: Rect2) -> Vector2:
@@ -1409,6 +1557,81 @@ func _render_locations() -> void:
 		location_list.add_child(button)
 
 
+func _render_scene_actions() -> void:
+	if scene_action_list == null:
+		return
+	_clear_column(scene_action_list)
+	var player: Dictionary = world_sync.get_player()
+	var player_anchor: Dictionary = world_sync.get_player_anchor()
+	var anchor_id := str(player.get("anchorId", ""))
+	var anchor_kind := str(player_anchor.get("kind", "场景锚点")) if not player_anchor.is_empty() else "场景锚点"
+	var action_budget := int(world_sync.current_state.get("clock", {}).get("actionBudget", 0))
+	var summary := Label.new()
+	summary.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	summary.text = "当前位置：%s · %s\n行动预算：%d" % [_anchor_kind_label(anchor_kind), anchor_id, action_budget]
+	_style_body_label(summary, 14)
+	scene_action_list.add_child(summary)
+
+	var anchor_buttons_added := 0
+	for anchor in world_sync.get_anchors():
+		if not (anchor is Dictionary):
+			continue
+		var anchor_location := str(anchor.get("locationId", ""))
+		if anchor_location != selected_location_id:
+			continue
+		var target_anchor_id := str(anchor.get("id", ""))
+		var interaction: Dictionary = world_sync.find_interaction("move_to_anchor", "anchor", target_anchor_id)
+		var button := Button.new()
+		button.text = "前往：%s" % _anchor_display_label(anchor)
+		button.disabled = target_anchor_id == anchor_id or (not interaction.is_empty() and not _is_interaction_enabled(interaction))
+		button.tooltip_text = "移动到 %s" % target_anchor_id
+		if button.disabled and target_anchor_id == anchor_id:
+			button.tooltip_text = "当前所在锚点"
+		elif button.disabled and not interaction.is_empty():
+			button.tooltip_text = _interaction_reason(interaction)
+		_style_button(button)
+		button.pressed.connect(_on_move_to_anchor_pressed.bind(target_anchor_id, anchor_location))
+		scene_action_list.add_child(button)
+		anchor_buttons_added += 1
+
+	var action_buttons_added := 0
+	for interaction in world_sync.get_available_interactions():
+		if not (interaction is Dictionary):
+			continue
+		if str(interaction.get("type", "")) != "scene_action":
+			continue
+		var target = interaction.get("target", {})
+		if not (target is Dictionary):
+			continue
+		var target_data: Dictionary = target
+		if str(target_data.get("locationId", "")) != selected_location_id:
+			continue
+		var action_button := Button.new()
+		action_button.text = "执行：%s" % str(interaction.get("label", "场景行动"))
+		action_button.disabled = not _is_interaction_enabled(interaction)
+		action_button.tooltip_text = str(interaction.get("label", "场景行动"))
+		if action_button.disabled:
+			action_button.tooltip_text = _interaction_reason(interaction)
+		_style_button(action_button)
+		action_button.pressed.connect(_on_scene_interaction_pressed.bind(str(interaction.get("id", ""))))
+		scene_action_list.add_child(action_button)
+		action_buttons_added += 1
+
+	var end_phase_interaction: Dictionary = world_sync.find_interaction_by_id("end_phase")
+	var end_phase_button := Button.new()
+	end_phase_button.text = "结束当前时段"
+	end_phase_button.disabled = not end_phase_interaction.is_empty() and not _is_interaction_enabled(end_phase_interaction)
+	_style_button(end_phase_button)
+	end_phase_button.pressed.connect(_on_end_phase_pressed)
+	scene_action_list.add_child(end_phase_button)
+
+	if anchor_buttons_added == 0 and action_buttons_added == 0:
+		var empty_hint := Label.new()
+		empty_hint.text = "当前场景暂无可执行行动。"
+		_style_body_label(empty_hint, 14)
+		scene_action_list.add_child(empty_hint)
+
+
 func _render_npcs() -> void:
 	_clear_column(npc_list)
 	for npc in world_sync.get_npcs():
@@ -1569,6 +1792,47 @@ func _render_social_action_result(action_label: String, result: Dictionary) -> v
 	dialogue_label.text = "\n".join(lines)
 
 
+func _render_action_feedback_result(action_label: String, result: Dictionary) -> void:
+	var feedback = result.get("actionFeedback", {})
+	var lines: Array[String] = []
+	if feedback is Dictionary and not feedback.is_empty():
+		var feedback_data: Dictionary = feedback
+		var title := str(feedback_data.get("title", action_label))
+		var summary := str(feedback_data.get("summary", "动作已提交。"))
+		speaker_label.text = "行动反馈 · %s" % title
+		lines.append(summary)
+		var location_name := _get_location_name(str(feedback_data.get("locationId", selected_location_id)))
+		var anchor_id := str(feedback_data.get("anchorId", ""))
+		if not anchor_id.is_empty():
+			lines.append("位置：%s · %s" % [location_name, anchor_id])
+		var changed_resources: Array = feedback_data.get("changedResources", [])
+		if not changed_resources.is_empty():
+			lines.append("\n变化：")
+			for change in changed_resources.slice(0, 5):
+				if change is Dictionary:
+					lines.append("- %s" % _format_resource_change(change))
+			if changed_resources.size() > 5:
+				lines.append("- 还有 %d 条变化已写入后端事件。" % (changed_resources.size() - 5))
+	else:
+		var dialogue: Array = result.get("dialogue", [])
+		if not dialogue.is_empty() and dialogue[0] is Dictionary:
+			var first_line: Dictionary = dialogue[0]
+			lines.append(str(first_line.get("text", "动作已提交。")))
+		else:
+			lines.append("动作已提交。")
+		speaker_label.text = "行动反馈 · %s" % action_label
+
+	var clock_transition = result.get("clockTransition", {})
+	if clock_transition is Dictionary and not clock_transition.is_empty():
+		var transition: Dictionary = clock_transition
+		lines.append("\n时段：%s → %s；新预算：%s" % [
+			transition.get("fromPhase", "?"),
+			transition.get("toPhase", "?"),
+			transition.get("actionBudget", "?"),
+		])
+	dialogue_label.text = "\n".join(lines)
+
+
 func _render_attend_result(result: Dictionary) -> void:
 	var lines: Array[String] = []
 	var event_result: Dictionary = result.get("eventResult", {})
@@ -1703,6 +1967,71 @@ func _get_location_name(location_id: String) -> String:
 	if not location.is_empty():
 		return str(location.get("name", location_id))
 	return location_id
+
+
+func _anchor_kind_label(kind: String) -> String:
+	var labels := {
+		"entry": "入口",
+		"farm_field": "田地",
+		"social_spot": "社交点",
+		"market_spot": "市集",
+		"event_spot": "舞台",
+		"service_spot": "服务点",
+	}
+	return str(labels.get(kind, kind if not kind.is_empty() else "锚点"))
+
+
+func _anchor_display_label(anchor: Dictionary) -> String:
+	var kind := _anchor_kind_label(str(anchor.get("kind", "")))
+	var anchor_id := str(anchor.get("id", ""))
+	if anchor_id.is_empty():
+		return kind
+	if anchor_id.ends_with("_door") or anchor_id.ends_with("_gate"):
+		return kind
+	return "%s" % kind
+
+
+func _scene_action_short_label(interaction: Dictionary) -> String:
+	var label := str(interaction.get("label", "行动"))
+	label = label.replace("farm_plot_01", "1号田")
+	label = label.replace("farm_plot_02", "2号田")
+	return label
+
+
+func _safe_node_suffix(raw: String) -> String:
+	return raw.replace(":", "_").replace("/", "_").replace(" ", "_")
+
+
+func _format_resource_change(change: Dictionary) -> String:
+	var resource_type := str(change.get("resourceType", "resource"))
+	var resource_id := str(change.get("resourceId", ""))
+	var prefix := "%s" % resource_type
+	if not resource_id.is_empty():
+		prefix = "%s %s" % [resource_type, resource_id]
+	if change.has("delta"):
+		return "%s：%s" % [prefix, _format_value_brief(change.get("delta"))]
+	return "%s：%s → %s" % [prefix, _format_value_brief(change.get("before")), _format_value_brief(change.get("after"))]
+
+
+func _format_value_brief(value) -> String:
+	if value is Dictionary:
+		var data: Dictionary = value
+		if data.has("stage"):
+			var crop_id := str(data.get("cropId", ""))
+			return "%s%s" % [data.get("stage", "?"), (" / %s" % crop_id) if not crop_id.is_empty() and crop_id != "<null>" else ""]
+		if data.has("locationId") or data.has("anchorId"):
+			return "%s@%s" % [data.get("locationId", "?"), data.get("anchorId", "?")]
+		return JSON.stringify(data)
+	if value is Array:
+		var parts: Array[String] = []
+		for item in value:
+			if item is Dictionary:
+				var item_data: Dictionary = item
+				parts.append("%s %+d" % [item_data.get("itemId", "item"), int(item_data.get("delta", 0))])
+			else:
+				parts.append(str(item))
+		return "，".join(parts)
+	return str(value)
 
 
 func _interaction_payload_or_fallback(action_type: String, target_kind: String, target_id: String, fallback: Dictionary) -> Dictionary:

@@ -127,6 +127,41 @@ class GossipHook:
 
 
 @dataclass(frozen=True, slots=True)
+class LifeActionSeed:
+    """Day 1 日常行动素材种子，用于低风险驱动日程行为。"""
+
+    action_id: str
+    time_window: str
+    summary: str
+    intent_tags: tuple[str, ...]
+    location_hints: tuple[str, ...] = ()
+    related_npc_ids: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class DailyRumorBeat:
+    """Day 1 谣言节拍素材，供后续传播玩法消费。"""
+
+    beat_id: str
+    visibility: str
+    cue: str
+    spread_targets: tuple[str, ...]
+    tags: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class RelationshipBeatSeed:
+    """Day 1 关系节拍素材，供关系变化反馈与表达锚点消费。"""
+
+    beat_id: str
+    stage_hint: str
+    trigger: str
+    direction: str
+    summary: str
+    tags: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class AssetRefs:
     """关联美术资产 id，校验时与 asset_manifest.json 交叉引用。"""
 
@@ -154,3 +189,6 @@ class NpcDeepCard:
     gift_reactions: GiftReactions
     gossip_hooks: tuple[GossipHook, ...]
     asset_refs: AssetRefs
+    life_action_seeds: tuple[LifeActionSeed, ...] = ()
+    daily_rumor_beats: tuple[DailyRumorBeat, ...] = ()
+    relationship_beat_seeds: tuple[RelationshipBeatSeed, ...] = ()

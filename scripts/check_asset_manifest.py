@@ -33,6 +33,13 @@ REQUIRED_FIELDS = {
     "reviewNotes",
 }
 
+ALLOWED_STATUSES = {
+    "style_anchor_candidate",
+    "prompt_ready",
+    "pending_review",
+    "source_selected",
+}
+
 
 def load_json(path: Path) -> Any:
     """读取 JSON 文件并附带路径上下文。"""
@@ -59,6 +66,26 @@ def parse_size(value: str) -> tuple[int, int]:
     return int(width), int(height)
 
 
+def validate_prompt_ref(asset_id: str, prompt_ref: str, status: str) -> None:
+    """校验 prompt 引用路径，支持 Markdown 锚点计划引用。"""
+    base_ref, _, anchor = prompt_ref.partition("#")
+    prompt_path = ROOT / base_ref
+    if not prompt_path.exists():
+        raise RuntimeError(f"{asset_id} 缺少 prompt 文件：{prompt_path}")
+
+    if anchor:
+        markdown_text = prompt_path.read_text(encoding="utf-8")
+        anchor_patterns = (
+            f'id="{anchor}"',
+            f"id='{anchor}'",
+        )
+        if not any(pattern in markdown_text for pattern in anchor_patterns):
+            raise RuntimeError(f"{asset_id} 的 prompt 锚点不存在：{prompt_ref}")
+
+    if status == "prompt_ready" and not anchor:
+        raise RuntimeError(f"{asset_id} 为 prompt_ready 时必须引用文档锚点：{prompt_ref}")
+
+
 def validate_manifest() -> None:
     """校验已筛选资产的路径、字段和尺寸。"""
     manifest = load_json(MANIFEST_PATH)
@@ -78,11 +105,12 @@ def validate_manifest() -> None:
             raise RuntimeError(f"重复资产 id：{asset_id}")
         seen_ids.add(asset_id)
 
-        prompt_path = ROOT / str(entry["fullPromptRef"])
-        if not prompt_path.exists():
-            raise RuntimeError(f"{asset_id} 缺少 prompt 文件：{prompt_path}")
-
         status = str(entry["status"])
+        if status not in ALLOWED_STATUSES:
+            raise RuntimeError(f"{asset_id} 使用了未登记状态：{status}")
+
+        validate_prompt_ref(asset_id, str(entry["fullPromptRef"]), status)
+
         if status == "source_selected":
             asset_path = ROOT / str(entry["path"])
             if not asset_path.exists():

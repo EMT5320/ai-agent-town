@@ -57,6 +57,7 @@ REQUIRED_CLIENT_CONTEXT_FIELDS = {
 REQUIRED_GAME_STATE_FIELDS = {
     "clock",
     "player",
+    "playerAnchor",
     "locations",
     "anchors",
     "interactables",
@@ -97,6 +98,7 @@ REQUIRED_DEBUG_TURN_FIELDS = {
 
 REQUIRED_MEMORY_SEARCH_FIELDS = {"query", "agentId", "tags", "limit", "items"}
 REQUIRED_MEMORY_ITEM_FIELDS = {"agentId", "agentName", "tick", "importance", "tags", "text", "match"}
+REQUIRED_ACTION_FEEDBACK_FIELDS = {"title", "summary", "locationId", "anchorId", "resultType", "changedResources", "eventIds"}
 
 
 def assert_no_inline_api_key(payload: object, label: str, path: str = "") -> None:
@@ -267,6 +269,23 @@ def assert_player_action_contract(response: dict, label: str) -> None:
     assert_game_state_contract(response["state"], f"{label} state")
 
 
+def assert_action_feedback_contract(result: dict, label: str, *, expected_result_type: str | None = None) -> dict:
+    """确认锚点移动或场景动作返回统一 actionFeedback 契约。"""
+    feedback = result.get("actionFeedback")
+    if not isinstance(feedback, dict):
+        raise RuntimeError(f"{label}.actionFeedback 应为对象")
+    missing = sorted(REQUIRED_ACTION_FEEDBACK_FIELDS - set(feedback))
+    if missing:
+        raise RuntimeError(f"{label}.actionFeedback 缺少字段：{missing}")
+    if expected_result_type and feedback.get("resultType") != expected_result_type:
+        raise RuntimeError(f"{label}.actionFeedback.resultType 期望 {expected_result_type}，实际为 {feedback.get('resultType')}")
+    if not isinstance(feedback["changedResources"], list):
+        raise RuntimeError(f"{label}.actionFeedback.changedResources 应为数组")
+    if not isinstance(feedback["eventIds"], list) or not feedback["eventIds"]:
+        raise RuntimeError(f"{label}.actionFeedback.eventIds 应为非空数组")
+    return feedback
+
+
 def assert_game_state_contract(state: dict, label: str) -> None:
     """确认 /api/world/state 保持 Godot 可消费的稳定状态切片。"""
     missing = sorted((REQUIRED_GAME_STATE_FIELDS | REQUIRED_CLIENT_CONTEXT_FIELDS) - set(state))
@@ -285,6 +304,11 @@ def assert_game_state_contract(state: dict, label: str) -> None:
         raise RuntimeError(f"{label}.clock 应包含 phase 和 actionBudget")
     if not isinstance(state["player"], dict) or not state["player"].get("locationId") or not state["player"].get("anchorId"):
         raise RuntimeError(f"{label}.player 应包含 locationId 和 anchorId")
+    player_anchor = state.get("playerAnchor")
+    if not isinstance(player_anchor, dict) or not player_anchor.get("id") or not player_anchor.get("locationId"):
+        raise RuntimeError(f"{label}.playerAnchor 应包含 id 和 locationId")
+    if player_anchor.get("id") != state["player"].get("anchorId"):
+        raise RuntimeError(f"{label}.playerAnchor.id 应与 player.anchorId 一致")
     if not isinstance(state["player"].get("inventory"), list):
         raise RuntimeError(f"{label}.player.inventory 应为数组")
     if not isinstance(state["slice"], dict) or not state["slice"].get("npcIds") or not state["slice"].get("locationIds"):
@@ -565,6 +589,8 @@ app = create_town_app(provider_mode="rule")
 initial = app.get_public_state()
 if len(initial["agents"]) != 10:
     raise RuntimeError(f"期望 10 个初始 Agent，实际得到 {len(initial['agents'])}")
+if initial.get("playerAnchor", {}).get("id") != initial.get("player", {}).get("anchorId"):
+    raise RuntimeError("公开状态应暴露与 player.anchorId 一致的 playerAnchor")
 assert_gossip_propagation_contract(app)
 
 game_state = app.get_game_state()
@@ -608,24 +634,31 @@ for required_hint in ("starlight_shortage_scene", "starlight_shortage_ui_card", 
     if required_hint not in asset_hint_ids:
         raise RuntimeError(f"游戏状态中的事件资源提示缺少 {required_hint}")
 interaction_types = {item.get("type") for item in game_state["availableInteractions"]}
-for required_interaction in ("move", "move_to_anchor", "farm_action", "end_phase", "talk", "give_gift", "inspect", "attend_event"):
+for required_interaction in ("move", "move_to_anchor", "scene_action", "farm_action", "end_phase", "talk", "give_gift", "inspect", "attend_event"):
     if required_interaction not in interaction_types:
         raise RuntimeError(f"/api/world/state availableInteractions 缺少 {required_interaction}")
 
 anchor_move = app.player_action({"type": "move_to_anchor", "locationId": "farm", "anchorId": "farm_field"})
 assert_player_action_contract(anchor_move, "move_to_anchor")
+anchor_feedback = assert_action_feedback_contract(anchor_move["result"], "move_to_anchor", expected_result_type="anchor_moved")
 if anchor_move["state"]["player"]["anchorId"] != "farm_field":
     raise RuntimeError("move_to_anchor 后玩家锚点应同步为 farm_field")
 if anchor_move["state"]["clock"]["actionBudget"] != game_state["clock"]["actionBudget"] - 1:
     raise RuntimeError("move_to_anchor 应消耗 1 点行动预算")
+if anchor_feedback.get("anchorId") != "farm_field":
+    raise RuntimeError("move_to_anchor.actionFeedback.anchorId 应为 farm_field")
 
-plant = app.player_action({"type": "farm_action", "locationId": "farm", "interactableId": "farm_plot_01", "action": "plant", "itemId": "starlight_turnip_seed"})
-assert_player_action_contract(plant, "farm_action plant")
+plant = app.player_action(
+    {"type": "scene_action", "locationId": "farm", "interactableId": "farm_plot_01", "action": "plant", "itemId": "starlight_turnip_seed"}
+)
+assert_player_action_contract(plant, "scene_action plant")
+assert_action_feedback_contract(plant["result"], "scene_action plant", expected_result_type="scene_action_applied")
 if not any(plot["id"] == "farm_plot_01" and plot["stage"] == "planted" for plot in plant["state"]["farmPlots"]):
     raise RuntimeError("plant 后 farm_plot_01 应进入 planted 阶段")
 
-water = app.player_action({"type": "farm_action", "locationId": "farm", "interactableId": "farm_plot_01", "action": "water"})
-assert_player_action_contract(water, "farm_action water")
+water = app.player_action({"type": "scene_action", "locationId": "farm", "interactableId": "farm_plot_01", "action": "water"})
+assert_player_action_contract(water, "scene_action water")
+assert_action_feedback_contract(water["result"], "scene_action water", expected_result_type="scene_action_applied")
 if not any(plot["id"] == "farm_plot_01" and plot["stage"] == "watered" for plot in water["state"]["farmPlots"]):
     raise RuntimeError("water 后 farm_plot_01 应进入 watered 阶段")
 if water["state"]["clock"]["actionBudget"] != 0:
@@ -638,8 +671,9 @@ if phase_end["state"]["clock"]["phase"] != "noon" or phase_end["state"]["clock"]
 if "farm_plot_01" not in phase_end["result"]["clockTransition"]["maturedFarmPlotIds"]:
     raise RuntimeError("end_phase 应把已浇水田块推进到可收获")
 
-harvest = app.player_action({"type": "farm_action", "locationId": "farm", "interactableId": "farm_plot_01", "action": "harvest"})
-assert_player_action_contract(harvest, "farm_action harvest")
+harvest = app.player_action({"type": "scene_action", "locationId": "farm", "interactableId": "farm_plot_01", "action": "harvest"})
+assert_player_action_contract(harvest, "scene_action harvest")
+assert_action_feedback_contract(harvest["result"], "scene_action harvest", expected_result_type="scene_action_applied")
 if not any(plot["id"] == "farm_plot_01" and plot["stage"] == "empty" for plot in harvest["state"]["farmPlots"]):
     raise RuntimeError("harvest 后 farm_plot_01 应回到 empty 阶段")
 if not any(item["id"] == "fresh_turnip" and item["quantity"] >= 2 for item in harvest["state"]["player"]["inventory"]):

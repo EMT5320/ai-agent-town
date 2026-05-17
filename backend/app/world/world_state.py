@@ -371,6 +371,7 @@ def sync_agents_from_presence(world: dict[str, Any], presence: list[dict[str, An
 def public_world(world: dict[str, Any]) -> dict[str, Any]:
     """输出前端需要的公开状态，裁剪长历史。"""
     view = deepcopy(world)
+    view["playerAnchor"] = current_player_anchor(world)
     view["locations"] = list(view["locations"].values())
     view["agents"] = list(view["agents"].values())
     view["player"]["actionHistory"] = view["player"].get("actionHistory", [])[-10:]
@@ -401,6 +402,7 @@ def public_game_world(world: dict[str, Any], recent_events: list[dict[str, Any]]
     return {
         "clock": view["clock"],
         "player": view["player"],
+        "playerAnchor": view.get("playerAnchor"),
         "locations": [location for location in view["locations"] if location["id"] in location_ids],
         "anchors": anchors,
         "interactables": interactables,
@@ -418,4 +420,20 @@ def public_game_world(world: dict[str, Any], recent_events: list[dict[str, Any]]
             "supportedNpcPresenceSources": list(NPC_PRESENCE_SOURCES),
         },
         "townStats": view["townStats"],
+    }
+
+
+def current_player_anchor(world: dict[str, Any]) -> dict[str, Any] | None:
+    """返回玩家当前锚点快照，给公共状态和客户端状态统一透出。"""
+    player = world.get("player", {})
+    anchor_id = str(player.get("anchorId") or "")
+    anchor = world.get("anchors", {}).get(anchor_id)
+    if not isinstance(anchor, dict):
+        return None
+    return {
+        "id": anchor.get("id"),
+        "locationId": anchor.get("locationId"),
+        "kind": anchor.get("kind"),
+        "screenPosition": anchor.get("screenPosition"),
+        "tags": list(anchor.get("tags", [])) if isinstance(anchor.get("tags"), list) else [],
     }

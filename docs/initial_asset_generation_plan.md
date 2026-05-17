@@ -1,7 +1,7 @@
 ---
 status: snapshot
 owner_lane: asset-pipeline
-last_verified: 2026-05-15
+last_verified: 2026-05-17
 startup_load: on-demand
 source_of_truth: false
 scope: initial asset generation batches and historical asset sequencing
@@ -21,7 +21,7 @@ scope: initial asset generation batches and historical asset sequencing
 - `assets/source/ui/anime_dialogue_panel_style.png`
 - 玩家农场主与 6 个首发 NPC 的 reference sheet
 
-这些资产适合继续作为风格、角色比例、服饰复杂度和 UI 形状语言的基线。当前缺口集中在正式游戏可消费资源：地点背景、事件 CG、半身立绘差分、地图小人、道具图标和拆分 UI 组件。
+这些资产适合继续作为风格、角色比例、服饰复杂度和 UI 形状语言的基线。当前缺口集中在正式游戏可消费资源：happy/troubled 半身立绘差分、行动反馈图标、生活行动 UI 小组件，以及后续可直接导入的地点背景与事件 CG。
 
 代码层仍保留旧观察台的 10 NPC / 6 地点种子数据；首版正式资产按文档冻结的 6 NPC / 3 地点执行。旧 NPC 和旧地点先作为扩展池，不进入本轮正式资产生成。
 
@@ -38,6 +38,8 @@ scope: initial asset generation batches and historical asset sequencing
 | 地图小人 | 7 | 玩家 + 6 NPC 的地图层表现 | P1 |
 | 互动标记 | 3 | 对话、送礼、事件入口 | P2 |
 | 道具图标 | 3 | 芜菁、小花、星灯灯笼 | P2 |
+| 行动反馈图标 | 5 | move/talk/gift/inspect/event 的即时反馈 | P1 |
+| 生活行动 UI 小组件 | 5 | 生活行动按钮、日程条、结果浮层 | P1 |
 | UI 组件 | 4 | 对话框、名牌、选择按钮、记忆卡片 | P2 |
 
 ### 扩展池资产
@@ -84,14 +86,28 @@ scope: initial asset generation batches and historical asset sequencing
 
 生成 3 个道具图标与 4 个 UI 组件。UI 组件后续可以在 Godot 中重建为 Control + Theme；生成图主要提供形状语言、边框、色彩和星灯纹样参考。
 
+### 批次 2A：表情差分与生活行动反馈（prompt-ready）
+
+本批次在不伪造源图的前提下，先把 backlog 写成可校验 manifest 条目：
+
+1. 14 张角色差分：玩家 + 6 NPC 的 `happy` / `troubled`。
+2. 5 张行动反馈图标：`move`、`talk`、`gift`、`inspect`、`event`。
+3. 5 张生活行动 UI 小组件：3 个行动按钮 + 日程条 + 结果浮层。
+
+执行约束：
+
+- manifest 状态统一标记为 `prompt_ready`，禁止提前标记 `source_selected`。
+- `fullPromptRef` 使用 `docs/asset_generation_prompts.md` 的锚点段落，便于校验。
+- `processedPath` 与 `godotPath` 保持 `null`，直到源图真实生成并筛选通过。
+
 ## 资产登记规则
 
 每张筛选进入首版的图需要登记到 `assets/manifests/asset_manifest.json`：
 
 - `path` 指向 `assets/source/...`。
-- `fullPromptRef` 指向 `assets/manifests/prompts/...txt`。
-- `status` 使用 `source_selected`。
-- `processedPath` 和 `godotPath` 在处理/导入前保持 `null`。
+- `fullPromptRef` 已生成资产指向 `assets/manifests/prompts/...txt`；prompt 计划条目可指向 `docs/asset_generation_prompts.md#...` 锚点。
+- 已生成并通过筛选的条目使用 `source_selected`；仅完成 prompt 计划的条目使用 `prompt_ready`。
+- `prompt_ready` 条目必须保持 `processedPath=null`、`godotPath=null`。
 - `reviewNotes` 记录是否能承载对话 UI、是否有不可控文字、是否需要重生成。
 
 ## 质量门槛

@@ -525,6 +525,49 @@ class AgentRuntime:
                     },
                 }
             )
+            interactions.append(
+                {
+                    "id": f"scene_action:{plot['id']}:{farm_action}",
+                    "type": "scene_action",
+                    "label": self._farm_action_label(farm_action, str(plot["id"])),
+                    "enabled": enabled,
+                    "reason": reason,
+                    "target": {"kind": "farm_plot", "id": plot["id"], "locationId": plot.get("locationId"), "anchorId": plot.get("anchorId")},
+                    "payload": {
+                        "type": "scene_action",
+                        "locationId": plot.get("locationId"),
+                        "interactableId": plot["id"],
+                        "action": farm_action,
+                        "itemId": plot.get("seedItemId") if farm_action == "plant" else None,
+                    },
+                }
+            )
+
+        for interactable in self.world.get("interactables", {}).values():
+            if str(interactable.get("kind") or "") == "farm_plot":
+                continue
+            actions = [str(action) for action in interactable.get("actions", []) if str(action)]
+            if "inspect" not in actions:
+                continue
+            location_id = str(interactable.get("locationId") or "")
+            anchor_id = str(interactable.get("anchorId") or "")
+            at_anchor = self.world["player"].get("locationId") == location_id and self.world["player"].get("anchorId") == anchor_id
+            interactions.append(
+                {
+                    "id": f"scene_action:{interactable['id']}:inspect",
+                    "type": "scene_action",
+                    "label": self._scene_action_label("inspect", interactable),
+                    "enabled": at_anchor,
+                    "reason": None if at_anchor else "not_near_anchor",
+                    "target": {"kind": str(interactable.get("kind") or "interactable"), "id": interactable["id"], "locationId": location_id, "anchorId": anchor_id},
+                    "payload": {
+                        "type": "scene_action",
+                        "locationId": location_id,
+                        "interactableId": interactable["id"],
+                        "action": "inspect",
+                    },
+                }
+            )
 
         for event in self.world.get("activeEvents", []):
             if event.get("status") == "resolved":
@@ -618,6 +661,18 @@ class AgentRuntime:
         labels = {"plant": "播种", "water": "浇水", "harvest": "收获"}
         return f"{labels.get(action, action)} {plot_id}"
 
+    def _scene_action_label(self, action: str, interactable: dict[str, Any]) -> str:
+        """把通用场景交互体转成客户端按钮文案。"""
+        kind = str(interactable.get("kind") or "interactable")
+        kind_labels = {
+            "notice_board": "公告板",
+            "event_marker": "事件点",
+            "service_spot": "服务点",
+            "interactable": "互动点",
+        }
+        action_labels = {"inspect": "查看", "attend_event": "参与"}
+        return f"{action_labels.get(action, action)}{kind_labels.get(kind, kind)}"
+
     def explain_event_skill(self, filters: dict[str, Any] | None = None) -> dict[str, Any]:
         """解释单个 Event Skill 在 API / Debug Console 中如何被追踪。"""
         filters = filters or {}
@@ -675,6 +730,8 @@ class AgentRuntime:
             result = self._handle_player_move(payload)
         elif action_type == "move_to_anchor":
             result = self._handle_player_move_to_anchor(payload)
+        elif action_type == "scene_action":
+            result = self._handle_player_scene_action(payload)
         elif action_type == "farm_action":
             result = self._handle_player_farm_action(payload)
         elif action_type == "end_phase":
@@ -1335,11 +1392,35 @@ class AgentRuntime:
             },
         )
         self._record_player_history("move_to_anchor", payload, [event["id"]])
+        action_feedback = self._build_action_feedback(
+            title="移动到场景锚点",
+            summary=str(event["payload"]["summary"]),
+            location_id=location_id,
+            anchor_id=anchor_id,
+            result_type="anchor_moved",
+            changed_resources=[
+                {
+                    "resourceType": "player_position",
+                    "resourceId": "player",
+                    "before": previous,
+                    "after": {"locationId": location_id, "anchorId": anchor_id},
+                },
+                {
+                    "resourceType": "action_budget",
+                    "resourceId": "clock.actionBudget",
+                    "before": budget["before"],
+                    "after": budget["after"],
+                    "delta": int(budget["after"]) - int(budget["before"]),
+                },
+            ],
+            event_ids=[event["id"]],
+        )
         return {
             "dialogue": [{"speakerId": "system", "speakerName": "旁白", "text": event["payload"]["summary"]}],
             "relationshipDeltas": [],
             "memoryWrites": [],
             "movement": event["payload"],
+            "actionFeedback": action_feedback,
             "eventIds": [event["id"]],
         }
 
@@ -1354,6 +1435,12 @@ class AgentRuntime:
             raise ValueError(f"未知农场动作：{action}")
         self._assert_player_at_anchor(str(plot.get("locationId")), str(plot.get("anchorId")))
         budget = self._consume_player_action_budget("farm_action")
+        stage_before = str(plot.get("stage") or "")
+        inventory_before: dict[str, int] = {
+            str(item.get("id")): int(item.get("quantity", 0))
+            for item in self.world["player"].get("inventory", [])
+            if item.get("id")
+        }
         event_payload: dict[str, Any] = {"playerId": "player", "farmPlotId": plot_id, "action": action, "actionBudget": budget}
 
         if action == "plant":
@@ -1387,12 +1474,164 @@ class AgentRuntime:
         event_payload["inventory"] = self.world["player"].get("inventory", [])
         event = self.event_store.append("player.farm_action", event_payload)
         self._record_player_history("farm_action", payload, [event["id"]])
+        changed_resources = [
+            {
+                "resourceType": "farm_plot",
+                "resourceId": plot_id,
+                "before": {"stage": stage_before},
+                "after": {"stage": plot.get("stage"), "cropId": plot.get("cropId")},
+            },
+            {
+                "resourceType": "action_budget",
+                "resourceId": "clock.actionBudget",
+                "before": budget["before"],
+                "after": budget["after"],
+                "delta": int(budget["after"]) - int(budget["before"]),
+            },
+        ]
+        inventory_delta = self._inventory_quantity_delta(inventory_before)
+        if inventory_delta:
+            changed_resources.append(
+                {
+                    "resourceType": "inventory",
+                    "resourceId": "player.inventory",
+                    "delta": inventory_delta,
+                }
+            )
+        action_feedback = self._build_action_feedback(
+            title=f"执行场景动作：{action}",
+            summary=str(event_payload["summary"]),
+            location_id=str(plot.get("locationId") or self.world["player"].get("locationId") or ""),
+            anchor_id=str(plot.get("anchorId") or self.world["player"].get("anchorId") or ""),
+            result_type="scene_action_applied",
+            changed_resources=changed_resources,
+            event_ids=[event["id"]],
+        )
         return {
             "dialogue": [{"speakerId": "system", "speakerName": "旁白", "text": event_payload["summary"]}],
             "relationshipDeltas": [],
             "memoryWrites": [],
             "farmAction": event_payload,
+            "actionFeedback": action_feedback,
             "eventIds": [event["id"]],
+        }
+
+    def _handle_player_scene_action(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """执行锚点附近的场景动作，统一走 interactable 契约。"""
+        interactable_id = str(payload.get("interactableId") or "")
+        interactable = self.world.get("interactables", {}).get(interactable_id)
+        if not interactable:
+            raise ValueError(f"未知场景交互体：{interactable_id}")
+        action = str(payload.get("action") or "")
+        supported_actions = {
+            str(item)
+            for item in interactable.get("actions", [])
+            if str(item)
+        }
+        if action not in supported_actions:
+            raise ValueError(f"交互体 {interactable_id} 不支持动作：{action}")
+        location_id = str(interactable.get("locationId") or "")
+        anchor_id = str(interactable.get("anchorId") or "")
+        self._assert_player_at_anchor(location_id, anchor_id)
+        kind = str(interactable.get("kind") or "")
+
+        if kind == "farm_plot":
+            farm_payload = {
+                "type": "farm_action",
+                "locationId": location_id,
+                "interactableId": interactable_id,
+                "action": action,
+                "itemId": payload.get("itemId"),
+            }
+            result = self._handle_player_farm_action(farm_payload)
+        elif action == "inspect":
+            state = interactable.get("state") if isinstance(interactable.get("state"), dict) else {}
+            inspect_payload = {"type": "inspect", "locationId": location_id}
+            event_id = str(payload.get("eventId") or state.get("eventId") or "")
+            if event_id:
+                inspect_payload["eventId"] = event_id
+            result = self._handle_player_inspect(inspect_payload)
+        elif action == "attend_event":
+            state = interactable.get("state") if isinstance(interactable.get("state"), dict) else {}
+            event_id = str(payload.get("eventId") or state.get("eventId") or "")
+            if not event_id:
+                raise ValueError(f"交互体 {interactable_id} 缺少 eventId，无法执行 attend_event")
+            attend_payload = {"type": "attend_event", "eventId": event_id}
+            if payload.get("choice"):
+                attend_payload["choice"] = payload["choice"]
+            result = self._handle_player_attend_event(attend_payload)
+        else:
+            raise ValueError(f"交互体 {interactable_id} 暂不支持 scene_action:{action}")
+
+        scene_action = {
+            "interactableId": interactable_id,
+            "kind": kind,
+            "action": action,
+            "locationId": location_id,
+            "anchorId": anchor_id,
+        }
+        result["sceneAction"] = scene_action
+        if not isinstance(result.get("actionFeedback"), dict):
+            summary = scene_action["action"]
+            if isinstance(result.get("inspect"), dict):
+                summary = str(result["inspect"].get("summary") or summary)
+            elif isinstance(result.get("eventResult"), dict):
+                summary = str(result["eventResult"].get("summary") or summary)
+            result["actionFeedback"] = self._build_action_feedback(
+                title=f"执行场景动作：{action}",
+                summary=summary,
+                location_id=location_id,
+                anchor_id=anchor_id,
+                result_type="scene_action_applied",
+                changed_resources=[],
+                event_ids=[str(event_id) for event_id in result.get("eventIds", [])],
+            )
+        return result
+
+    def _inventory_quantity_delta(self, before: dict[str, int]) -> list[dict[str, Any]]:
+        """计算玩家背包数量变化，供 actionFeedback 追踪资源变化。"""
+        after: dict[str, int] = {
+            str(item.get("id")): int(item.get("quantity", 0))
+            for item in self.world["player"].get("inventory", [])
+            if item.get("id")
+        }
+        item_ids = sorted(set(before) | set(after))
+        deltas: list[dict[str, Any]] = []
+        for item_id in item_ids:
+            quantity_before = int(before.get(item_id, 0))
+            quantity_after = int(after.get(item_id, 0))
+            if quantity_before == quantity_after:
+                continue
+            deltas.append(
+                {
+                    "itemId": item_id,
+                    "before": quantity_before,
+                    "after": quantity_after,
+                    "delta": quantity_after - quantity_before,
+                }
+            )
+        return deltas
+
+    def _build_action_feedback(
+        self,
+        *,
+        title: str,
+        summary: str,
+        location_id: str,
+        anchor_id: str,
+        result_type: str,
+        changed_resources: list[dict[str, Any]],
+        event_ids: list[str],
+    ) -> dict[str, Any]:
+        """统一构造场景动作反馈契约，供客户端直接渲染行动回执。"""
+        return {
+            "title": title,
+            "summary": summary,
+            "locationId": location_id,
+            "anchorId": anchor_id,
+            "resultType": result_type,
+            "changedResources": changed_resources,
+            "eventIds": [str(event_id) for event_id in event_ids],
         }
 
     def _handle_player_end_phase(self, payload: dict[str, Any]) -> dict[str, Any]:

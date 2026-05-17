@@ -33,9 +33,9 @@ scope: current implementation facts, verification state, and work constraints
 | 开发线 | 当前状态 | 已验证事实 | 仍需验证或实现 |
 | --- | --- | --- | --- |
 | 后端 Director / Event Skill | 部分完成 | `WorldDigest`、`DirectorBeat`、`TensionDetector`、`SkillRouter`、`DirectorValidator`、`DirectorQueueManager` 已落地；Runtime 会生成、校验、消费或丢弃 `activate_event_skill` Beat；星灯祭单技能已注册；玩家画像证据模板、玩家风格信号 `styleSignal`、事件反应记忆模板、asset hints 和通用 fallback 台词模板已迁入 Event Skill；星灯祭结算已统一输出 `event_skill_outcome.v1`，API `eventResult`、事件流和 `completedEvents` 共用 `outcomeRecord`；Debug / Memory / influence 查询 API 已由 smoke 走真实 HTTP 路由验证 | Event Skill 仍只有一个；星灯祭仍有部分结算模板留在 Runtime；通用 DirectorPlanner 和多事件 Skill 尚未完成 |
-| Content Codex / NPC 深度卡 | 已完成首批 | `docs/npc_deep_card_spec.md` 已定义数据契约；`.windsurf/workflows/author-npc-deep-card.md` 已定义批量写作流程；`backend/app/content/data/npc/` 已入库 `kai`、`bram`、`mira`、`tomas`、`orren`、`lena` 6 份卡；`monologueSeeds` 已接入夜间反思上下文、compact evidence 和规则 fallback；`gossipHooks` 已进入校验、对话上下文 `gossipEvidence`、选择理由、传播草案、`candidateDebugSummary`、`gossip_propagation` 契约和 validator；Runtime 会写入 `gossip.propagation_validated` 校验事件；`npm.cmd run content:check` 通过；smoke 覆盖 `deepCard`、对话 Prompt、送礼、关系阶段、monologue evidence、gossip evidence 与合法 / 非法传播样例 | 谣言传播仍只记录校验结果，不写入世界状态、关系或记忆扩散；后续批量 Event Skill 工作流未开始 |
-| Godot 客户端 | 部分完成 | 代码已接入：地点背景层、NPC 选择、底部 VN 对话层、聊天提交、进行中事件区、`inspect`、choices、`attend_event`、VN 结果展示；地图角色层已渲染玩家与当前场景 NPC / event marker；WASD 独立连续移动、地图层直接点击当前场景空地落点、落点标记、单个最近交互目标高亮、MapMoveHint 和更大舞台移动范围已接入；已移除小人淡黄色矩形背景；已补 UI 点击穿透、按钮禁用键盘焦点、WASD 物理键兜底、玩家 / NPC 分离站位槽、玩家出生点上移、收紧交互半径、点击落点边界修正、动态地图 bounds、靠近目标滞回和 NPC 小人保持可点；命令已检：`check_godot_project.py`、Godot headless import、`client:env` 与 `client:run:check` 通过；主人已完成上一版真实窗口人工验收，2026-05-17 已确认点击落点正常 | 本轮广场 / 酒馆卡住修复、单目标高亮稳定性和移动稳定性仍需主人窗口复验；本地移动只做表现层；服务端锚点 / 交互半径契约、行动反馈、日程可视化和更自然的内容节奏仍待推进 |
-| 资产管线 | 部分完成 | manifest 当前有 31 条资产；3 张地图小人为 `style_anchor_candidate`；4 张重画地图小人和 3 张交互标记为 `pending_review`；3 张背景、1 张事件 CG、玩家 + 6 NPC neutral 立绘已登记；`AssetRegistry` 已支持表情回退；地图小人与交互 marker 已进入 Godot 场景显示链路 | `happy` / `troubled` 表情差分、道具图标、拆分 UI 组件、玩法反馈图标尚未进 manifest 或 Godot registry；地图小人是否晋级 `source_selected` 仍需主人明确筛选结论 |
+| Content Codex / NPC 深度卡 | 已完成首批 | `docs/npc_deep_card_spec.md` 已定义数据契约；`.windsurf/workflows/author-npc-deep-card.md` 已定义批量写作流程；`backend/app/content/data/npc/` 已入库 `kai`、`bram`、`mira`、`tomas`、`orren`、`lena` 6 份卡；`monologueSeeds` 已接入夜间反思上下文、compact evidence 和规则 fallback；`gossipHooks` 已进入校验、对话上下文 `gossipEvidence`、选择理由、传播草案、`candidateDebugSummary`、`gossip_propagation` 契约和 validator；6 张卡已新增 `lifeActionSeeds`、`dailyRumorBeats`、`relationshipBeatSeeds`，每卡当前为 `3/2/3` 条 Day 1 素材；Runtime 会写入 `gossip.propagation_validated` 校验事件；`npm.cmd run content:check` 通过；smoke 覆盖 `deepCard`、对话 Prompt、送礼、关系阶段、monologue evidence、gossip evidence 与合法 / 非法传播样例 | 谣言传播仍只记录校验结果，不写入世界状态、关系或记忆扩散；新增生活行动 / 谣言 / 关系节拍素材尚未进入运行时日程系统；后续批量 Event Skill 工作流未开始 |
+| Godot 客户端 | 部分完成 | 代码已接入：地点背景层、NPC 选择、底部 VN 对话层、聊天提交、进行中事件区、`inspect`、choices、`attend_event`、VN 结果展示；地图角色层已渲染玩家与当前场景 NPC / event marker；WASD 独立连续移动、地图层直接点击当前场景空地落点、落点标记、单个最近交互目标高亮、MapMoveHint 和更大舞台移动范围已接入；已移除小人淡黄色矩形背景；已补 UI 点击穿透、按钮禁用键盘焦点、WASD 物理键兜底、玩家 / NPC 分离站位槽、玩家出生点上移、收紧交互半径、点击落点边界修正、动态地图 bounds、靠近目标滞回和 NPC 小人保持可点；本轮新增服务端锚点按钮、地图锚点按钮、`scene_action` 场景行动按钮、结束时段按钮和 `actionFeedback` VN 回执；命令已检：`check_godot_project.py`、Godot headless import、`client:env` 与 `client:run:check` 通过；主人已完成上一版真实窗口人工验收，2026-05-17 已确认点击落点正常 | 本轮新增锚点 / 场景行动 / 行动反馈 UI 仍需主人窗口复验；本地 WASD 与点击移动仍只做表现层；日程可视化和更自然的内容节奏仍待推进 |
+| 资产管线 | 部分完成 | manifest 当前有 55 条资产：21 条 `source_selected`、3 条 `style_anchor_candidate`、7 条 `pending_review`、24 条 `prompt_ready`；新增 backlog 覆盖 14 张 `happy/troubled` 表情差分、5 张行动反馈图标和 5 个生活行动 UI 小组件；`prompt_ready` 条目均引用 `docs/asset_generation_prompts.md` 锚点；`AssetRegistry` 已支持表情回退；地图小人与交互 marker 已进入 Godot 场景显示链路 | `prompt_ready` 仍只是可生成 backlog，尚未生成、筛选或接入 Godot registry；地图小人是否晋级 `source_selected` 仍需主人明确筛选结论 |
 | LLM / Debug | 部分完成 | 代码已接入：OpenAI-compatible cloud provider、profile 解析、本地 overlay 示例、Debug 字段记录、规则 fallback、`model:check` 配置校验、Web LLM 配置卡片和热重载接口；2026-05-16 已用当前本机 `config/models.json` 跑通真实 `CloudApiProvider` smoke，dialogue / event_reaction / night_reflection 均为 `deepseek-v4-flash` 且 `fallbackReason=None`；smoke 覆盖 compact Debug payload、RAG-lite memory search、玩家影响链 | 提交态不包含真实 API key；fresh env 或无 key 沙箱会跳过真实 LLM 调用；`debug_analysis` profile 只在配置中存在；切换模型、key 或 profile 后需重新刷新真实延迟、成本和失败率 |
 | 文档治理 | 已完成本轮入口 | `AGENTS.md`、`CLAUDE.md`、`docs/README.md`、`agent_context`、`goal_board`、`current_status`、`open_questions` 已形成新对话入口、分层索引和状态看板 | 后续每轮只记录已验证变化，避免复制源设计长文 |
 
@@ -47,9 +47,9 @@ scope: current implementation facts, verification state, and work constraints
 - 世界状态初始化、10 个初始 NPC、5 个地点、关系图谱、基础状态数值和 Agent 记忆列表已存在。
 - 时间推进、Agent 轮换调度、事件记录和公开状态导出已存在。
 - 玩家游戏 API 已存在：`GET /api/world/state`、`POST /api/player/action`。
-- 玩家动作已覆盖 `move`、`talk`、`give_gift`、`inspect`、`attend_event`。
+- 玩家动作已覆盖 `move`、`move_to_anchor`、`scene_action`、`farm_action`、`end_phase`、`talk`、`give_gift`、`inspect`、`attend_event`。
 - 星灯祭供应短缺事件已有查看、选择、关系变化、即时记忆、事件反应、夜间反思和结算记录。
-- `/api/player/action` 的根节点、`result` 和 `state` 均带有 Godot 可直接展示的 `memoryEvidence`、`relationshipEvidence`、`playerProfile`、`currentObjective`、`availableInteractions`。
+- `/api/player/action` 的根节点、`result` 和 `state` 均带有 Godot 可直接展示的 `memoryEvidence`、`relationshipEvidence`、`playerProfile`、`currentObjective`、`availableInteractions`；锚点移动和场景行动会返回统一 `actionFeedback`。
 
 ### Director / Skill
 
@@ -87,6 +87,7 @@ scope: current implementation facts, verification state, and work constraints
 - 主场景代码已能读取世界状态、渲染背景、列出地点和 NPC、展示半身立绘、提交聊天动作。
 - 主场景已能渲染地图角色层，显示玩家和当前场景 NPC / event marker，并提供 talk / gift / event 交互 marker。
 - 主场景已新增本地地图移动与靠近反馈：WASD 独立连续移动、点击当前场景空地设置落点、显示落点标记、玩家小人平滑移动、靠近最近 NPC / 事件后只高亮一个交互目标；玩家出生点与 NPC 比例站位槽分离并从底部边缘上移，交互半径已收紧并加入退出滞回；该坐标不写回后端。
+- 主场景已接入服务端锚点与场景行动：左侧“场景行动”区和地图锚点按钮可提交 `move_to_anchor`，农场田块、公告板和事件点等入口可提交 `scene_action`，VN 面板会展示后端 `actionFeedback` 资源变化。
 - 玩家可移动范围已从地点小范围扩大为舞台主体区域，避开左右 UI 与底部 VN 面板。
 - 点击当前场景任意可见区域会先修正到可行走边界再设置落点，避免广场 / 酒馆视觉空地因 bounds 过窄产生无响应体感。
 - 地图背景、顶层空白容器和标签已改为点击穿透；按钮与交互标记禁用键盘焦点，降低空地点击和移动键被 UI 吃掉的概率。
@@ -103,18 +104,18 @@ scope: current implementation facts, verification state, and work constraints
 - `assets/source/` 是正式资产源目录。
 - `assets/manifests/asset_manifest.json` 是当前资产登记入口。
 - `scripts/check_asset_manifest.py` 会校验字段、源图、prompt 文件、PNG 尺寸和 Godot 引用。
-- 当前 manifest 共有 31 条资产：21 条 `source_selected`、3 条 `style_anchor_candidate`、7 条 `pending_review`。
+- 当前 manifest 共有 55 条资产：21 条 `source_selected`、3 条 `style_anchor_candidate`、7 条 `pending_review`、24 条 `prompt_ready`。
 - 当前已进入 Godot registry 的资产是 3 张地点背景、星灯祭事件 CG、玩家 + 6 个首发 NPC 的 `neutral` 半身立绘、玩家 + 6 个首发 NPC 的地图小人和 3 类交互标记。
 - 地图小人和交互标记已进入 Godot 资产目录、`AssetRegistry` 与主场景地图角色层。
-- 本轮没有新增表情差分、道具图标和拆分 UI 组件。
+- 本轮新增表情差分、行动反馈图标和生活行动 UI 小组件的 `prompt_ready` backlog；尚未生成或接入 Godot。
 
 ## 4. 当前主要缺口
 
-1. **玩法深度主线**：真实窗口基础链路已通过，WASD、点击落点、落点标记、当前场景过滤、动态移动范围、单目标靠近反馈、去背景、UI 点击穿透、玩家 / NPC 分离站位槽、玩家出生点上移、收紧交互半径、点击边界修正和靠近滞回已落地；仍需要主人复验广场 / 酒馆新手感，并继续推进服务端锚点契约、行动反馈、生活行动循环和日程可视化。
-2. **Content Codex 二阶段接入**：`monologueSeeds` 已接入夜间反思/RAG；`gossipHooks` 已进入对话证据选择、传播草案、validator 和运行时校验事件，仍需扩展为记忆 / 关系层谣言传播。
+1. **玩法深度主线**：真实窗口基础链路已通过，WASD、点击落点、落点标记、当前场景过滤、动态移动范围、单目标靠近反馈、去背景、UI 点击穿透、玩家 / NPC 分离站位槽、玩家出生点上移、收紧交互半径、点击边界修正、靠近滞回、服务端锚点、`scene_action` 和 `actionFeedback` 已落地；仍需要主人复验三场景手感、锚点按钮、农场行动和行动反馈显示，并继续推进日程可视化。
+2. **Content Codex 二阶段接入**：`monologueSeeds` 已接入夜间反思/RAG；`gossipHooks` 已进入对话证据选择、传播草案、validator 和运行时校验事件；`lifeActionSeeds` / `dailyRumorBeats` / `relationshipBeatSeeds` 已准备 Day 1 素材，仍需扩展为运行时日程、记忆 / 关系层谣言传播。
 3. **Event Skill 数据化深度**：当前已有 schema 和单技能注册表，画像证据、`styleSignal`、事件反应记忆、asset hints 与通用 fallback 台词模板已迁入 Skill；更多结算模板和复用测试仍需推进。
 4. **真实 LLM 证据刷新**：当前本机 `config/models.json` 已跑通真实 smoke；切换模型、key 或 profile 后，需要重新验证 DeepSeek / OpenAI-compatible profile 的真实延迟、成本、错误和 fallback。
-5. **资产补齐**：表情差分、UI 组件、道具图标、玩法反馈图标仍待生成、筛选、登记和接入；地图小人晋级状态需主人确认。
+5. **资产补齐**：表情差分、UI 组件和行动反馈图标已进入 `prompt_ready` backlog，仍待生成、筛选、登记源图和接入；地图小人晋级状态需主人确认。
 6. **Debug Console 扩展**：后端已有 Debug / Memory 查询 API，Web 侧仍需展示 Director 队列、Skill 激活、fallback 和成本字段。
 
 ## 5. 开发前硬性约束
@@ -165,12 +166,12 @@ Get-Content docs\daytime_integration_handoff.md
 
 2026-05-16，主人已运行真实 Godot 窗口并确认当前基础体验基本无问题。该结论覆盖：地点切换、背景切换、NPC 选择、`talk` 提交、星灯祭事件查看、choices 展示和事件结算展示。
 
-仍需人工未验收的内容：本轮新增的空地点击修复、落点标记、单目标高亮、移动稳定性，以及后续新增的行动反馈、表情差分、UI 组件和真实 LLM profile 切换。
+仍需人工未验收的内容：本轮新增的锚点按钮、场景行动、行动反馈显示、三场景移动稳定性，以及后续新增的表情差分、UI 组件和真实 LLM profile 切换。
 
 ## 8. 下一轮建议
 
 1. 文档治理已把真实窗口验收记录为已人工确认；后续每轮继续只更新已验证事实、剩余缺口和下一步。
-2. Godot 玩法线先复验空地点击落点、单目标高亮和移动稳定性，再推进服务端锚点契约、行动反馈、生活行动按钮和日程可视化。
+2. Godot 玩法线先复验三场景移动稳定性、锚点按钮、农场 `scene_action` 和 `actionFeedback` 显示，再推进日程可视化。
 3. 内容线优先把 `gossip.propagation_validated` 从校验事件扩展为第一版谣言记忆 / 关系传播。
 4. 后端线继续收紧 Event Skill 数据化：用 Skill 定义驱动更多结算模板和复用测试。
 5. LLM / Debug 线在切换模型、key 或 profile 后刷新真实 smoke，记录 dialogue / event_reaction / night_reflection 的真实输出、延迟和 fallback。

@@ -1,7 +1,7 @@
 ---
 status: active
 owner_lane: context-governance
-last_verified: 2026-05-16
+last_verified: 2026-05-17
 startup_load: index
 source_of_truth: true
 scope: 文档分层索引与渐进式读取路线

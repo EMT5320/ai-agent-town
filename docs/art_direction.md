@@ -1,7 +1,7 @@
 ---
 status: active
 owner_lane: asset-pipeline
-last_verified: 2026-05-16
+last_verified: 2026-05-17
 startup_load: on-demand
 source_of_truth: true
 scope: art style, asset generation order, acceptance rules, and visual consistency
@@ -277,6 +277,20 @@ assets/source/ui/relationship_delta_badge.png
 assets/source/ui/memory_card_anime.png
 assets/source/ui/night_diary_panel_anime.png
 ```
+
+### H. 下一批优先 backlog（仅 prompt 计划）
+
+本轮优先补齐以下三类资源，先进入 manifest 的 `prompt_ready`，不提前声明已生成：
+
+1. 玩家 + 6 NPC 的 `happy` / `troubled` 表情差分（共 14 张）。
+2. `move`、`talk`、`gift`、`inspect`、`event` 行动反馈图标（共 5 张）。
+3. 生活行动 UI 小组件：农务/社交/休息按钮、日程条、行动结果浮层（共 5 张）。
+
+约束：
+
+- 以上条目只登记 backlog，不标记 `source_selected`。
+- prompt 引用统一落到 `docs/asset_generation_prompts.md` 的批次 8 锚点段落。
+- 等源图真实生成并筛选通过后，再补 `processedPath` / `godotPath`。
 
 ## 角色设定表
 
