@@ -80,7 +80,7 @@ scope: new-session entrypoint, boundaries, commands, and next steps
 - 地图层已补 UI 点击穿透、按钮禁用键盘焦点和 WASD 物理键兜底，降低空地点击被透明 UI 吃掉、移动键被按钮焦点干扰的概率。
 - 当前场景点击落点改为先修正到可行走边界再接受，地图舞台 bounds 改为随窗口动态放宽，玩家出生点从底部边缘上移到舞台下中区，靠近目标增加滞回，NPC 小人保持可点，减少广场 / 酒馆的卡住体感。
 - 地图上下文动作面板已接入：靠近锚点 / 交互体 / 居民 / 事件后生成候选动作，`E`/`Space` 执行，`Tab`/`Q` 切换；左侧“场景行动”降级为调试兜底，VN 面板继续展示后端 `actionFeedback`。
-- `check_godot_project.py`、Godot headless import、`npm.cmd run client:env` 和 `npm.cmd run client:run:check` 已通过；`client:env` 会额外 headless 加载 `world_main.tscn`。2026-05-16 主人已完成上一版真实窗口人工验收；本轮 `world_main` 默认入口、Tick NPC 移动与 HUD 暂停/倍速仍需主人窗口复验。
+- `check_godot_project.py`、Godot headless import、`npm.cmd run client:env` 和 `npm.cmd run client:run:check` 已通过；2026-05-17 `world_main.tscn` 已加载现有地点背景、`map_idle` 小人、NPC 名称/状态、路径线和底部 tick 状态提示。2026-05-16 主人已完成上一版真实窗口人工验收；本轮 `world_main` 默认入口、Tick NPC 移动与 HUD 暂停/倍速仍需主人窗口复验。
 
 ### 资产与文档治理
 
@@ -137,8 +137,8 @@ git diff --check
 
 1. 固定离线基线：运行 `npm.cmd run context:check`、`npm.cmd run check`、`npm.cmd run smoke`、`npm.cmd run asset:check`、`npm.cmd run client:env`、`npm.cmd run client:run:check`。
 2. 生产化计划入口：读取 `docs/production_roadmap.md`，确认阶段 1 "活着的世界"关键决策未变化；阶段 1 内该文档是路线源。
-3. Phase 1 sprint 已完成 D1-D2 基础闭环：`LifeActionExecutor`、`POST /api/world/tick`、`WorldClockService`、`EventBusService`、`NpcController` 与 `world_main.tscn` 骨架均已落地。
+3. Phase 1 sprint 已完成 D1-D2 基础闭环：`LifeActionExecutor`、`POST /api/world/tick`、`WorldClockService`、`EventBusService`、`NpcController` 与 `world_main.tscn` 均已落地；默认画面已从纯色块占位推进到背景、小人、路径线和 tick 状态提示。
 4. 当前默认客户端入口：`npm.cmd run start` 启动后端，再另开终端运行 `npm.cmd run client:run`，会进入 `world_main.tscn` 观察 NPC tick 移动；旧 UI 用 `npm.cmd run client:run:legacy` 回看。
-5. 下一步 Phase 1 sprint：把 `world_main` 从验证骨架推进到可验收玩法入口，优先补相机/玩家控制、VN 交互、NPC idle bobbing / 行动标签和 30 秒录屏验收。
+5. 下一步 Phase 1 sprint：先做主人真实窗口复验与 30 秒录屏验收，再继续补相机/玩家控制、VN 交互和轻量日程可视化。
 6. 阶段 1 事件通道继续先用 `/api/world/tick` 响应 events 驱动 Godot `EventBus`；SSE 仍作为后置增强。
 7. 30 秒验收标尺：玩家不操作时能看到至少 3 个 NPC 在大地图上走动或做事，玩家可暂停 / 恢复世界时间，并能靠近 NPC 按 `E` 弹出 VN 对话。

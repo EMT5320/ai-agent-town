@@ -8,6 +8,7 @@ enum NpcState {
 }
 
 const MOVE_EPSILON := 2.0
+const SPRITE_SCALE := 1.35
 
 @export var npc_id: String = ""
 @export var move_speed_pixels: float = 120.0
@@ -19,30 +20,55 @@ var anchor_graph: Dictionary = {}
 var anchor_positions: Dictionary = {}
 var move_target: Vector2 = Vector2.ZERO
 
-var _sprite: ColorRect
+var _display_name: String = ""
+var _accent_color: Color = Color(1.0, 1.0, 1.0, 1.0)
+var _pending_texture: Texture2D
+var _visual_root: Node2D
+var _sprite: Sprite2D
+var _shadow: ColorRect
+var _fallback_body: ColorRect
+var _name_label: Label
 var _action_label: Label
 
 
 func _ready() -> void:
-	# 占位体直接用色块与动作标签，后续可替换成正式 sprite。
-	_sprite = ColorRect.new()
-	_sprite.name = "NpcBody"
-	_sprite.color = Color(0.94, 0.88, 0.62, 1.0)
-	_sprite.size = Vector2(24.0, 36.0)
-	_sprite.position = Vector2(-12.0, -18.0)
-	add_child(_sprite)
+	# 小地图优先显示真实 sprite，fallback 方块只用于定位缺图问题。
+	z_index = 10
+	_visual_root = Node2D.new()
+	_visual_root.name = "VisualRoot"
+	add_child(_visual_root)
 
-	_action_label = Label.new()
-	_action_label.name = "ActionLabel"
-	_action_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_action_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_action_label.position = Vector2(-48.0, -48.0)
-	_action_label.size = Vector2(96.0, 20.0)
-	_action_label.text = "Idle"
+	_shadow = ColorRect.new()
+	_shadow.name = "GroundShadow"
+	_shadow.color = Color(0.0, 0.0, 0.0, 0.28)
+	_shadow.size = Vector2(56.0, 12.0)
+	_shadow.position = Vector2(-28.0, -6.0)
+	add_child(_shadow)
+
+	_sprite = Sprite2D.new()
+	_sprite.name = "MapSprite"
+	_sprite.position = Vector2(0.0, -43.0)
+	_sprite.scale = Vector2(SPRITE_SCALE, SPRITE_SCALE)
+	_visual_root.add_child(_sprite)
+
+	_fallback_body = ColorRect.new()
+	_fallback_body.name = "FallbackBody"
+	_fallback_body.color = _accent_color
+	_fallback_body.size = Vector2(40.0, 58.0)
+	_fallback_body.position = Vector2(-20.0, -72.0)
+	_visual_root.add_child(_fallback_body)
+
+	_name_label = _make_label("NameLabel", _display_name if _display_name != "" else npc_id, Vector2(-72.0, -128.0), 144.0, 15)
+	add_child(_name_label)
+
+	_action_label = _make_label("ActionLabel", "Idle", Vector2(-74.0, -106.0), 148.0, 14)
 	add_child(_action_label)
+	_apply_pending_texture()
+	_enter_state(NpcState.IDLE, "Idle")
 
 
 func _process(delta: float) -> void:
+	_update_idle_bobbing()
 	if current_state != NpcState.WALKING:
 		return
 
@@ -62,6 +88,17 @@ func configure_anchor_graph(graph: Dictionary, positions: Dictionary) -> void:
 	anchor_positions = positions.duplicate(true)
 
 
+func configure_appearance(display_name: String, texture: Texture2D, accent_color: Color) -> void:
+	_display_name = display_name
+	_pending_texture = texture
+	_accent_color = accent_color
+	if _name_label != null:
+		_name_label.text = display_name
+	if _fallback_body != null:
+		_fallback_body.color = accent_color
+	_apply_pending_texture()
+
+
 func apply_tick_event(event_payload: Dictionary) -> void:
 	var event_type := str(event_payload.get("type", ""))
 	if event_type == "npc.move_started":
@@ -74,7 +111,7 @@ func apply_tick_event(event_payload: Dictionary) -> void:
 		_handle_arrived(event_payload)
 		return
 	if event_type == "npc.action_started":
-		_enter_state(NpcState.PERFORMING, _action_label_from_event(event_payload, "Doing"))
+		_enter_state(NpcState.PERFORMING, _action_label_from_event(event_payload, "Performing"))
 		return
 	if event_type == "npc.action_completed":
 		_enter_state(NpcState.IDLE, "Idle")
@@ -91,7 +128,7 @@ func set_anchor_position(anchor_id: String) -> void:
 func _handle_move_started(event_payload: Dictionary) -> void:
 	var from_anchor := str(event_payload.get("fromAnchorId", event_payload.get("from", "")))
 	var to_anchor := str(event_payload.get("toAnchorId", event_payload.get("to", "")))
-	if from_anchor != "" and current_anchor_id == "":
+	if from_anchor != "":
 		set_anchor_position(from_anchor)
 	if to_anchor == "":
 		return
@@ -99,13 +136,13 @@ func _handle_move_started(event_payload: Dictionary) -> void:
 
 
 func _handle_move_progress(event_payload: Dictionary) -> void:
-	# 支持后端给定插值进度，也支持直接给位置。
+	# 后端当前直接下发起点和终点，优先用 progress 还原 NPC 的权威位置。
 	var position_payload = event_payload.get("position", null)
 	if position_payload is Dictionary:
 		var x := float(position_payload.get("x", global_position.x))
 		var y := float(position_payload.get("y", global_position.y))
 		global_position = Vector2(x, y)
-		_enter_state(NpcState.WALKING, "Walking")
+		_enter_state(NpcState.WALKING, _move_label(event_payload))
 		return
 
 	var progress := float(event_payload.get("progress", -1.0))
@@ -120,7 +157,7 @@ func _handle_move_progress(event_payload: Dictionary) -> void:
 		var from_vec: Vector2 = from_point
 		var to_vec: Vector2 = to_point
 		global_position = from_vec.lerp(to_vec, clamp(progress, 0.0, 1.0))
-		_enter_state(NpcState.WALKING, "Walking")
+		_enter_state(NpcState.WALKING, _move_label(event_payload))
 
 
 func _handle_arrived(event_payload: Dictionary) -> void:
@@ -136,10 +173,16 @@ func _target_anchor_move(anchor_id: String) -> void:
 		return
 	var next_target := target as Vector2
 
-	# 后端当前直接下发起点和终点，客户端先按权威事件直线插值。
+	# move_started 到首个 progress 之间也给出本地过渡，避免视觉停顿。
 	target_anchor_id = anchor_id
 	move_target = next_target
-	_enter_state(NpcState.WALKING, "Walking")
+	_enter_state(NpcState.WALKING, "Moving")
+
+
+func _move_label(event_payload: Dictionary) -> String:
+	var progress := float(event_payload.get("progress", 0.0))
+	var to_anchor := str(event_payload.get("toAnchorId", target_anchor_id))
+	return "Moving -> %s %.0f%%" % [to_anchor.replace("_", " "), progress * 100.0]
 
 
 func _action_label_from_event(event_payload: Dictionary, fallback_text: String) -> String:
@@ -148,17 +191,58 @@ func _action_label_from_event(event_payload: Dictionary, fallback_text: String) 
 		return action_name
 	var action_id := str(event_payload.get("actionId", ""))
 	if action_id != "":
-		return action_id
+		return action_id.replace("life_", "").replace("_", " ")
 	return fallback_text
 
 
 func _enter_state(next_state: NpcState, label_text: String) -> void:
 	current_state = next_state
-	_action_label.text = label_text
+	if _action_label != null:
+		_action_label.text = label_text
 	match current_state:
 		NpcState.IDLE:
-			_sprite.color = Color(0.94, 0.88, 0.62, 1.0)
+			_set_visual_modulate(Color(1.0, 1.0, 1.0, 1.0))
 		NpcState.WALKING:
-			_sprite.color = Color(0.69, 0.86, 1.0, 1.0)
+			_set_visual_modulate(Color(0.82, 0.92, 1.0, 1.0))
 		NpcState.PERFORMING:
-			_sprite.color = Color(0.79, 1.0, 0.72, 1.0)
+			_set_visual_modulate(Color(0.88, 1.0, 0.80, 1.0))
+
+
+func _set_visual_modulate(color: Color) -> void:
+	if _sprite != null:
+		_sprite.modulate = color
+	if _fallback_body != null:
+		_fallback_body.color = _accent_color * color
+
+
+func _update_idle_bobbing() -> void:
+	if _visual_root == null:
+		return
+	var seconds := float(Time.get_ticks_msec()) / 1000.0
+	var amplitude := 4.0 if current_state == NpcState.PERFORMING else 2.4
+	_visual_root.position.y = sin(seconds * 3.2 + float(abs(npc_id.hash() % 31))) * amplitude
+
+
+func _apply_pending_texture() -> void:
+	if _sprite == null or _fallback_body == null:
+		return
+	_sprite.texture = _pending_texture
+	var has_texture := _pending_texture != null
+	_sprite.visible = has_texture
+	_fallback_body.visible = not has_texture
+
+
+func _make_label(label_name: String, text: String, label_position: Vector2, width: float, font_size: int) -> Label:
+	var label := Label.new()
+	label.name = label_name
+	label.text = text
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.position = label_position
+	label.size = Vector2(width, 22.0)
+	label.add_theme_font_size_override("font_size", font_size)
+	label.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0))
+	label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.9))
+	label.add_theme_constant_override("shadow_offset_x", 2)
+	label.add_theme_constant_override("shadow_offset_y", 2)
+	return label
