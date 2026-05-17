@@ -24,6 +24,7 @@ from app.providers.context_builder import (
     build_player_dialogue_context,
     build_player_dialogue_messages,
     build_prompt_messages,
+    validate_gossip_propagation_payload,
 )
 from app.providers.provider_support import FEATURE_DIALOGUE, FEATURE_EVENT_REACTION, FEATURE_NIGHT_REFLECTION, sanitize_profile_for_debug
 from app.providers.response_parser import parse_feature_response
@@ -925,6 +926,7 @@ class AgentRuntime:
             "npc.memory_created",
             "npc.night_reflection",
             "npc.dialogue",
+            "gossip.propagation_validated",
             "town.event_resolved",
             "debug.turn_recorded",
             "provider.fallback",
@@ -1115,6 +1117,7 @@ class AgentRuntime:
             "playerProfile",
             "memoryEvidence",
             "memoryEvidenceUsed",
+            "gossipPropagationValidation",
         )
         compact = {key: self._compact_debug_value(debug[key]) for key in compact_keys if key in debug}
 
@@ -1458,6 +1461,10 @@ class AgentRuntime:
         memory_text = str(parsed.get("memory_to_save") or f"我和新来的农场主聊了 {topic}。")
         memory_evidence = context["memoryEvidence"]
         memory_evidence_used = parsed.get("memory_evidence_used")
+        gossip_validation = self._validate_dialogue_gossip_propagation(parsed=parsed, context=context, target=target, topic=topic)
+        gossip_event = None
+        if gossip_validation is not None:
+            gossip_event = self.event_store.append("gossip.propagation_validated", gossip_validation)
 
         remember(target, memory_text, tick=self.world["clock"]["tick"], importance=0.68, tags=["player_talk", topic])
         memory_payload = {"agentId": target["id"], "agentName": target["name"], "text": memory_text, "tags": ["player_talk", topic]}
@@ -1483,6 +1490,7 @@ class AgentRuntime:
                 "playerProfile": self._player_profile_payload(),
                 "memoryEvidence": memory_evidence,
                 "memoryEvidenceUsed": memory_evidence_used,
+                "gossipPropagationValidation": gossip_validation,
             },
         )
         target.setdefault("decisionHistory", []).append(debug)
@@ -1490,6 +1498,8 @@ class AgentRuntime:
         debug_event = self.event_store.append("debug.turn_recorded", {"agentId": target["id"], "agentName": target["name"], "debug": debug})
 
         event_ids = [player_event["id"], profile_event["id"], relation_event["id"], memory_event["id"], dialogue_event["id"], debug_event["id"]]
+        if gossip_event is not None:
+            event_ids.insert(-1, gossip_event["id"])
         self._record_player_history("talk", payload, event_ids)
         return {
             "dialogue": [{"speakerId": target["id"], "speakerName": target["name"], "text": speech}],
@@ -1498,6 +1508,7 @@ class AgentRuntime:
             "playerProfile": self._player_profile_payload(),
             "memoryEvidence": memory_evidence,
             "memoryEvidenceUsed": memory_evidence_used,
+            "gossipPropagationValidation": gossip_validation,
             "relationshipStage": self._relationship_stage_payload(target["id"], before_relation, after_relation),
             "eventIds": event_ids,
         }
@@ -2653,6 +2664,66 @@ class AgentRuntime:
             return {"source": "memory_summary", "text": summary_text, "tags": ["memory_summary"], "score": None}
         return None
 
+    def _validate_dialogue_gossip_propagation(
+        self,
+        *,
+        parsed: dict[str, Any],
+        context: dict[str, Any],
+        target: dict[str, Any],
+        topic: str,
+    ) -> dict[str, Any] | None:
+        """校验对话返回中的 gossip_propagation，并写入仅记录用途的调试结构。"""
+        gossip_evidence = context.get("gossipEvidence") if isinstance(context.get("gossipEvidence"), dict) else {}
+        items = gossip_evidence.get("items") if isinstance(gossip_evidence.get("items"), list) else []
+        payload = parsed.get("gossip_propagation")
+        if payload is None and not items:
+            return None
+
+        contract = gossip_evidence.get("propagationRecordContract") if isinstance(gossip_evidence.get("propagationRecordContract"), dict) else {}
+        if payload is None:
+            validation = {"accepted": False, "violations": ["payload_missing"], "normalized": {}}
+        else:
+            validation = validate_gossip_propagation_payload(payload, gossip_evidence)
+
+        normalized = validation.get("normalized") if isinstance(validation.get("normalized"), dict) else {}
+        accepted = bool(validation.get("accepted"))
+        return {
+            "agentId": target.get("id"),
+            "agentName": target.get("name"),
+            "topic": topic,
+            "provided": payload is not None,
+            "accepted": accepted,
+            "violations": list(validation.get("violations", [])),
+            "normalized": normalized,
+            "hookId": normalized.get("hookId"),
+            "direction": normalized.get("direction"),
+            "targetNpcIds": list(normalized.get("targetNpcIds", [])) if isinstance(normalized.get("targetNpcIds"), list) else [],
+            "recordVersion": contract.get("recordVersion"),
+            "validator": contract.get("validator"),
+            "worldMutationApplied": False,
+            "summary": "gossip_propagation accepted" if accepted else "gossip_propagation rejected",
+        }
+
+    def _build_rule_dialogue_gossip_propagation(self, context: dict[str, Any]) -> dict[str, Any] | None:
+        """规则对话模式下生成一条可被后端校验的 gossip_propagation 样例。"""
+        gossip_evidence = context.get("gossipEvidence") if isinstance(context.get("gossipEvidence"), dict) else {}
+        items = gossip_evidence.get("items") if isinstance(gossip_evidence.get("items"), list) else []
+        if not items:
+            return None
+        first = items[0] if isinstance(items[0], dict) else {}
+        hook_id = str(first.get("id") or "").strip()
+        draft = first.get("propagationDraft") if isinstance(first.get("propagationDraft"), dict) else {}
+        target_ids = [str(item).strip() for item in draft.get("targetNpcIds", []) if str(item).strip()]
+        if not hook_id or not target_ids:
+            return None
+        direction = str(draft.get("direction") or "seed").strip() or "seed"
+        return {
+            "hookId": hook_id,
+            "targetNpcIds": [target_ids[0]],
+            "direction": direction,
+            "reason": "我先记下这条传闻，再观察后续走向。",
+        }
+
     def _short_debug_text(self, text: str, limit: int = 80) -> str:
         """压缩 Debug 和规则台词里的证据文本，避免单句过长。"""
         normalized = " ".join(str(text).split())
@@ -2688,6 +2759,9 @@ class AgentRuntime:
         }
         if evidence_used:
             response["memory_evidence_used"] = evidence_used
+        gossip_propagation = self._build_rule_dialogue_gossip_propagation(context)
+        if gossip_propagation:
+            response["gossip_propagation"] = gossip_propagation
         return {"provider": "RuleDialogueProvider", "rawText": json.dumps(response, ensure_ascii=False), "parsed": response, "usage": {"tokens": 0, "cost": 0, "latencyMs": 1}}
 
     def _sync_player_location(self, payload: dict[str, Any]) -> None:

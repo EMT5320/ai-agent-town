@@ -25,7 +25,8 @@ const MAP_EVENT_MARKER_SCALE := 0.68
 const PLAYER_LOCAL_MOVE_SPEED := 520.0
 const PLAYER_LOCAL_STOP_DISTANCE := 3.0
 const PLAYER_LOCAL_INTERACT_RADIUS := 86.0
-const MAP_PLAYER_SPAWN_RATIO := Vector2(0.50, 0.88)
+const PLAYER_LOCAL_INTERACT_EXIT_MARGIN := 28.0
+const MAP_PLAYER_SPAWN_RATIO := Vector2(0.50, 0.66)
 const MAP_NPC_SLOT_RATIOS := [
 	Vector2(0.24, 0.30),
 	Vector2(0.76, 0.30),
@@ -64,6 +65,8 @@ var player_local_target := Vector2.ZERO
 var player_local_has_click_target := false
 var player_local_initialized := false
 var player_local_location_id := ""
+var current_near_npc_id := ""
+var current_near_event_id := ""
 var map_hint_label: Label
 var player_target_marker: Label
 
@@ -565,13 +568,18 @@ func _set_local_player_target(world_point: Vector2, from_click: bool) -> bool:
 	if not player_local_initialized:
 		return false
 	var bounds := _map_bounds()
-	if not bounds.has_point(world_point):
+	if not get_viewport_rect().has_point(world_point):
 		return false
-	player_local_target = _clamp_point_to_walk_area(world_point, bounds)
+	var clamped_target := _clamp_point_to_walk_area(world_point, bounds)
+	var target_was_clamped := clamped_target.distance_to(world_point) > _scaled(2)
+	player_local_target = clamped_target
 	player_local_has_click_target = true
 	_update_player_target_marker()
 	if from_click:
-		_update_map_hint("已设置当前场景落点，可继续 WASD 移动或靠近交互")
+		if target_was_clamped:
+			_update_map_hint("已把落点修正到可行走边界，可继续 WASD 移动或靠近交互")
+		else:
+			_update_map_hint("已设置当前场景落点，可继续 WASD 移动或靠近交互")
 	_update_map_proximity_feedback()
 	return true
 
@@ -722,13 +730,13 @@ func _submit_talk(npc_id: String) -> void:
 		return
 	_clear_event_focus()
 	selected_npc_id = npc_id
-	selected_location_id = str(npc.get("locationId", selected_location_id))
 	_render_portrait(npc)
+	var action_location_id := str(npc.get("locationId", selected_location_id))
 	var payload := _interaction_payload_or_fallback(
 		"talk",
 		"npc",
 		npc_id,
-		{"type": "talk", "targetId": npc_id, "locationId": selected_location_id, "topic": "first_meeting"}
+		{"type": "talk", "targetId": npc_id, "locationId": action_location_id, "topic": "first_meeting"}
 	)
 	payload["topic"] = str(payload.get("topic", "first_meeting"))
 	payload["message"] = str(payload.get("message", "你好，我刚搬到晨露农场，想认识一下小镇。"))
@@ -757,13 +765,13 @@ func _submit_gift(npc_id: String) -> void:
 		return
 	_clear_event_focus()
 	selected_npc_id = npc_id
-	selected_location_id = str(npc.get("locationId", selected_location_id))
 	_render_portrait(npc)
+	var action_location_id := str(npc.get("locationId", selected_location_id))
 	var payload := _interaction_payload_or_fallback(
 		"give_gift",
 		"npc",
 		npc_id,
-		{"type": "give_gift", "targetId": npc_id, "locationId": selected_location_id, "itemId": _first_gift_item_id()}
+		{"type": "give_gift", "targetId": npc_id, "locationId": action_location_id, "itemId": _first_gift_item_id()}
 	)
 	if str(payload.get("itemId", "")).is_empty():
 		_set_status("背包里暂时没有可送出的礼物。")
@@ -847,8 +855,12 @@ func _refresh_world() -> void:
 
 func _apply_authoritative_state(state: Dictionary) -> void:
 	# 所有动作回执都以 state 为准，客户端只保留当前选中项和 VN 展示文本。
+	var previous_location_id := selected_location_id
 	world_sync.apply_state(state)
 	selected_location_id = str(state.get("player", {}).get("locationId", selected_location_id))
+	if selected_location_id != previous_location_id:
+		current_near_npc_id = ""
+		current_near_event_id = ""
 	_ensure_selected_npc()
 	_sync_event_focus_with_world()
 
@@ -948,6 +960,7 @@ func _create_map_actor_node(owner_id: String, display_name: String, location_id:
 	var sprite_scale := MAP_SPRITE_SCALE * ui_scale
 	actor.name = "MapActor_%s" % owner_id
 	actor.mouse_filter = Control.MOUSE_FILTER_PASS
+	actor.z_index = 30 if is_player else 10
 	actor.position = anchor - Vector2(node_size.x * 0.5, node_size.y)
 	actor.size = node_size
 	actor.set_meta("agentId", owner_id)
@@ -963,6 +976,7 @@ func _create_map_actor_node(owner_id: String, display_name: String, location_id:
 	sprite_button.scale = Vector2(sprite_scale, sprite_scale)
 	sprite_button.position = Vector2((node_size.x - MAP_SPRITE_SIZE * sprite_scale) * 0.5, _scaled(38))
 	sprite_button.disabled = is_player
+	sprite_button.mouse_filter = Control.MOUSE_FILTER_IGNORE if is_player else Control.MOUSE_FILTER_PASS
 	sprite_button.tooltip_text = "%s · %s" % [display_name, _get_location_name(location_id)]
 	if not is_player:
 		sprite_button.pressed.connect(_on_map_npc_pressed.bind(owner_id))
@@ -1028,10 +1042,11 @@ func _create_map_label(text: String, width: int, font_size: int) -> Label:
 
 func _map_bounds() -> Rect2:
 	var viewport_size := get_viewport_rect().size
-	var left := _scaled(385)
-	var right = max(left + _scaled(420), viewport_size.x - _scaled(385))
-	var top := _scaled(92)
-	var bottom = max(top + _scaled(270), viewport_size.y - _top_layer_reserved_bottom() - _scaled(8))
+	var side_margin: float = min(_scaled(240), max(_scaled(64), viewport_size.x * 0.10))
+	var left: float = side_margin
+	var right: float = max(left + _scaled(420), viewport_size.x - side_margin)
+	var top: float = min(_scaled(92), max(_scaled(58), viewport_size.y * 0.12))
+	var bottom: float = max(top + _scaled(270), viewport_size.y - _top_layer_reserved_bottom() - _scaled(8))
 	return Rect2(left, top, right - left, bottom - top)
 
 
@@ -1118,12 +1133,17 @@ func _update_map_proximity_feedback() -> void:
 	if not player_local_initialized or map_character_layer == null:
 		return
 	var interact_radius := _scaled(PLAYER_LOCAL_INTERACT_RADIUS)
+	var exit_radius := interact_radius + _scaled(PLAYER_LOCAL_INTERACT_EXIT_MARGIN)
 	var nearest_npc_name := ""
 	var nearest_event_title := ""
 	var nearest_npc_distance := INF
 	var nearest_event_distance := INF
 	var nearest_npc_actor: Control = null
 	var nearest_event_marker: TextureButton = null
+	var previous_npc_name := ""
+	var previous_npc_actor: Control = null
+	var previous_event_title := ""
+	var previous_event_marker: TextureButton = null
 	for child in map_character_layer.get_children():
 		if child is TextureButton:
 			var marker := child as TextureButton
@@ -1133,6 +1153,10 @@ func _update_map_proximity_feedback() -> void:
 			var event_location := str(marker.get_meta("locationId", ""))
 			var same_location := event_location == selected_location_id
 			var distance := player_local_position.distance_to(event_anchor)
+			var event_id := str(marker.get_meta("eventId", ""))
+			if same_location and event_id == current_near_event_id and distance <= exit_radius:
+				previous_event_title = str(marker.get_meta("eventTitle", event_id))
+				previous_event_marker = marker
 			if same_location and distance <= interact_radius and distance < nearest_event_distance:
 				nearest_event_distance = distance
 				nearest_event_title = str(marker.get_meta("eventTitle", marker.get_meta("eventId", "事件")))
@@ -1148,10 +1172,23 @@ func _update_map_proximity_feedback() -> void:
 			var same_location := actor_location == selected_location_id
 			var can_interact: bool = bool(actor.get_meta("interactable", false))
 			var distance := player_local_position.distance_to(actor_anchor)
+			var actor_id := str(actor.get_meta("agentId", ""))
+			if same_location and can_interact and actor_id == current_near_npc_id and distance <= exit_radius:
+				previous_npc_name = str(actor.get_meta("displayName", actor_id))
+				previous_npc_actor = actor
 			if same_location and can_interact and distance <= interact_radius and distance < nearest_npc_distance:
 				nearest_npc_distance = distance
 				nearest_npc_name = str(actor.get_meta("displayName", actor.get_meta("agentId", "居民")))
 				nearest_npc_actor = actor
+
+	if previous_npc_actor != null:
+		nearest_npc_actor = previous_npc_actor
+		nearest_npc_name = previous_npc_name
+	if previous_event_marker != null:
+		nearest_event_marker = previous_event_marker
+		nearest_event_title = previous_event_title
+	current_near_npc_id = str(nearest_npc_actor.get_meta("agentId", "")) if nearest_npc_actor != null else ""
+	current_near_event_id = str(nearest_event_marker.get_meta("eventId", "")) if nearest_event_marker != null else ""
 
 	# 同一时间只激活最近的 NPC / 事件，避免多人重叠时焦点在多个 marker 之间抖动。
 	for child in map_character_layer.get_children():
@@ -1174,7 +1211,7 @@ func _update_map_proximity_feedback() -> void:
 			var is_near: bool = actor == nearest_npc_actor
 			var sprite_button := actor.get_node_or_null("Sprite") as TextureButton
 			if sprite_button != null:
-				sprite_button.disabled = not is_near
+				sprite_button.disabled = false
 				var owner_id := str(actor.get_meta("agentId", ""))
 				var tint := Color(1.0, 0.94, 0.72, 1.0) if owner_id == selected_npc_id or is_near else Color(1.0, 1.0, 1.0, 0.70)
 				sprite_button.modulate = tint
@@ -1463,7 +1500,6 @@ func _select_npc(npc_id: String, clear_event: bool) -> void:
 	var npc := _find_npc(npc_id)
 	if npc.is_empty():
 		return
-	selected_location_id = str(npc.get("locationId", selected_location_id))
 	_render_portrait(npc)
 
 

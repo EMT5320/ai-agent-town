@@ -7,6 +7,7 @@ import os
 import sys
 import tempfile
 from threading import Thread
+from types import MethodType
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
@@ -218,6 +219,19 @@ def assert_gossip_propagation_contract(app) -> None:
     )
     if rejected.get("accepted"):
         raise RuntimeError("gossip_propagation 非法样例不应通过校验")
+
+
+def assert_gossip_validation_record(record: dict, label: str, *, expected_accepted: bool) -> None:
+    """确认运行时 gossip_propagation 校验记录结构稳定。"""
+    if not isinstance(record, dict):
+        raise RuntimeError(f"{label} gossipPropagationValidation 应为对象")
+    for field in ("provided", "accepted", "violations", "normalized", "worldMutationApplied"):
+        if field not in record:
+            raise RuntimeError(f"{label} gossipPropagationValidation 缺少字段：{field}")
+    if bool(record.get("accepted")) != expected_accepted:
+        raise RuntimeError(f"{label} gossipPropagationValidation accepted 不符合预期：{record.get('accepted')}")
+    if record.get("worldMutationApplied"):
+        raise RuntimeError(f"{label} gossipPropagationValidation 不应声明世界状态变更")
 
 
 def assert_client_context_fields(payload: dict, label: str) -> None:
@@ -704,6 +718,72 @@ if not talk["result"].get("playerProfile", {}).get("styleSummary"):
 if not talk["result"].get("relationshipStage", {}).get("stage"):
     raise RuntimeError("玩家对话后应返回 relationshipStage")
 
+gossip_accept = app.player_action(
+    {
+        "type": "talk",
+        "targetId": "kai",
+        "locationId": "tavern",
+        "topic": "festival_debt_rumor",
+        "message": "昨晚酒馆账单和星灯祭准备是不是又有新消息？",
+    }
+)
+assert_player_action_contract(gossip_accept, "gossip_accept")
+accepted_record = gossip_accept["result"].get("gossipPropagationValidation")
+assert_gossip_validation_record(accepted_record, "gossip_accept", expected_accepted=True)
+if not accepted_record.get("provided"):
+    raise RuntimeError("gossip_accept 应记录 provided=true")
+accepted_event = next((event for event in reversed(gossip_accept["state"]["recentEvents"]) if event["type"] == "gossip.propagation_validated"), None)
+if not accepted_event:
+    raise RuntimeError("gossip_accept 应写入 gossip.propagation_validated 事件")
+if not accepted_event.get("payload", {}).get("accepted"):
+    raise RuntimeError("gossip_accept 事件应标记 accepted=true")
+accepted_debug = assert_feature_debug(app.get_public_state(), "dialogue")
+assert_gossip_validation_record(accepted_debug.get("gossipPropagationValidation"), "gossip_accept debug", expected_accepted=True)
+
+gossip_reject_app = create_town_app(provider_mode="rule")
+original_decide_player_dialogue = gossip_reject_app.runtime._decide_player_dialogue
+
+
+def _inject_rejected_gossip(self, target, payload, context, messages):
+    provider_result, profile, fallback_reason = original_decide_player_dialogue(target, payload, context, messages)
+    parsed = dict(provider_result.get("parsed", {}))
+    parsed["gossip_propagation"] = {
+        "hookId": "unknown_hook",
+        "targetNpcIds": ["unknown_npc"],
+        "direction": "amplify",
+        "reason": "smoke 注入非法 gossip",
+        "worldStatePatch": {"townStats": {"stability": 999}},
+    }
+    mutated = dict(provider_result)
+    mutated["provider"] = "SmokeInjectedDialogueProvider"
+    mutated["parsed"] = parsed
+    mutated["rawText"] = json.dumps(parsed, ensure_ascii=False)
+    return mutated, profile, fallback_reason
+
+
+gossip_reject_app.runtime._decide_player_dialogue = MethodType(_inject_rejected_gossip, gossip_reject_app.runtime)
+gossip_reject = gossip_reject_app.player_action(
+    {
+        "type": "talk",
+        "targetId": "kai",
+        "locationId": "tavern",
+        "topic": "festival_debt_rumor",
+        "message": "昨晚酒馆账单和星灯祭准备是不是又有新消息？",
+    }
+)
+assert_player_action_contract(gossip_reject, "gossip_reject")
+rejected_record = gossip_reject["result"].get("gossipPropagationValidation")
+assert_gossip_validation_record(rejected_record, "gossip_reject", expected_accepted=False)
+if not any("forbidden_state_fields" in str(item) for item in rejected_record.get("violations", [])):
+    raise RuntimeError("gossip_reject 应记录 forbidden_state_fields 违规")
+rejected_event = next((event for event in reversed(gossip_reject["state"]["recentEvents"]) if event["type"] == "gossip.propagation_validated"), None)
+if not rejected_event:
+    raise RuntimeError("gossip_reject 应写入 gossip.propagation_validated 事件")
+if rejected_event.get("payload", {}).get("accepted"):
+    raise RuntimeError("gossip_reject 事件应标记 accepted=false")
+rejected_debug = assert_feature_debug(gossip_reject_app.get_public_state(), "dialogue")
+assert_gossip_validation_record(rejected_debug.get("gossipPropagationValidation"), "gossip_reject debug", expected_accepted=False)
+
 gift = app.player_action({"type": "give_gift", "targetId": "kai", "locationId": "tavern", "itemId": "farm_flower"})
 assert_player_action_contract(gift, "give_gift")
 if not gift["result"]["relationshipDeltas"]:
@@ -891,6 +971,8 @@ print(
         "eventReactionProfile": event_reaction_debug["profileName"],
         "nightReflectionProfile": night_reflection_debug["profileName"],
         "followUpEvidence": follow_up_debug["memoryEvidenceUsed"]["source"],
+        "gossipAccepted": accepted_record["accepted"],
+        "gossipRejectedViolations": len(rejected_record.get("violations", [])),
         "debugSkills": http_debug_summary["debugSkills"],
         "memoryHits": http_debug_summary["memoryHits"],
         "influenceEvents": http_debug_summary["influenceEvents"],

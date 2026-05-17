@@ -27,7 +27,7 @@ scope: lane board, write boundaries, and handoff format
 - `npm.cmd run client:env`：通过，Godot 4.6.2 headless 项目打开检查通过。
 - `npm.cmd run client:run:check`：通过 DryRun，只验证运行入口和 Godot 参数。
 - Godot headless import / quit：通过，脚本可加载；退出时仅出现 Godot ObjectDB leak warning。
-- 真实 Godot 窗口：2026-05-16 主人已人工验收上一版基础体验；2026-05-17 主人确认点击移动已正常，但仍反馈部分场景移动卡住、玩家与托玛重叠、NPC 高亮抖动；本轮分离站位槽与收紧交互半径后仍需主人复验。
+- 真实 Godot 窗口：2026-05-16 主人已人工验收上一版基础体验；2026-05-17 主人确认点击移动已正常，但仍反馈三场景中必有一处卡住，中央广场为主、酒馆偶发；本轮补点击边界修正、动态 bounds、玩家出生点上移、靠近滞回和地点短窗收紧后仍需主人复验。
 - 本轮并行开发收口：`content:check`、`smoke`、`check`、`check_godot_project.py`、Godot headless import、Godot headless quit、`client:env`、`client:run:check`、`git diff --check` 已通过。
 - 本轮真实 LLM smoke 使用 `deepseek-v4-flash`，dialogue / event_reaction / night_reflection 三条链路 `fallbackReason=None`。
 - `npm.cmd run asset:check`：通过。
@@ -50,6 +50,7 @@ scope: lane board, write boundaries, and handoff format
 - Godot 地图角色层已接入：玩家 + 6 NPC 小人、talk / gift / event marker、NPC 点击入口均已进入主场景。
 - Godot 本地移动与靠近反馈已接入：WASD 独立连续移动、地图层直接点击当前场景空地落点、落点标记、单个最近交互目标高亮和 MapMoveHint。
 - Godot 玩家出生点已和 NPC 比例站位槽分离，交互半径已收紧，降低重叠卡住和高亮抖动概率。
+- Godot 点击落点会自动修正到可行走边界，地图 bounds 已随窗口动态放宽，玩家出生点已从底部边缘上移，靠近目标加入退出滞回，NPC 小人不再因非最近目标整体禁用。
 - Godot 地图角色层已按当前场景过滤 NPC / event marker，玩家移动范围已扩大到舞台主体区域。
 - Godot 地图输入已补点击穿透与焦点收紧：背景、顶层空白容器和标签不吃鼠标，按钮/marker 不接管键盘焦点。
 - Godot 角色小人淡黄色矩形背景已移除，选中或靠近状态改用 sprite tint 与 marker 状态表达。
@@ -58,7 +59,7 @@ scope: lane board, write boundaries, and handoff format
 - 资产 manifest 和 Godot registry 已覆盖首批背景、事件 CG 与 neutral 立绘。
 - Debug / Memory / influence HTTP 查询 API 已纳入 smoke 覆盖。
 - `monologueSeeds` 已接入夜间反思上下文、compact memory evidence 和规则 fallback。
-- `gossipHooks` 已接入内容校验、对话 `gossipEvidence` 选择、传播草案、选择理由、`candidateDebugSummary`、validator 和 smoke prompt 断言。
+- `gossipHooks` 已接入内容校验、对话 `gossipEvidence` 选择、传播草案、选择理由、`candidateDebugSummary`、validator、运行时 `gossip.propagation_validated` 事件和 smoke 断言。
 - 7 张地图小人和 3 张交互标记已进入 manifest、资产目录和 Godot 资源镜像。
 - 首发 6 名 NPC 深度卡已入库：`kai`、`bram`、`mira`、`tomas`、`orren`、`lena`。
 - NPC 内容工作流已落地：`.windsurf/workflows/author-npc-deep-card.md`。
@@ -66,7 +67,7 @@ scope: lane board, write boundaries, and handoff format
 
 ### 部分完成
 
-- Content Codex 首批数据已可用；`monologueSeeds` 已接入夜间反思/RAG，`gossipHooks` 已进入对话证据选择、传播草案和 validator，后续需要扩展为事件/记忆扩散。
+- Content Codex 首批数据已可用；`monologueSeeds` 已接入夜间反思/RAG，`gossipHooks` 已进入对话证据选择、传播草案、validator 和运行时校验事件，后续需要扩展为记忆 / 关系扩散。
 - Godot 事件交互、地图角色层、本地移动与靠近反馈已通过代码检查、headless 检查和 dry-run；上一版真实窗口已由主人验收，本轮空地点击与移动稳定性修复仍待主人窗口复验。
 - Godot 已从纯背景图和简单 UI 点击推进到可移动舞台层；后续缺口转为服务端锚点契约、行动反馈、生活行动按钮和日程可视化。
 - Event Skill 仍只有星灯祭单技能，部分结算逻辑仍有 Runtime 硬编码。
@@ -83,8 +84,8 @@ scope: lane board, write boundaries, and handoff format
 
 | 开发线 | 当前状态 | 下一步 | 主要写入范围 | 禁止/谨慎范围 | 验收命令 |
 | --- | --- | --- | --- | --- | --- |
-| Godot 玩法客户端 | partial | WASD、地图层空地点击、落点标记、单目标高亮、当前场景过滤、更大移动范围、UI 点击穿透、焦点收紧、玩家 / NPC 分离站位槽与收紧交互半径已落地；下一步主人复验手感，再推进服务端锚点契约、行动反馈、生活行动按钮和日程可视化 | `clients/godot/`、必要时 `clients/godot/assets/`、`scripts/check_godot_project.py` | 不在客户端保存权威世界状态；不把后端结算规则复制进 GDScript | `npm.cmd run client:env`、`npm.cmd run client:run:check`、`npm.cmd run check`，人工 `client:run` |
-| Content Codex / NPC 深度卡 | partial | `monologueSeeds` 已接入夜间反思/RAG，`gossipHooks` 已进入对话 `gossipEvidence`、`propagationDraft` 与 validator；下一步把谣言证据写入事件/记忆传播，再启动 `/author-event-skill` | `backend/app/content/`、`scripts/check_npc_codex.py`、`backend/app/providers/context_builder.py`、必要 runtime glue、相关 docs | 不写固定剧情节点；不让内容卡直接改世界状态；不伪造资产 id | `npm.cmd run content:check`、`npm.cmd run smoke`、`npm.cmd run check` |
+| Godot 玩法客户端 | partial | WASD、地图层空地点击、落点标记、单目标高亮、当前场景过滤、动态移动范围、UI 点击穿透、焦点收紧、玩家 / NPC 分离站位槽、玩家出生点上移、收紧交互半径、点击边界修正和靠近滞回已落地；下一步主人复验三场景手感，再推进服务端锚点契约、行动反馈、生活行动按钮和日程可视化 | `clients/godot/`、必要时 `clients/godot/assets/`、`scripts/check_godot_project.py` | 不在客户端保存权威世界状态；不把后端结算规则复制进 GDScript | `npm.cmd run client:env`、`npm.cmd run client:run:check`、`npm.cmd run check`，人工 `client:run` |
+| Content Codex / NPC 深度卡 | partial | `monologueSeeds` 已接入夜间反思/RAG，`gossipHooks` 已进入对话 `gossipEvidence`、`propagationDraft`、validator 与运行时校验事件；下一步把谣言证据写入记忆 / 关系传播，再启动 `/author-event-skill` | `backend/app/content/`、`scripts/check_npc_codex.py`、`backend/app/providers/context_builder.py`、必要 runtime glue、相关 docs | 不写固定剧情节点；不让内容卡直接改世界状态；不伪造资产 id | `npm.cmd run content:check`、`npm.cmd run smoke`、`npm.cmd run check` |
 | 后端 Director / Event Skill | partial | 画像证据、`styleSignal`、事件反应记忆、asset hints、通用 fallback 台词和 `event_skill_outcome.v1` outcomeRecord 已迁入 Skill / Runtime 协作链路；下一步继续迁移结算模板，补 Skill 复用测试 | `backend/app/director/`、`backend/app/skills/`、`backend/app/runtime/agent_runtime.py`、相关测试 | 不让 LLM 直接改世界状态；不破坏旧 `/api/state` 与 Debug 观察台 | `npm.cmd run smoke`、`npm.cmd run check` |
 | 资产管线 | partial | 按玩法需要推进 batch 1b 表情差分、UI 组件、道具图标和行动反馈图标；地图小人晋级等待主人筛选 | `assets/source/`、`assets/processed/`、`assets/manifests/`、`clients/godot/assets/` | 不覆盖原图；不提交来源不清的资产；不把未人工确认的小人标成 `source_selected` | `npm.cmd run asset:check`、`npm.cmd run check` |
 | LLM / Debug | partial | 当前真实 smoke 已跑通；切换模型、key 或 profile 后用 `AGENT_TOWN_REQUIRE_REAL_LLM_SMOKE=1` 刷新 dialogue / event_reaction / night_reflection 证据 | `backend/app/providers/`、`backend/app/providers/context_builder.py`、Debug 记录结构、迁移期 `frontend/`、相关 docs | 不提交密钥；不隐藏 token、延迟、错误；不把跳过或 fallback 的 live smoke 写成通过 | `npm.cmd run model:check`、`npm.cmd run smoke`、真实 LLM 手动记录 |
@@ -101,7 +102,7 @@ scope: lane board, write boundaries, and handoff format
 
 - Godot worker：只改 `clients/godot/` 和必要检查脚本，目标是推进服务端锚点契约前的客户端表现、行动反馈和日程可视化。
 - 后端 worker：只改 Director / Skill / Runtime 相关最小范围，目标是减少星灯祭硬编码并补测试。
-- Content worker：只改 Content Codex、Prompt 上下文和必要 Runtime glue，目标是把 `gossipEvidence.propagationDraft` 扩展为谣言事件/记忆传播最小闭环。
+- Content worker：只改 Content Codex、Prompt 上下文和必要 Runtime glue，目标是把 `gossip.propagation_validated` 扩展为谣言记忆 / 关系传播最小闭环。
 - 资产 worker：只改资产目录、manifest 和必要 Godot asset mirror，目标是表情差分、UI 组件和行动反馈图标。
 - Reviewer：只读核对契约、过标表述、验收输出和工作区状态。
 
@@ -126,7 +127,7 @@ scope: lane board, write boundaries, and handoff format
 
 1. 文档与治理：保持本轮状态收紧后的 checkpoint，后续只记录已验证变化。
 2. Godot 玩法客户端：先复验空地点击落点、单目标高亮和移动稳定性，再推进服务端锚点契约、行动反馈和日程可视化。
-3. Content Codex：把 `gossipEvidence.propagationDraft` 继续扩展为事件/记忆层的第一版谣言传播。
+3. Content Codex：把 `gossip.propagation_validated` 继续扩展为记忆 / 关系层的第一版谣言传播。
 4. 后端：星灯祭 Skill 数据化下一步继续减少 Runtime 结算硬编码，并保持 Debug 事件证据。
 5. LLM / Debug：保持当前真实 smoke 证据；切换模型、key 或 profile 后再刷新延迟、fallback 和输出质量。
 6. 资产：推进 batch 1b 表情差分、UI 组件、道具图标和行动反馈图标。
