@@ -92,6 +92,7 @@ scope: current implementation facts, verification state, and work constraints
 - `world_main.tscn` 已新增玩家本地控制闭环：`PlayerController` 显示玩家 `map_idle` 小人，支持 WASD / 方向键在大地图中移动，`Camera2D` 跟随玩家，靠近 NPC 后按 `E` 会通过 `/api/player/action` 提交 `talk`，并由 `WorldVnPanel` 弹出后端返回的对话、关系/记忆/事件计数。
 - 2026-05-17 主人已确认玩家移动手感没有问题；同轮修正 NPC 首个 tick 全员同点迁徙、路径线过强和同锚点标签堆叠：NPC 初始站位对齐后端 presence，三名广场 NPC 使用表现层 crowd offset 分散显示，路径线改为低透明短暂调试线。
 - 2026-05-17 新增 `WorldPulsePanel`，在默认 `world_main` 右上角展示后端 `/api/world/state` 的 active event、`npcSchedules` 生活计划，以及 `/api/world/tick` 的 NPC 移动 / 行动状态，作为阶段 1 日程可视化的最小玩家可读入口。
+- 2026-05-17 新增远处事件提示：active event 会在对应地图锚点生成脉冲 beacon；当玩家不在事件所在场景时，顶部 `RemoteEventCompass` 会显示事件方向和地点，让玩家在远处也能感知酒馆 / 广场事件。
 - 主场景已能渲染地图角色层，显示玩家和当前场景 NPC / event marker，并提供 talk / gift / event 交互 marker。
 - 主场景已新增本地地图移动与靠近反馈：WASD 独立连续移动、点击当前场景空地设置落点、显示落点标记、玩家小人平滑移动、靠近最近 NPC / 事件后只高亮一个交互目标；玩家出生点与 NPC 比例站位槽分离并从底部边缘上移，交互半径已收紧并加入退出滞回；该坐标不写回后端。
 - 主场景已接入地图上下文动作：靠近服务端锚点、交互体、居民或事件后生成候选动作，`E`/`Space` 执行，`Tab`/`Q` 切换；侧栏“场景行动”保留为调试兜底。
@@ -119,7 +120,7 @@ scope: current implementation facts, verification state, and work constraints
 
 ## 4. 当前主要缺口
 
-1. **玩法深度主线**：旧 P0 窗口基础链路已通过；新默认 `world_main` 已具备 tick 驱动 NPC 移动骨架、HUD 暂停/倍速、玩家移动、`E` 键 VN talk、右上角世界动态面板和三场景横向拼图；玩家移动手感已由主人确认，本轮 NPC 轨迹异常已修复但仍需要主人用 `npm.cmd run start` + `npm.cmd run client:run` 复验 NPC 分散行动、路径线弱化和日程可视化节奏。
+1. **玩法深度主线**：旧 P0 窗口基础链路已通过；新默认 `world_main` 已具备 tick 驱动 NPC 移动骨架、HUD 暂停/倍速、玩家移动、`E` 键 VN talk、右上角世界动态面板、远处事件提示和三场景横向拼图；玩家移动手感已由主人确认，本轮 NPC 轨迹异常已修复但仍需要主人用 `npm.cmd run start` + `npm.cmd run client:run` 复验 NPC 分散行动、路径线弱化、日程可视化和事件提示节奏。
 2. **Content Codex 二阶段接入**：`monologueSeeds` 已接入夜间反思/RAG；`gossipHooks` 已进入对话证据选择、传播草案、validator 和运行时校验事件；`lifeActionSeeds` / `dailyRumorBeats` / `relationshipBeatSeeds` 已进入 `npcSchedules` / `lifeActionPlan` 快照，仍需扩展为 NPC 实际工具行动、记忆 / 关系层谣言传播。
 3. **Event Skill 数据化深度**：当前已有 schema 和单技能注册表，画像证据、`styleSignal`、事件反应记忆、asset hints 与通用 fallback 台词模板已迁入 Skill；更多结算模板和复用测试仍需推进。
 4. **真实 LLM 证据刷新**：当前本机 `config/models.json` 已跑通真实 smoke；切换模型、key 或 profile 后，需要重新验证 DeepSeek / OpenAI-compatible profile 的真实延迟、成本、错误和 fallback。
@@ -175,7 +176,7 @@ Get-Content docs\daytime_integration_handoff.md
 
 2026-05-16，主人已运行真实 Godot 窗口并确认当前基础体验基本无问题。该结论覆盖：地点切换、背景切换、NPC 选择、`talk` 提交、星灯祭事件查看、choices 展示和事件结算展示。
 
-仍需人工未验收的内容：默认 `world_main.tscn` 的 NPC 分散行动、弱化路径线、右上角 `WorldPulsePanel` 日程可读性、HUD 暂停/倍速、`E` 键 talk、后端未启动时的错误提示，以及表情差分、UI 组件和真实 LLM profile 切换。玩家移动手感已于 2026-05-17 由主人确认没有问题。
+仍需人工未验收的内容：默认 `world_main.tscn` 的 NPC 分散行动、弱化路径线、右上角 `WorldPulsePanel` 日程可读性、`RemoteEventCompass` 与事件 beacon 观感、HUD 暂停/倍速、`E` 键 talk、后端未启动时的错误提示，以及表情差分、UI 组件和真实 LLM profile 切换。玩家移动手感已于 2026-05-17 由主人确认没有问题。
 
 ## 8. 下一轮建议
 

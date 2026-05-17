@@ -85,6 +85,8 @@ checks = {
     "town map world pulse panel": "WorldPulsePanel" in town_map and "_request_initial_world_snapshot" in town_map and "_refresh_world_pulse_panel" in town_map,
     "town map schedule snapshot": "npcSchedules" in town_map and "activeLifeAction" in town_map and "spaceActionCandidates" in town_map,
     "town map npc status pulse": "_update_npc_status_from_event" in town_map and "_update_npc_statuses_from_agents" in town_map and "PULSE_PANEL_MAX_LINES" in town_map,
+    "town map remote event beacon": "RemoteEventCompass" in town_map and "_sync_event_beacons" in town_map and "_ensure_event_beacon" in town_map,
+    "town map event anchor mapping": "EVENT_ANCHORS" in town_map and "DEFAULT_EVENT_ANCHORS" in town_map and "get_interaction_marker(\"event\")" in town_map,
     "town map player loop": "PlayerControllerScript" in town_map and "_spawn_player" in town_map and "_update_nearest_npc_hint" in town_map,
     "town map backend talk": "_submit_talk" in town_map and "post_player_action" in town_map and "world_map_greeting" in town_map,
     "town map vn panel": "VnPanelScript" in town_map and "show_dialogue" in town_map and "show_busy" in town_map,

@@ -12,6 +12,14 @@ const PLAYER_INTERACT_RADIUS := 128.0
 const ROUTE_LINE_VISIBLE_MSEC := 2200
 const PULSE_PANEL_MAX_LINES := 6
 const STAGE_ORDER := ["farm", "plaza", "tavern"]
+const EVENT_ANCHORS := {
+	"starlight_festival_shortage": "tavern_stage",
+}
+const DEFAULT_EVENT_ANCHORS := {
+	"farm": "farm_house_door",
+	"plaza": "plaza_fountain",
+	"tavern": "tavern_stage",
+}
 const STAGE_NAMES := {
 	"farm": "Farm 农场",
 	"plaza": "Plaza 广场",
@@ -82,6 +90,7 @@ var _pulse_layer: CanvasLayer
 var _pulse_clock_label: Label
 var _pulse_event_label: Label
 var _pulse_schedule_label: Label
+var _event_compass_label: Label
 var _player_controller
 var _camera: Camera2D
 var _vn_panel
@@ -92,6 +101,8 @@ var _latest_clock: Dictionary = {}
 var _npc_plans: Dictionary = {}
 var _npc_statuses: Dictionary = {}
 var _active_event_summaries: Array[String] = []
+var _active_event_records: Dictionary = {}
+var _event_beacons: Dictionary = {}
 
 
 func _ready() -> void:
@@ -123,6 +134,8 @@ func _process(_delta: float) -> void:
 	_update_camera_target()
 	_update_nearest_npc_hint()
 	_expire_route_lines()
+	_update_event_beacons()
+	_refresh_event_compass()
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -277,6 +290,7 @@ func _build_world_pulse_panel() -> void:
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_theme_stylebox_override("panel", _make_pulse_panel_style())
 	_pulse_layer.add_child(panel)
+	_build_event_compass_label()
 
 	var margin := MarginContainer.new()
 	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -306,6 +320,22 @@ func _build_world_pulse_panel() -> void:
 	_pulse_schedule_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	column.add_child(_pulse_schedule_label)
 	_refresh_world_pulse_panel()
+
+
+func _build_event_compass_label() -> void:
+	_event_compass_label = Label.new()
+	_event_compass_label.name = "RemoteEventCompass"
+	_event_compass_label.position = Vector2(520.0, 64.0)
+	_event_compass_label.size = Vector2(760.0, 34.0)
+	_event_compass_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_event_compass_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_event_compass_label.visible = false
+	_event_compass_label.add_theme_font_size_override("font_size", 18)
+	_event_compass_label.add_theme_color_override("font_color", Color(1.0, 0.78, 0.38, 0.96))
+	_event_compass_label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.90))
+	_event_compass_label.add_theme_constant_override("shadow_offset_x", 2)
+	_event_compass_label.add_theme_constant_override("shadow_offset_y", 2)
+	_pulse_layer.add_child(_event_compass_label)
 
 
 func _make_pulse_label(label_name: String, text: String, font_size: int, font_color: Color) -> Label:
@@ -415,6 +445,7 @@ func _apply_world_state_snapshot(snapshot: Dictionary) -> void:
 		_latest_clock = clock.duplicate(true)
 
 	_active_event_summaries.clear()
+	_active_event_records.clear()
 	var active_events = snapshot.get("activeEvents", [])
 	if active_events is Array:
 		for event in active_events:
@@ -424,9 +455,20 @@ func _apply_world_state_snapshot(snapshot: Dictionary) -> void:
 			var phase := str(event.get("phase", ""))
 			var location_id := str(event.get("locationId", ""))
 			_active_event_summaries.append("%s @ %s %s" % [title, _pretty_location(location_id), phase])
+			var event_id := str(event.get("id", ""))
+			if event_id != "":
+				_active_event_records[event_id] = {
+					"id": event_id,
+					"title": title,
+					"locationId": location_id,
+					"phase": phase,
+					"anchorId": _event_anchor_for(event),
+				}
+	_sync_event_beacons()
 
 	_update_npc_plans(snapshot.get("npcSchedules", []))
 	_refresh_world_pulse_panel()
+	_refresh_event_compass()
 
 
 func _update_npc_plans(raw_schedules) -> void:
@@ -649,6 +691,120 @@ func _update_npc_status_from_event(npc_id: String, event_type: String, event_pay
 		_npc_statuses[npc_id] = "完成行动 · %s" % _short_action_label(str(event_payload.get("actionId", "")))
 
 
+func _sync_event_beacons() -> void:
+	var stale_event_ids: Array[String] = []
+	for event_key in _event_beacons.keys():
+		var event_id := str(event_key)
+		if _active_event_records.has(event_id):
+			continue
+		stale_event_ids.append(event_id)
+
+	for event_id in stale_event_ids:
+		var stale_node = _event_beacons.get(event_id, null)
+		if stale_node is Node:
+			(stale_node as Node).queue_free()
+		_event_beacons.erase(event_id)
+
+	for event_key in _active_event_records.keys():
+		var event_id := str(event_key)
+		var record = _active_event_records.get(event_id, {})
+		if not (record is Dictionary):
+			continue
+		var anchor_id := str(record.get("anchorId", ""))
+		var anchor_point = _anchor_positions.get(anchor_id, null)
+		if not (anchor_point is Vector2):
+			continue
+		var beacon := _ensure_event_beacon(event_id)
+		beacon.global_position = (anchor_point as Vector2) + Vector2(0.0, -84.0)
+		var label = beacon.get_node_or_null("Label")
+		if label is Label:
+			(label as Label).text = _truncate_text(str(record.get("title", event_id)), 26)
+
+
+func _ensure_event_beacon(event_id: String) -> Node2D:
+	if _event_beacons.has(event_id):
+		return _event_beacons[event_id] as Node2D
+
+	var beacon := Node2D.new()
+	beacon.name = "EventBeacon_%s" % event_id
+	beacon.z_index = 9
+	debug_layer.add_child(beacon)
+
+	var ring := ColorRect.new()
+	ring.name = "PulseRing"
+	ring.position = Vector2(-30.0, -30.0)
+	ring.size = Vector2(60.0, 60.0)
+	ring.color = Color(1.0, 0.62, 0.20, 0.22)
+	ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	beacon.add_child(ring)
+
+	var sprite := Sprite2D.new()
+	sprite.name = "Icon"
+	sprite.texture = _asset_registry.get_interaction_marker("event")
+	sprite.scale = Vector2(0.65, 0.65)
+	beacon.add_child(sprite)
+
+	var label := Label.new()
+	label.name = "Label"
+	label.position = Vector2(-92.0, 30.0)
+	label.size = Vector2(184.0, 26.0)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.add_theme_font_size_override("font_size", 14)
+	label.add_theme_color_override("font_color", Color(1.0, 0.78, 0.40, 0.98))
+	label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.92))
+	label.add_theme_constant_override("shadow_offset_x", 2)
+	label.add_theme_constant_override("shadow_offset_y", 2)
+	beacon.add_child(label)
+
+	_event_beacons[event_id] = beacon
+	return beacon
+
+
+func _update_event_beacons() -> void:
+	if _event_beacons.is_empty():
+		return
+	var seconds := float(Time.get_ticks_msec()) / 1000.0
+	var pulse := 1.0 + sin(seconds * 4.0) * 0.08
+	var alpha := 0.70 + sin(seconds * 4.0) * 0.20
+	for beacon_key in _event_beacons.keys():
+		var beacon = _event_beacons.get(str(beacon_key), null)
+		if not (beacon is Node2D):
+			continue
+		var node := beacon as Node2D
+		node.scale = Vector2(pulse, pulse)
+		var ring = node.get_node_or_null("PulseRing")
+		if ring is ColorRect:
+			var ring_color := Color(1.0, 0.62, 0.20, clampf(alpha * 0.34, 0.12, 0.42))
+			(ring as ColorRect).color = ring_color
+
+
+func _refresh_event_compass() -> void:
+	if _event_compass_label == null:
+		return
+	if _active_event_records.is_empty() or _player_controller == null:
+		_event_compass_label.visible = false
+		return
+	var event_id := str(_active_event_records.keys()[0])
+	var record = _active_event_records.get(event_id, {})
+	if not (record is Dictionary):
+		_event_compass_label.visible = false
+		return
+	var event_location := str(record.get("locationId", ""))
+	var player_location := _stage_id_for_position(_player_controller.global_position)
+	if event_location == "" or event_location == player_location:
+		_event_compass_label.visible = false
+		return
+	var anchor_id := str(record.get("anchorId", ""))
+	var anchor_point = _anchor_positions.get(anchor_id, _player_controller.global_position)
+	var direction := "→" if (anchor_point is Vector2 and (anchor_point as Vector2).x > _player_controller.global_position.x) else "←"
+	_event_compass_label.text = "远处事件 %s %s：%s" % [
+		direction,
+		_pretty_location(event_location),
+		_truncate_text(str(record.get("title", event_id)), 34),
+	]
+	_event_compass_label.visible = true
+
+
 func _refresh_world_pulse_panel() -> void:
 	if _pulse_clock_label == null or _pulse_event_label == null or _pulse_schedule_label == null:
 		return
@@ -702,6 +858,14 @@ func _format_npc_plan(npc_id: String) -> String:
 	if source != "":
 		return "%s → %s · %s" % [label, target, source]
 	return "%s → %s" % [label, target]
+
+
+func _event_anchor_for(event: Dictionary) -> String:
+	var event_id := str(event.get("id", ""))
+	if EVENT_ANCHORS.has(event_id):
+		return str(EVENT_ANCHORS[event_id])
+	var location_id := str(event.get("locationId", ""))
+	return str(DEFAULT_EVENT_ANCHORS.get(location_id, "plaza_fountain"))
 
 
 func _short_action_label(action_id: String) -> String:
