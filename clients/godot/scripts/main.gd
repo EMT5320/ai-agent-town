@@ -26,6 +26,9 @@ const PLAYER_LOCAL_MOVE_SPEED := 520.0
 const PLAYER_LOCAL_STOP_DISTANCE := 3.0
 const PLAYER_LOCAL_INTERACT_RADIUS := 86.0
 const PLAYER_LOCAL_INTERACT_EXIT_MARGIN := 28.0
+# 地图移动 Debug 面板默认关闭；需要现场排查时临时改为 true。
+const MAP_MOVEMENT_DEBUG_ENABLED := false
+const MAP_DEBUG_NOTE_LIMIT := 5
 const MAP_PLAYER_SPAWN_RATIO := Vector2(0.50, 0.66)
 const MAP_NPC_SLOT_RATIOS := [
 	Vector2(0.24, 0.30),
@@ -68,7 +71,16 @@ var player_local_location_id := ""
 var current_near_npc_id := ""
 var current_near_event_id := ""
 var map_hint_label: Label
+var map_debug_panel: PanelContainer
+var map_debug_label: Label
+var player_actor_node: Control
 var player_target_marker: Label
+var last_move_axis := Vector2.ZERO
+var last_click_debug := "未点击"
+var last_motion_debug := "未移动"
+var last_location_debug := "等待同步"
+var last_proximity_debug := "未计算"
+var map_debug_notes: Array[String] = []
 
 
 func _ready() -> void:
@@ -566,14 +578,20 @@ func _map_node_size() -> Vector2:
 
 func _set_local_player_target(world_point: Vector2, from_click: bool) -> bool:
 	if not player_local_initialized:
+		last_click_debug = "拒绝：玩家本地坐标未初始化 point=%s" % _debug_vector(world_point)
+		_push_map_debug_note(last_click_debug)
 		return false
 	var bounds := _map_bounds()
 	if not get_viewport_rect().has_point(world_point):
+		last_click_debug = "拒绝：点击点不在视口 point=%s viewport=%s" % [_debug_vector(world_point), _debug_rect(get_viewport_rect())]
+		_push_map_debug_note(last_click_debug)
 		return false
 	var clamped_target := _clamp_point_to_walk_area(world_point, bounds)
 	var target_was_clamped := clamped_target.distance_to(world_point) > _scaled(2)
 	player_local_target = clamped_target
 	player_local_has_click_target = true
+	last_click_debug = "接受：raw=%s target=%s clamped=%s" % [_debug_vector(world_point), _debug_vector(clamped_target), str(target_was_clamped)]
+	_push_map_debug_note(last_click_debug)
 	_update_player_target_marker()
 	if from_click:
 		if target_was_clamped:
@@ -589,7 +607,9 @@ func _tick_local_player_motion(delta: float) -> void:
 	if not player_local_initialized or map_character_layer == null:
 		return
 	var bounds := _map_bounds()
+	var previous_position := player_local_position
 	var input_axis := _read_local_move_axis()
+	last_move_axis = input_axis
 	var moved := false
 	if input_axis.length() > 0.0:
 		player_local_position = _clamp_point_to_walk_area(
@@ -611,7 +631,14 @@ func _tick_local_player_motion(delta: float) -> void:
 	if moved:
 		_apply_local_player_visual()
 		_update_player_target_marker()
+		last_motion_debug = "axis=%s pos=%s delta=%.2f clickTarget=%s" % [
+			_debug_vector(input_axis),
+			_debug_vector(player_local_position),
+			previous_position.distance_to(player_local_position),
+			str(player_local_has_click_target),
+		]
 	_update_map_proximity_feedback()
+	_update_map_debug_label(bounds)
 
 
 func _read_local_move_axis() -> Vector2:
@@ -634,12 +661,27 @@ func _read_local_move_axis() -> Vector2:
 func _apply_local_player_visual() -> void:
 	if map_character_layer == null:
 		return
-	var player_actor := map_character_layer.get_node_or_null("MapActor_player") as Control
+	var player_actor := _get_player_actor_node()
 	if player_actor == null:
+		last_motion_debug = "视觉节点缺失：pos=%s" % _debug_vector(player_local_position)
+		_push_map_debug_note(last_motion_debug)
 		return
 	var node_size := _map_node_size()
 	player_actor.position = player_local_position - Vector2(node_size.x * 0.5, node_size.y)
 	player_actor.set_meta("anchor", player_local_position)
+
+
+func _get_player_actor_node() -> Control:
+	# 地图层同帧重绘时旧节点会先退出树，保留稳定引用并用 meta 兜底查找玩家小人。
+	if player_actor_node != null and is_instance_valid(player_actor_node) and player_actor_node.get_parent() == map_character_layer:
+		return player_actor_node
+	if map_character_layer == null:
+		return null
+	for child in map_character_layer.get_children():
+		if child is Control and str(child.get_meta("agentId", "")) == "player":
+			player_actor_node = child as Control
+			return player_actor_node
+	return null
 
 
 func _resolve_player_anchor(player_location: String, bounds: Rect2) -> Vector2:
@@ -650,6 +692,8 @@ func _resolve_player_anchor(player_location: String, bounds: Rect2) -> Vector2:
 		player_local_position = location_anchor
 		player_local_target = location_anchor
 		player_local_has_click_target = false
+		last_location_debug = "本地出生点：%s pos=%s" % [player_location, _debug_vector(location_anchor)]
+		_push_map_debug_note(last_location_debug)
 	else:
 		player_local_position = _clamp_point_to_walk_area(player_local_position, bounds)
 		player_local_target = _clamp_point_to_walk_area(player_local_target, bounds)
@@ -676,15 +720,17 @@ func _on_refresh_pressed() -> void:
 
 func _on_location_pressed(location_id: String) -> void:
 	_clear_event_focus()
-	var previous_location_id := selected_location_id
-	selected_location_id = location_id
+	_push_map_debug_note("请求切场景：selected=%s -> %s" % [selected_location_id, location_id])
 	_set_status("正在移动到 %s ..." % location_id)
 	var response = await api_client.post_player_action({"type": "move", "locationId": location_id})
 	if not _is_action_response_ok(response):
-		selected_location_id = previous_location_id
+		_push_map_debug_note("切场景失败：%s" % _response_error(response))
 		_render_world()
 		_set_status("移动失败：%s" % _response_error(response))
 		return
+	var response_player: Dictionary = response["data"]["state"].get("player", {})
+	var anchor_key := "anchor" + "Id"
+	_push_map_debug_note("切场景回执：player=%s anchor=%s" % [response_player.get("locationId", "?"), response_player.get(anchor_key, "?")])
 	_apply_authoritative_state(response["data"]["state"])
 	_render_world()
 	_set_status("已到达：%s" % _get_location_name(selected_location_id))
@@ -856,13 +902,25 @@ func _refresh_world() -> void:
 func _apply_authoritative_state(state: Dictionary) -> void:
 	# 所有动作回执都以 state 为准，客户端只保留当前选中项和 VN 展示文本。
 	var previous_location_id := selected_location_id
+	var previous_player = world_sync.get_player()
+	if not previous_player.is_empty():
+		previous_location_id = str(previous_player.get("locationId", selected_location_id))
 	world_sync.apply_state(state)
 	selected_location_id = str(state.get("player", {}).get("locationId", selected_location_id))
+	last_location_debug = "权威状态：prev=%s selected=%s local=%s" % [previous_location_id, selected_location_id, player_local_location_id]
 	if selected_location_id != previous_location_id:
-		current_near_npc_id = ""
-		current_near_event_id = ""
+		_clear_map_proximity_focus()
+		_push_map_debug_note("权威切场景：%s -> %s" % [previous_location_id, selected_location_id])
 	_ensure_selected_npc()
 	_sync_event_focus_with_world()
+
+
+func _clear_map_proximity_focus() -> void:
+	# 切场景必须清掉旧场景的靠近目标和点击落点，避免单个旧焦点把新场景锁住。
+	current_near_npc_id = ""
+	current_near_event_id = ""
+	player_local_has_click_target = false
+	last_proximity_debug = "已清理靠近焦点"
 
 
 func _render_world() -> void:
@@ -887,6 +945,9 @@ func _render_map_characters() -> void:
 		return
 	_clear_control_children(map_character_layer)
 	map_hint_label = null
+	map_debug_panel = null
+	map_debug_label = null
+	player_actor_node = null
 	player_target_marker = null
 	var bounds := _map_bounds()
 	_ensure_map_hint_label(bounds)
@@ -898,6 +959,7 @@ func _render_map_characters() -> void:
 	var player_anchor := _resolve_player_anchor(player_location, bounds)
 	var player_actor := _create_map_actor_node("player", str(player.get("name", "新来的农场主")), player_location, true, player_anchor)
 	map_character_layer.add_child(player_actor)
+	player_actor_node = player_actor
 	occupancy[player_location] = 0
 	for npc in world_sync.get_npcs():
 		if not (npc is Dictionary):
@@ -911,6 +973,7 @@ func _render_map_characters() -> void:
 		_add_map_actor(npc_id, str(npc.get("name", npc_id)), npc_location, false, occupancy, bounds)
 	_update_player_target_marker()
 	_update_map_proximity_feedback()
+	_update_map_debug_label(bounds)
 
 
 func _render_map_event_markers(bounds: Rect2) -> void:
@@ -1101,6 +1164,95 @@ func _update_map_hint(text: String) -> void:
 		map_hint_label.text = text
 
 
+func _ensure_map_debug_label(bounds: Rect2) -> void:
+	if not MAP_MOVEMENT_DEBUG_ENABLED or map_character_layer == null:
+		return
+	if map_debug_panel == null or not is_instance_valid(map_debug_panel):
+		map_debug_panel = PanelContainer.new()
+		map_debug_panel.name = "MapMovementDebug"
+		map_debug_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		map_debug_panel.z_index = 240
+		map_debug_panel.add_theme_stylebox_override("panel", _make_panel_style(Color(0.04, 0.06, 0.05, 0.78), UI_GOLD_LIGHT, _scaled_int(12), _scaled_int(2), _scaled_int(10)))
+
+		map_debug_label = Label.new()
+		map_debug_label.name = "DebugText"
+		map_debug_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		map_debug_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		map_debug_label.add_theme_font_size_override("font_size", _font_size(13))
+		map_debug_label.add_theme_color_override("font_color", Color(0.92, 1.0, 0.86, 1.0))
+		map_debug_label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.95))
+		map_debug_label.add_theme_constant_override("shadow_offset_x", _scaled_int(1))
+		map_debug_label.add_theme_constant_override("shadow_offset_y", _scaled_int(1))
+		map_debug_panel.add_child(map_debug_label)
+	if map_debug_panel.get_parent() != map_character_layer:
+		map_character_layer.add_child(map_debug_panel)
+	var debug_size := Vector2(max(_scaled(430), bounds.size.x * 0.34), _scaled(228))
+	map_debug_panel.custom_minimum_size = debug_size
+	map_debug_panel.size = debug_size
+	map_debug_panel.position = Vector2(bounds.end.x - debug_size.x - _scaled(8), bounds.position.y + _scaled(68))
+
+
+func _update_map_debug_label(bounds: Rect2) -> void:
+	if not MAP_MOVEMENT_DEBUG_ENABLED or map_character_layer == null:
+		return
+	_ensure_map_debug_label(bounds)
+	if map_debug_label == null:
+		return
+	var player: Dictionary = {}
+	if world_sync != null:
+		player = world_sync.get_player()
+	var state_location := str(player.get("locationId", "未同步"))
+	var anchor_key := "anchor" + "Id"
+	var state_anchor := str(player.get(anchor_key, "无"))
+	var player_actor := _get_player_actor_node()
+	var actor_anchor := "缺失"
+	var actor_name := "缺失"
+	if player_actor != null:
+		actor_anchor = _debug_vector(player_actor.get_meta("anchor", Vector2.ZERO))
+		actor_name = player_actor.name
+	var lines: Array[String] = []
+	lines.append("Map Debug")
+	lines.append("selected=%s | state=%s | local=%s | anchor=%s" % [selected_location_id, state_location, player_local_location_id, state_anchor])
+	lines.append("pos=%s | actor=%s %s | target=%s | hasTarget=%s" % [_debug_vector(player_local_position), actor_name, actor_anchor, _debug_vector(player_local_target), str(player_local_has_click_target)])
+	lines.append("axis=%s | motion=%s" % [_debug_vector(last_move_axis), last_motion_debug])
+	lines.append("nearNpc=%s | nearEvent=%s | %s" % [current_near_npc_id, current_near_event_id, last_proximity_debug])
+	lines.append("click=%s" % last_click_debug)
+	lines.append("location=%s" % last_location_debug)
+	lines.append("bounds=%s | viewport=%s" % [_debug_rect(bounds), _debug_rect(get_viewport_rect())])
+	if not map_debug_notes.is_empty():
+		lines.append("notes:")
+		for note in map_debug_notes:
+			lines.append("- %s" % note)
+	map_debug_label.text = "\n".join(lines)
+	if map_debug_panel != null and map_debug_panel.get_parent() == map_character_layer:
+		map_character_layer.move_child(map_debug_panel, map_character_layer.get_child_count() - 1)
+
+
+func _push_map_debug_note(message: String) -> void:
+	if not MAP_MOVEMENT_DEBUG_ENABLED:
+		return
+	map_debug_notes.append(message)
+	while map_debug_notes.size() > MAP_DEBUG_NOTE_LIMIT:
+		map_debug_notes.remove_at(0)
+	print("[MapMovementDebug] ", message)
+	if map_character_layer != null:
+		_update_map_debug_label(_map_bounds())
+
+
+func _debug_vector(value: Vector2) -> String:
+	return "(%.1f, %.1f)" % [value.x, value.y]
+
+
+func _debug_rect(value: Rect2) -> String:
+	return "p=%s s=%s" % [_debug_vector(value.position), _debug_vector(value.size)]
+
+
+func _debug_distance(value: float) -> String:
+	if value == INF:
+		return "inf"
+	return "%.1f" % value
+
+
 func _update_player_target_marker() -> void:
 	if map_character_layer == null:
 		return
@@ -1189,6 +1341,12 @@ func _update_map_proximity_feedback() -> void:
 		nearest_event_title = previous_event_title
 	current_near_npc_id = str(nearest_npc_actor.get_meta("agentId", "")) if nearest_npc_actor != null else ""
 	current_near_event_id = str(nearest_event_marker.get_meta("eventId", "")) if nearest_event_marker != null else ""
+	last_proximity_debug = "npcDist=%s eventDist=%s radius=%.1f exit=%.1f" % [
+		_debug_distance(nearest_npc_distance),
+		_debug_distance(nearest_event_distance),
+		interact_radius,
+		exit_radius,
+	]
 
 	# 同一时间只激活最近的 NPC / 事件，避免多人重叠时焦点在多个 marker 之间抖动。
 	for child in map_character_layer.get_children():
@@ -1627,6 +1785,8 @@ func _clear_column(column: VBoxContainer) -> void:
 
 func _clear_control_children(node: Control) -> void:
 	for child in node.get_children():
+		# 立即移出父节点，避免同帧重绘时旧名字占位导致新玩家节点被自动改名。
+		node.remove_child(child)
 		child.queue_free()
 
 
