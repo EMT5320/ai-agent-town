@@ -98,7 +98,12 @@ scope: initial asset generation batches and historical asset sequencing
 
 - manifest 状态统一标记为 `prompt_ready`，禁止提前标记 `source_selected`。
 - `fullPromptRef` 使用 `docs/asset_generation_prompts.md` 的锚点段落，便于校验。
+- `promptBatchId` 按子批次拆分：`batch-8a-expression-delta`、`batch-8b-action-feedback-icons`、`batch-8c-life-ui-widgets`。
+- `godotTargetPath` 与 `godotTargetSlot` 必填，用于后续接入排程。
 - `processedPath` 与 `godotPath` 保持 `null`，直到源图真实生成并筛选通过。
+- 每次更新 backlog 后运行 `python scripts/export_prompt_ready_assets.py`，刷新 `docs/asset_batches/prompt_ready_export.json` 与 `docs/asset_batches/prompt_ready_export.md`。
+- 批次归属、用途、Godot 接入目标由 `docs/asset_batches/prompt_ready_backlog_batches.json` 统一维护，并通过 `python scripts/check_asset_manifest.py` 校验。
+- 生产前导出执行清单：`python scripts/export_prompt_ready_assets.py`，产出 `docs/asset_batches/prompt_ready_export.json` 与 `docs/asset_batches/prompt_ready_export.md`。
 
 ## 资产登记规则
 
@@ -106,6 +111,7 @@ scope: initial asset generation batches and historical asset sequencing
 
 - `path` 指向 `assets/source/...`。
 - `fullPromptRef` 已生成资产指向 `assets/manifests/prompts/...txt`；prompt 计划条目可指向 `docs/asset_generation_prompts.md#...` 锚点。
+- `promptBatchId`、`godotTargetPath`、`godotTargetSlot` 在 `prompt_ready` 条目中必填。
 - 已生成并通过筛选的条目使用 `source_selected`；仅完成 prompt 计划的条目使用 `prompt_ready`。
 - `prompt_ready` 条目必须保持 `processedPath=null`、`godotPath=null`。
 - `reviewNotes` 记录是否能承载对话 UI、是否有不可控文字、是否需要重生成。

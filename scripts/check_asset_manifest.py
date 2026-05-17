@@ -11,6 +11,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_PATH = ROOT / "assets" / "manifests" / "asset_manifest.json"
 PLAN_PATH = ROOT / "assets" / "manifests" / "initial_asset_plan.json"
+PROMPT_READY_BATCH_PLAN_PATH = ROOT / "docs" / "asset_batches" / "prompt_ready_backlog_batches.json"
 
 REQUIRED_FIELDS = {
     "id",
@@ -39,6 +40,108 @@ ALLOWED_STATUSES = {
     "pending_review",
     "source_selected",
 }
+
+
+def build_prompt_ready_batch_map() -> dict[str, dict[str, Any]]:
+    """读取并校验 prompt_ready 批次计划。"""
+    if not PROMPT_READY_BATCH_PLAN_PATH.exists():
+        raise RuntimeError(f"缺少 prompt_ready 批次计划：{PROMPT_READY_BATCH_PLAN_PATH}")
+    plan = load_json(PROMPT_READY_BATCH_PLAN_PATH)
+    if not isinstance(plan, dict):
+        raise RuntimeError("prompt_ready 批次计划顶层必须是对象")
+
+    batches = plan.get("batches")
+    if not isinstance(batches, list) or not batches:
+        raise RuntimeError("prompt_ready 批次计划需要非空 batches")
+
+    prompt_ready_map: dict[str, dict[str, Any]] = {}
+    seen_batch_ids: set[str] = set()
+    for batch in batches:
+        if not isinstance(batch, dict):
+            raise RuntimeError("prompt_ready 批次条目必须是对象")
+        batch_id = str(batch.get("id", "")).strip()
+        if not batch_id:
+            raise RuntimeError("prompt_ready 批次缺少 id")
+        if batch_id in seen_batch_ids:
+            raise RuntimeError(f"重复 prompt_ready 批次 id：{batch_id}")
+        seen_batch_ids.add(batch_id)
+
+        prompt_anchor = str(batch.get("promptAnchor", "")).strip()
+        if not prompt_anchor or "#" not in prompt_anchor:
+            raise RuntimeError(f"{batch_id} 缺少合法 promptAnchor（需包含锚点）")
+
+        planned_godot_prefix = str(batch.get("plannedGodotPrefix", "")).strip()
+        if not planned_godot_prefix.startswith("res://assets/"):
+            raise RuntimeError(f"{batch_id} 的 plannedGodotPrefix 必须以 res://assets/ 开头")
+        if not planned_godot_prefix.endswith("/"):
+            planned_godot_prefix = f"{planned_godot_prefix}/"
+
+        allowed_usages = batch.get("allowedUsages")
+        if not isinstance(allowed_usages, list) or not allowed_usages:
+            raise RuntimeError(f"{batch_id} 需要非空 allowedUsages")
+        normalized_usages = {str(usage).strip() for usage in allowed_usages if str(usage).strip()}
+        if not normalized_usages:
+            raise RuntimeError(f"{batch_id} 的 allowedUsages 不能为空字符串")
+
+        asset_ids = batch.get("assetIds")
+        if not isinstance(asset_ids, list) or not asset_ids:
+            raise RuntimeError(f"{batch_id} 需要非空 assetIds")
+
+        for raw_asset_id in asset_ids:
+            asset_id = str(raw_asset_id).strip()
+            if not asset_id:
+                raise RuntimeError(f"{batch_id} 含空 assetId")
+            if asset_id in prompt_ready_map:
+                existed = prompt_ready_map[asset_id]["batchId"]
+                raise RuntimeError(f"{asset_id} 在多个批次重复：{existed} 与 {batch_id}")
+            prompt_ready_map[asset_id] = {
+                "batchId": batch_id,
+                "promptAnchor": prompt_anchor,
+                "plannedGodotPrefix": planned_godot_prefix,
+                "allowedUsages": normalized_usages,
+            }
+
+    return prompt_ready_map
+
+
+def validate_prompt_ready_entry(entry: dict[str, Any], spec: dict[str, Any]) -> None:
+    """校验 prompt_ready 条目的批次、用途与 Godot 接入目标。"""
+    asset_id = str(entry["id"])
+    usage = str(entry["usage"])
+    if usage not in spec["allowedUsages"]:
+        raise RuntimeError(
+            f"{asset_id} 的 usage={usage} 不在批次 {spec['batchId']} 允许范围："
+            f"{sorted(spec['allowedUsages'])}"
+        )
+
+    prompt_ref = str(entry["fullPromptRef"])
+    if prompt_ref != spec["promptAnchor"]:
+        raise RuntimeError(
+            f"{asset_id} 的 promptAnchor 不匹配：manifest={prompt_ref}, plan={spec['promptAnchor']}"
+        )
+
+    prompt_batch_id = str(entry.get("promptBatchId", "")).strip()
+    if prompt_batch_id != spec["batchId"]:
+        raise RuntimeError(
+            f"{asset_id} 的 promptBatchId 不匹配：manifest={prompt_batch_id}, plan={spec['batchId']}"
+        )
+
+    source_path = str(entry["path"])
+    expected_godot_target = f"{spec['plannedGodotPrefix']}{Path(source_path).name}"
+    godot_target_path = str(entry.get("godotTargetPath", "")).strip()
+    if godot_target_path != expected_godot_target:
+        raise RuntimeError(
+            f"{asset_id} 的 godotTargetPath 不匹配：manifest={godot_target_path}, expected={expected_godot_target}"
+        )
+    if not godot_target_path.startswith("res://assets/"):
+        raise RuntimeError(f"{asset_id} 的 godotTargetPath 格式非法：{godot_target_path}")
+
+    godot_target_slot = str(entry.get("godotTargetSlot", "")).strip()
+    if not godot_target_slot.startswith("asset_registry."):
+        raise RuntimeError(f"{asset_id} 的 godotTargetSlot 必须以 asset_registry. 开头：{godot_target_slot}")
+
+    if entry.get("processedPath") is not None or entry.get("godotPath") is not None:
+        raise RuntimeError(f"{asset_id} 为 prompt_ready 时 processedPath/godotPath 必须保持 null")
 
 
 def load_json(path: Path) -> Any:
@@ -92,6 +195,8 @@ def validate_manifest() -> None:
     if not isinstance(manifest, list):
         raise RuntimeError("asset_manifest.json 顶层必须是数组")
 
+    prompt_ready_batch_map = build_prompt_ready_batch_map()
+    seen_prompt_ready_ids: set[str] = set()
     seen_ids: set[str] = set()
     for entry in manifest:
         if not isinstance(entry, dict):
@@ -110,6 +215,12 @@ def validate_manifest() -> None:
             raise RuntimeError(f"{asset_id} 使用了未登记状态：{status}")
 
         validate_prompt_ref(asset_id, str(entry["fullPromptRef"]), status)
+        if status == "prompt_ready":
+            batch_spec = prompt_ready_batch_map.get(asset_id)
+            if batch_spec is None:
+                raise RuntimeError(f"{asset_id} 缺少 prompt_ready 批次归属")
+            validate_prompt_ready_entry(entry, batch_spec)
+            seen_prompt_ready_ids.add(asset_id)
 
         if status == "source_selected":
             asset_path = ROOT / str(entry["path"])
@@ -128,6 +239,14 @@ def validate_manifest() -> None:
                 godot_asset_path = ROOT / "clients" / "godot" / str(value).removeprefix("res://")
                 if not godot_asset_path.exists():
                     raise RuntimeError(f"{asset_id} 的 Godot 资源不存在：{value}")
+
+    plan_prompt_ready_ids = set(prompt_ready_batch_map)
+    missing_in_manifest = sorted(plan_prompt_ready_ids - seen_prompt_ready_ids)
+    if missing_in_manifest:
+        raise RuntimeError(f"批次计划中的 prompt_ready 资产未在 manifest 注册：{', '.join(missing_in_manifest)}")
+    extra_in_manifest = sorted(seen_prompt_ready_ids - plan_prompt_ready_ids)
+    if extra_in_manifest:
+        raise RuntimeError(f"manifest 中存在未分批的 prompt_ready 资产：{', '.join(extra_in_manifest)}")
 
 
 def validate_plan() -> None:

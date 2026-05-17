@@ -40,6 +40,7 @@ scope: new-session entrypoint, boundaries, commands, and next steps
 - 星灯祭 Event Skill 已承载玩家画像证据模板、玩家风格信号 `styleSignal`、事件反应记忆模板、asset hints 与通用 fallback 台词模板，Runtime 继续负责执行、校验和格式化。
 - 星灯祭结算会输出统一 `event_skill_outcome.v1`，API `eventResult`、`town.event_resolved.payload.outcomeRecord` 和 `completedEvents[].resolution.outcomeRecord` 共用该记录。
 - 服务端已透出 `playerAnchor`，并为 `move_to_anchor` 与 `scene_action` 返回统一 `actionFeedback`。
+- `/api/world/state` 已新增 `npcSchedules` 与 `lifeActionPlan` 只读快照，版本为 `life_action_plan.v1`，用于把 NPC 深度卡生活行动、谣言与关系节拍接入运行时可视化。
 
 ### Content Codex / NPC 深度卡
 
@@ -59,7 +60,7 @@ scope: new-session entrypoint, boundaries, commands, and next steps
 - 已有按 NPC / feature 选择 profile 的配置路径：`config/models.example.json` 为提交模板，`config/models.json` 和 `config/models.local.json` 为本机忽略配置；当前本机 `model:check` 显示 `activeProvider=cloud`、6 个 profiles、`localConfigLoaded=False`。
 - Web 观察台已有 LLM 配置卡片，可查看 profile、路由、key 状态，支持热重载与一次对话 smoke。
 - Debug 记录已包含 `providerMode`、`profileName`、`apiKeyConfigured`、`messages`、`rawText`、`parsed`、`executed`、`usage`、`latency`、`fallbackReason`。
-- 2026-05-16 已用当前本机 `config/models.json` 跑通真实 `CloudApiProvider` smoke：dialogue / event_reaction / night_reflection 均调用 `deepseek-v4-flash`，`fallbackReason=None`；提交态不包含密钥，fresh env 或无 key 沙箱会按规则跳过真实 LLM 调用。
+- 2026-05-17 已用当前本机 `config/models.json` 跑通真实 `CloudApiProvider` smoke：dialogue / event_reaction / night_reflection 均调用 `deepseek-v4-flash`，`fallbackReason=None`；提交态不包含密钥，fresh env 或无 key 沙箱会按规则跳过真实 LLM 调用。
 
 ### Godot 客户端
 
@@ -75,15 +76,15 @@ scope: new-session entrypoint, boundaries, commands, and next steps
 - 玩家出生点已和 NPC 固定站位槽分离，当前场景 NPC 使用比例槽位排布，交互半径已收紧，降低托玛等 NPC 与玩家重叠及高亮抖动概率。
 - 地图层已补 UI 点击穿透、按钮禁用键盘焦点和 WASD 物理键兜底，降低空地点击被透明 UI 吃掉、移动键被按钮焦点干扰的概率。
 - 当前场景点击落点改为先修正到可行走边界再接受，地图舞台 bounds 改为随窗口动态放宽，玩家出生点从底部边缘上移到舞台下中区，靠近目标增加滞回，NPC 小人保持可点，减少广场 / 酒馆的卡住体感。
-- 左侧“场景行动”区与地图锚点按钮已接入 `move_to_anchor`、`scene_action` 和结束时段；VN 面板会展示后端 `actionFeedback`。
-- `check_godot_project.py`、Godot headless import、`npm.cmd run client:env` 和 `npm.cmd run client:run:check` 已通过；2026-05-16 主人已完成上一版真实窗口人工验收，2026-05-17 主人确认点击落点已正常，本轮锚点 / 场景行动 / 行动反馈仍需主人复验。
+- 地图上下文动作面板已接入：靠近锚点 / 交互体 / 居民 / 事件后生成候选动作，`E`/`Space` 执行，`Tab`/`Q` 切换；左侧“场景行动”降级为调试兜底，VN 面板继续展示后端 `actionFeedback`。
+- `check_godot_project.py`、Godot headless import、`npm.cmd run client:env` 和 `npm.cmd run client:run:check` 已通过；2026-05-16 主人已完成上一版真实窗口人工验收，2026-05-17 主人确认点击落点已正常，本轮地图上下文动作 / 场景行动 / 行动反馈仍需主人复验。
 
 ### 资产与文档治理
 
 - `assets/manifests/asset_manifest.json` 当前登记 55 条资产：21 条 `source_selected`、3 条 `style_anchor_candidate`、7 条 `pending_review`、24 条 `prompt_ready`。
 - 已同步到 Godot 的资产包括 3 张地点背景、星灯祭事件 CG、玩家 + 6 个首发 NPC 的 `neutral` 立绘、7 张地图小人和 3 张交互标记。
 - `AssetRegistry` 已支持 `happy` / `troubled` 表情键兜底，缺图时回退 `neutral`。
-- 表情差分、行动反馈图标和生活行动 UI 小组件已有 `prompt_ready` backlog，尚未生成或接入 Godot registry。
+- 表情差分、行动反馈图标和生活行动 UI 小组件已有 3 批 `prompt_ready` backlog，导出清单位于 `docs/asset_batches/prompt_ready_export.md`，尚未生成或接入 Godot registry。
 - `AGENTS.md`、`CLAUDE.md`、`docs/README.md`、`docs/agent_context.md`、`docs/goal_board.md`、`docs/current_status.md`、`docs/open_questions.md` 是当前治理入口。
 
 ## 4. 当前边界
@@ -130,9 +131,9 @@ git diff --check
 ## 6. 下一轮最短开发入口
 
 1. 固定离线基线：运行 `npm.cmd run context:check`、`npm.cmd run check`、`npm.cmd run smoke`、`npm.cmd run asset:check`、`npm.cmd run client:env`、`npm.cmd run client:run:check`。
-2. 当前 checkpoint：真实 Godot 窗口上一版已由主人验收，点击落点已由主人确认正常；本轮新增锚点按钮、场景行动和行动反馈，仍需主人窗口复验。
-3. Godot 玩法线：WASD 独立移动、当前场景空地点落点、落点标记、单个最近交互目标高亮、当前场景角色/事件过滤、动态舞台移动范围、玩家 / NPC 分离站位、玩家出生点上移、收紧交互半径、靠近滞回、服务端锚点、场景行动和行动反馈卡已落地，下一步推进日程可视化。
-4. 内容线：`monologueSeeds` 已接入夜间反思 RAG，`gossipHooks` 已进入对话 `gossipEvidence`、传播草案、validator 与运行时校验事件；Day 1 生活行动 / 谣言 / 关系节拍素材已准备，下一步接入运行时日程与实际谣言传播记忆 / 关系扩散。
+2. 当前 checkpoint：真实 Godot 窗口上一版已由主人验收，点击落点已由主人确认正常；本轮新增地图上下文动作、快捷键执行、场景行动和行动反馈，仍需主人窗口复验。
+3. Godot 玩法线：WASD 独立移动、当前场景空地点落点、落点标记、单个最近交互目标高亮、当前场景角色/事件过滤、动态舞台移动范围、玩家 / NPC 分离站位、玩家出生点上移、收紧交互半径、靠近滞回、地图上下文候选、服务端锚点、场景行动和行动反馈卡已落地，下一步推进日程可视化。
+4. 内容线：`monologueSeeds` 已接入夜间反思 RAG，`gossipHooks` 已进入对话 `gossipEvidence`、传播草案、validator 与运行时校验事件；Day 1 生活行动 / 谣言 / 关系节拍素材已进入 `npcSchedules` / `lifeActionPlan` 快照，下一步驱动 NPC 行动与实际谣言传播记忆 / 关系扩散。
 5. 后端线：星灯祭画像证据、`styleSignal`、事件反应记忆、asset hints 和通用 fallback 台词模板已迁入 Skill，下一步继续迁移更多结算模板并补复用测试。
 6. LLM / Debug 线：真实 smoke 已跑通；如切换模型、key 或 profile，再重新记录 dialogue / event_reaction / night_reflection 延迟、fallback 和成本估计。
-7. 资产线：按 `prompt_ready` backlog 生成并筛选 `happy` / `troubled` 表情差分、生活 UI 组件和行动反馈图标。
+7. 资产线：按 `docs/asset_batches/prompt_ready_export.md` 生成并筛选 `happy` / `troubled` 表情差分、生活 UI 组件和行动反馈图标。

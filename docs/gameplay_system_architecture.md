@@ -1,7 +1,7 @@
 ---
 status: active
 owner_lane: godot-client
-last_verified: 2026-05-16
+last_verified: 2026-05-17
 startup_load: on-demand
 source_of_truth: true
 scope: gameplay loop, map interactions, soft schedules, and Godot/backend boundaries
@@ -91,7 +91,19 @@ NPC 的职责：
 
 实际位置和行动由运行时根据世界状态、导演 brief、可见性预算、当前事件、玩家行为和 NPC 自主判断生成。这样可以保留生活规律，又不会把 LLM NPC 锁进传统固定脚本。
 
-### 2.5 首版缩小内容，保留扩展骨架
+### 2.5 反 UI 点击化硬约束
+
+后续玩法实现需要遵守以下顺序：
+
+1. 后端先定义合法 action、状态变更、回执和 Debug 证据。
+2. Godot 在地图中提供靠近提示、上下文候选、快捷键和 VN 结果展示。
+3. 侧栏按钮只能作为调试兜底、无障碍辅助或开发期验证入口。
+4. 新增玩法如果只表现为列表按钮，需要同步补地图触发条件、空间锚点和后端权威契约。
+5. 新增 NPC 日程只能作为可解释快照或候选，不得把角色锁死到固定排班。
+
+这条约束用于保护系统地基，避免后续在资产、内容和事件规模扩大后产生大量迁移工程。
+
+### 2.6 首版缩小内容，保留扩展骨架
 
 近期可以重点打磨 3 个核心 NPC、3 个地点、1 种作物和 1 个事件，但数据结构要支持：
 
@@ -518,6 +530,13 @@ NPC 后续行动也应走结构化工具：
 - 靠近 NPC / 事件 / 田块时出现交互提示。
 - VN 层作为交互结果展示。
 - Debug 面板默认隐藏。
+
+### M1.5：权威生活行动快照
+
+- 后端输出 `npcSchedules` 与 `lifeActionPlan`。
+- 快照由 NPC 深度卡 seeds、Presence、锚点和交互体生成。
+- LLM 不能直接改写世界状态；Runtime 继续持有状态变更权。
+- Godot 先做轻量可视化，再把候选动作接入地图上下文提示。
 
 ### M2：最小农场和背包闭环
 

@@ -1,0 +1,69 @@
+{
+  "generatedAt": "2026-05-17",
+  "notes": "prompt_ready backlog planning only; no generated source assets are implied.",
+  "batches": [
+    {
+      "id": "batch-8a-expression-delta",
+      "label": "Expression delta batch (happy/troubled)",
+      "promptAnchor": "docs/asset_generation_prompts.md#batch-8-expression-delta",
+      "plannedGodotPrefix": "res://assets/characters/",
+      "allowedUsages": [
+        "dialogue_portrait"
+      ],
+      "assetIds": [
+        "player_farmer_happy",
+        "player_farmer_troubled",
+        "npc_mira_happy",
+        "npc_mira_troubled",
+        "npc_tomas_happy",
+        "npc_tomas_troubled",
+        "npc_orren_happy",
+        "npc_orren_troubled",
+        "npc_lena_happy",
+        "npc_lena_troubled",
+        "npc_kai_happy",
+        "npc_kai_troubled",
+        "npc_bram_happy",
+        "npc_bram_troubled"
+      ]
+    },
+    {
+      "id": "batch-8b-action-feedback-icons",
+      "label": "Action feedback icon batch",
+      "promptAnchor": "docs/asset_generation_prompts.md#batch-8-action-feedback-icons",
+      "plannedGodotPrefix": "res://assets/icons/",
+      "allowedUsages": [
+        "move_feedback",
+        "talk_feedback",
+        "gift_feedback",
+        "inspect_feedback",
+        "event_feedback"
+      ],
+      "assetIds": [
+        "action_feedback_move",
+        "action_feedback_talk",
+        "action_feedback_gift",
+        "action_feedback_inspect",
+        "action_feedback_event"
+      ]
+    },
+    {
+      "id": "batch-8c-life-ui-widgets",
+      "label": "Life action UI widget batch",
+      "promptAnchor": "docs/asset_generation_prompts.md#batch-8-life-ui-widgets",
+      "plannedGodotPrefix": "res://assets/ui/",
+      "allowedUsages": [
+        "life_action_button",
+        "life_action_schedule",
+        "life_action_feedback"
+      ],
+      "assetIds": [
+        "ui_life_action_button_farm",
+        "ui_life_action_button_chat",
+        "ui_life_action_button_rest",
+        "ui_life_action_schedule_strip",
+        "ui_life_action_result_toast"
+      ]
+    }
+  ]
+}

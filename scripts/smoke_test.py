@@ -67,6 +67,8 @@ REQUIRED_GAME_STATE_FIELDS = {
     "activeEvents",
     "completedEvents",
     "nightReflections",
+    "npcSchedules",
+    "lifeActionPlan",
     "recentEvents",
     "slice",
     "townStats",
@@ -99,6 +101,20 @@ REQUIRED_DEBUG_TURN_FIELDS = {
 REQUIRED_MEMORY_SEARCH_FIELDS = {"query", "agentId", "tags", "limit", "items"}
 REQUIRED_MEMORY_ITEM_FIELDS = {"agentId", "agentName", "tick", "importance", "tags", "text", "match"}
 REQUIRED_ACTION_FEEDBACK_FIELDS = {"title", "summary", "locationId", "anchorId", "resultType", "changedResources", "eventIds"}
+REQUIRED_NPC_SCHEDULE_FIELDS = {
+    "npcId",
+    "day",
+    "phase",
+    "generatedAtTick",
+    "locationId",
+    "anchorId",
+    "presenceSource",
+    "activeLifeAction",
+    "lifeActionCandidates",
+    "rumorBeatCandidates",
+    "relationshipBeatCandidates",
+    "worldMutationPolicy",
+}
 
 
 def assert_no_inline_api_key(payload: object, label: str, path: str = "") -> None:
@@ -286,13 +302,61 @@ def assert_action_feedback_contract(result: dict, label: str, *, expected_result
     return feedback
 
 
+def assert_npc_schedule_contract(state: dict, label: str) -> None:
+    """确认运行时日程快照可直接作为后续玩法候选输入。"""
+    schedules = state.get("npcSchedules")
+    if not isinstance(schedules, list) or not schedules:
+        raise RuntimeError(f"{label}.npcSchedules 应为非空数组")
+    for index, schedule in enumerate(schedules):
+        if not isinstance(schedule, dict):
+            raise RuntimeError(f"{label}.npcSchedules[{index}] 应为对象")
+        missing = sorted(REQUIRED_NPC_SCHEDULE_FIELDS - set(schedule))
+        if missing:
+            raise RuntimeError(f"{label}.npcSchedules[{index}] 缺少字段：{missing}")
+        policy = schedule.get("worldMutationPolicy")
+        if not isinstance(policy, dict) or policy.get("llmMayMutateWorld") is not False:
+            raise RuntimeError(f"{label}.npcSchedules[{index}].worldMutationPolicy.llmMayMutateWorld 应为 false")
+        life_candidates = schedule.get("lifeActionCandidates")
+        if not isinstance(life_candidates, list) or not life_candidates:
+            raise RuntimeError(f"{label}.npcSchedules[{index}].lifeActionCandidates 应为非空数组")
+        active_action = schedule.get("activeLifeAction")
+        if not isinstance(active_action, dict) or not active_action.get("id"):
+            raise RuntimeError(f"{label}.npcSchedules[{index}].activeLifeAction 应包含 id")
+        if not isinstance(active_action.get("spaceActionCandidates"), list):
+            raise RuntimeError(f"{label}.npcSchedules[{index}].activeLifeAction.spaceActionCandidates 应为数组")
+    plan = state.get("lifeActionPlan")
+    if not isinstance(plan, dict):
+        raise RuntimeError(f"{label}.lifeActionPlan 应为对象")
+    for field in ("version", "day", "phase", "generatedAtTick", "selectedActions", "locationBuckets", "policy"):
+        if field not in plan:
+            raise RuntimeError(f"{label}.lifeActionPlan 缺少字段：{field}")
+    if plan["version"] != "life_action_plan.v1":
+        raise RuntimeError(f"{label}.lifeActionPlan.version 期望 life_action_plan.v1，实际为 {plan['version']}")
+    if not isinstance(plan.get("selectedActions"), list) or not plan["selectedActions"]:
+        raise RuntimeError(f"{label}.lifeActionPlan.selectedActions 应为非空数组")
+    plan_policy = plan.get("policy")
+    if not isinstance(plan_policy, dict) or plan_policy.get("llmMayMutateWorld") is not False:
+        raise RuntimeError(f"{label}.lifeActionPlan.policy.llmMayMutateWorld 应为 false")
+
+
 def assert_game_state_contract(state: dict, label: str) -> None:
     """确认 /api/world/state 保持 Godot 可消费的稳定状态切片。"""
     missing = sorted((REQUIRED_GAME_STATE_FIELDS | REQUIRED_CLIENT_CONTEXT_FIELDS) - set(state))
     if missing:
         raise RuntimeError(f"{label} 缺少状态字段：{missing}")
     assert_client_context_fields(state, label)
-    for field in ("locations", "anchors", "interactables", "npcPresence", "farmPlots", "npcs", "activeEvents", "completedEvents", "nightReflections", "recentEvents"):
+    for field in (
+        "locations",
+        "anchors",
+        "interactables",
+        "npcPresence",
+        "farmPlots",
+        "npcs",
+        "activeEvents",
+        "completedEvents",
+        "nightReflections",
+        "recentEvents",
+    ):
         if not isinstance(state[field], list):
             raise RuntimeError(f"{label}.{field} 应为数组")
     for index, event in enumerate(state["recentEvents"]):
@@ -313,6 +377,10 @@ def assert_game_state_contract(state: dict, label: str) -> None:
         raise RuntimeError(f"{label}.player.inventory 应为数组")
     if not isinstance(state["slice"], dict) or not state["slice"].get("npcIds") or not state["slice"].get("locationIds"):
         raise RuntimeError(f"{label}.slice 应包含 npcIds 和 locationIds")
+    if state["slice"].get("scheduleSnapshotVersion") != "life_action_plan.v1":
+        raise RuntimeError(f"{label}.slice.scheduleSnapshotVersion 应为 life_action_plan.v1")
+    if not isinstance(state["slice"].get("supportedLifeActionWindows"), list):
+        raise RuntimeError(f"{label}.slice.supportedLifeActionWindows 应为数组")
     supported_sources = set(state["slice"].get("supportedNpcPresenceSources", []))
     required_sources = {"habit", "director_spotlight", "event_skill", "relationship_pull"}
     if not required_sources.issubset(supported_sources):
@@ -340,6 +408,7 @@ def assert_game_state_contract(state: dict, label: str) -> None:
             raise RuntimeError(f"{label}.activeEvents 星灯祭事件缺少 {field}")
     if not all(isinstance(choice, dict) and choice.get("id") and choice.get("label") for choice in active_event["choices"]):
         raise RuntimeError(f"{label}.activeEvents 星灯祭 choices 应包含 id 和 label")
+    assert_npc_schedule_contract(state, label)
 
 
 def assert_memory_search_contract(payload: dict, label: str) -> None:

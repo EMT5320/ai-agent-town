@@ -3,13 +3,8 @@
 from copy import deepcopy
 from typing import Any
 
-from app.content.codex_loader import (
-    CodexValidationError,
-    NpcDeepCard,
-    compute_relationship_stage,
-    load_all_npc_deep_cards,
-    to_runtime_dict,
-)
+from app.content.codex_loader import load_all_npc_deep_cards, to_runtime_dict
+from app.simulation import build_life_action_plan_snapshot
 
 from .seed_data import (
     AGENTS,
@@ -399,6 +394,7 @@ def public_game_world(world: dict[str, Any], recent_events: list[dict[str, Any]]
     anchors = [deepcopy(anchor) for anchor in world.get("anchors", {}).values() if anchor.get("locationId") in location_ids]
     interactables = [deepcopy(item) for item in world.get("interactables", {}).values() if item.get("locationId") in location_ids]
     farm_plots = [deepcopy(plot) for plot in world.get("farmPlots", {}).values() if plot.get("locationId") in location_ids]
+    npc_schedules, life_action_plan = build_life_action_plan_snapshot(world, npc_presence)
     return {
         "clock": view["clock"],
         "player": view["player"],
@@ -412,12 +408,16 @@ def public_game_world(world: dict[str, Any], recent_events: list[dict[str, Any]]
         "activeEvents": view.get("activeEvents", []),
         "completedEvents": view.get("completedEvents", []),
         "nightReflections": view.get("nightReflections", [])[-10:],
+        "npcSchedules": npc_schedules,
+        "lifeActionPlan": life_action_plan,
         "recentEvents": recent_events[-20:],
         "slice": {
             "npcIds": DAY1_NPC_IDS,
             "locationIds": DAY1_LOCATION_IDS,
             "anchorIds": [anchor["id"] for anchor in anchors],
             "supportedNpcPresenceSources": list(NPC_PRESENCE_SOURCES),
+            "scheduleSnapshotVersion": "life_action_plan.v1",
+            "supportedLifeActionWindows": list(PHASES),
         },
         "townStats": view["townStats"],
     }

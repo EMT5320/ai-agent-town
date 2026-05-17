@@ -1,0 +1,314 @@
+{
+  "generatedAt": "2026-05-17",
+  "sourceManifest": "assets/manifests/asset_manifest.json",
+  "batchCount": 3,
+  "assetCount": 24,
+  "batches": [
+    {
+      "batchId": "batch-8a-expression-delta",
+      "assetCount": 14,
+      "assets": [
+        {
+          "id": "player_farmer_happy",
+          "type": "character_portrait",
+          "usage": "dialogue_portrait",
+          "path": "assets/source/characters/player_farmer_happy.png",
+          "promptRef": "docs/asset_generation_prompts.md#batch-8-expression-delta",
+          "promptAnchor": "batch-8-expression-delta",
+          "promptSummary": "Prompt-ready portrait delta for player_farmer: happy expression with neutral-consistent outfit, hair, props and palette.",
+          "godotTargetPath": "res://assets/characters/player_farmer_happy.png",
+          "godotTargetSlot": "asset_registry.portraits.player.happy",
+          "reviewNotes": "Keep identity aligned with neutral portrait; only increase positive emotion and relaxed pose."
+        },
+        {
+          "id": "player_farmer_troubled",
+          "type": "character_portrait",
+          "usage": "dialogue_portrait",
+          "path": "assets/source/characters/player_farmer_troubled.png",
+          "promptRef": "docs/asset_generation_prompts.md#batch-8-expression-delta",
+          "promptAnchor": "batch-8-expression-delta",
+          "promptSummary": "Prompt-ready portrait delta for player_farmer: troubled expression with neutral-consistent outfit, hair, props and palette.",
+          "godotTargetPath": "res://assets/characters/player_farmer_troubled.png",
+          "godotTargetSlot": "asset_registry.portraits.player.troubled",
+          "reviewNotes": "Keep identity aligned with neutral portrait; only increase stress/troubled emotion cues."
+        },
+        {
+          "id": "npc_mira_happy",
+          "type": "character_portrait",
+          "usage": "dialogue_portrait",
+          "path": "assets/source/characters/npc_mira_happy.png",
+          "promptRef": "docs/asset_generation_prompts.md#batch-8-expression-delta",
+          "promptAnchor": "batch-8-expression-delta",
+          "promptSummary": "Prompt-ready portrait delta for npc_mira: happy expression with neutral-consistent outfit, hair, props and palette.",
+          "godotTargetPath": "res://assets/characters/npc_mira_happy.png",
+          "godotTargetSlot": "asset_registry.portraits.mira.happy",
+          "reviewNotes": "Keep identity aligned with neutral portrait; only increase positive emotion and relaxed pose."
+        },
+        {
+          "id": "npc_mira_troubled",
+          "type": "character_portrait",
+          "usage": "dialogue_portrait",
+          "path": "assets/source/characters/npc_mira_troubled.png",
+          "promptRef": "docs/asset_generation_prompts.md#batch-8-expression-delta",
+          "promptAnchor": "batch-8-expression-delta",
+          "promptSummary": "Prompt-ready portrait delta for npc_mira: troubled expression with neutral-consistent outfit, hair, props and palette.",
+          "godotTargetPath": "res://assets/characters/npc_mira_troubled.png",
+          "godotTargetSlot": "asset_registry.portraits.mira.troubled",
+          "reviewNotes": "Keep identity aligned with neutral portrait; only increase stress/troubled emotion cues."
+        },
+        {
+          "id": "npc_tomas_happy",
+          "type": "character_portrait",
+          "usage": "dialogue_portrait",
+          "path": "assets/source/characters/npc_tomas_happy.png",
+          "promptRef": "docs/asset_generation_prompts.md#batch-8-expression-delta",
+          "promptAnchor": "batch-8-expression-delta",
+          "promptSummary": "Prompt-ready portrait delta for npc_tomas: happy expression with neutral-consistent outfit, hair, props and palette.",
+          "godotTargetPath": "res://assets/characters/npc_tomas_happy.png",
+          "godotTargetSlot": "asset_registry.portraits.tomas.happy",
+          "reviewNotes": "Keep identity aligned with neutral portrait; only increase positive emotion and relaxed pose."
+        },
+        {
+          "id": "npc_tomas_troubled",
+          "type": "character_portrait",
+          "usage": "dialogue_portrait",
+          "path": "assets/source/characters/npc_tomas_troubled.png",
+          "promptRef": "docs/asset_generation_prompts.md#batch-8-expression-delta",
+          "promptAnchor": "batch-8-expression-delta",
+          "promptSummary": "Prompt-ready portrait delta for npc_tomas: troubled expression with neutral-consistent outfit, hair, props and palette.",
+          "godotTargetPath": "res://assets/characters/npc_tomas_troubled.png",
+          "godotTargetSlot": "asset_registry.portraits.tomas.troubled",
+          "reviewNotes": "Keep identity aligned with neutral portrait; only increase stress/troubled emotion cues."
+        },
+        {
+          "id": "npc_orren_happy",
+          "type": "character_portrait",
+          "usage": "dialogue_portrait",
+          "path": "assets/source/characters/npc_orren_happy.png",
+          "promptRef": "docs/asset_generation_prompts.md#batch-8-expression-delta",
+          "promptAnchor": "batch-8-expression-delta",
+          "promptSummary": "Prompt-ready portrait delta for npc_orren: happy expression with neutral-consistent outfit, hair, props and palette.",
+          "godotTargetPath": "res://assets/characters/npc_orren_happy.png",
+          "godotTargetSlot": "asset_registry.portraits.orren.happy",
+          "reviewNotes": "Keep identity aligned with neutral portrait; only increase positive emotion and relaxed pose."
+        },
+        {
+          "id": "npc_orren_troubled",
+          "type": "character_portrait",
+          "usage": "dialogue_portrait",
+          "path": "assets/source/characters/npc_orren_troubled.png",
+          "promptRef": "docs/asset_generation_prompts.md#batch-8-expression-delta",
+          "promptAnchor": "batch-8-expression-delta",
+          "promptSummary": "Prompt-ready portrait delta for npc_orren: troubled expression with neutral-consistent outfit, hair, props and palette.",
+          "godotTargetPath": "res://assets/characters/npc_orren_troubled.png",
+          "godotTargetSlot": "asset_registry.portraits.orren.troubled",
+          "reviewNotes": "Keep identity aligned with neutral portrait; only increase stress/troubled emotion cues."
+        },
+        {
+          "id": "npc_lena_happy",
+          "type": "character_portrait",
+          "usage": "dialogue_portrait",
+          "path": "assets/source/characters/npc_lena_happy.png",
+          "promptRef": "docs/asset_generation_prompts.md#batch-8-expression-delta",
+          "promptAnchor": "batch-8-expression-delta",
+          "promptSummary": "Prompt-ready portrait delta for npc_lena: happy expression with neutral-consistent outfit, hair, props and palette.",
+          "godotTargetPath": "res://assets/characters/npc_lena_happy.png",
+          "godotTargetSlot": "asset_registry.portraits.lena.happy",
+          "reviewNotes": "Keep identity aligned with neutral portrait; only increase positive emotion and relaxed pose."
+        },
+        {
+          "id": "npc_lena_troubled",
+          "type": "character_portrait",
+          "usage": "dialogue_portrait",
+          "path": "assets/source/characters/npc_lena_troubled.png",
+          "promptRef": "docs/asset_generation_prompts.md#batch-8-expression-delta",
+          "promptAnchor": "batch-8-expression-delta",
+          "promptSummary": "Prompt-ready portrait delta for npc_lena: troubled expression with neutral-consistent outfit, hair, props and palette.",
+          "godotTargetPath": "res://assets/characters/npc_lena_troubled.png",
+          "godotTargetSlot": "asset_registry.portraits.lena.troubled",
+          "reviewNotes": "Keep identity aligned with neutral portrait; only increase stress/troubled emotion cues."
+        },
+        {
+          "id": "npc_kai_happy",
+          "type": "character_portrait",
+          "usage": "dialogue_portrait",
+          "path": "assets/source/characters/npc_kai_happy.png",
+          "promptRef": "docs/asset_generation_prompts.md#batch-8-expression-delta",
+          "promptAnchor": "batch-8-expression-delta",
+          "promptSummary": "Prompt-ready portrait delta for npc_kai: happy expression with neutral-consistent outfit, hair, props and palette.",
+          "godotTargetPath": "res://assets/characters/npc_kai_happy.png",
+          "godotTargetSlot": "asset_registry.portraits.kai.happy",
+          "reviewNotes": "Keep identity aligned with neutral portrait; only increase positive emotion and relaxed pose."
+        },
+        {
+          "id": "npc_kai_troubled",
+          "type": "character_portrait",
+          "usage": "dialogue_portrait",
+          "path": "assets/source/characters/npc_kai_troubled.png",
+          "promptRef": "docs/asset_generation_prompts.md#batch-8-expression-delta",
+          "promptAnchor": "batch-8-expression-delta",
+          "promptSummary": "Prompt-ready portrait delta for npc_kai: troubled expression with neutral-consistent outfit, hair, props and palette.",
+          "godotTargetPath": "res://assets/characters/npc_kai_troubled.png",
+          "godotTargetSlot": "asset_registry.portraits.kai.troubled",
+          "reviewNotes": "Keep identity aligned with neutral portrait; only increase stress/troubled emotion cues."
+        },
+        {
+          "id": "npc_bram_happy",
+          "type": "character_portrait",
+          "usage": "dialogue_portrait",
+          "path": "assets/source/characters/npc_bram_happy.png",
+          "promptRef": "docs/asset_generation_prompts.md#batch-8-expression-delta",
+          "promptAnchor": "batch-8-expression-delta",
+          "promptSummary": "Prompt-ready portrait delta for npc_bram: happy expression with neutral-consistent outfit, hair, props and palette.",
+          "godotTargetPath": "res://assets/characters/npc_bram_happy.png",
+          "godotTargetSlot": "asset_registry.portraits.bram.happy",
+          "reviewNotes": "Keep identity aligned with neutral portrait; only increase positive emotion and relaxed pose."
+        },
+        {
+          "id": "npc_bram_troubled",
+          "type": "character_portrait",
+          "usage": "dialogue_portrait",
+          "path": "assets/source/characters/npc_bram_troubled.png",
+          "promptRef": "docs/asset_generation_prompts.md#batch-8-expression-delta",
+          "promptAnchor": "batch-8-expression-delta",
+          "promptSummary": "Prompt-ready portrait delta for npc_bram: troubled expression with neutral-consistent outfit, hair, props and palette.",
+          "godotTargetPath": "res://assets/characters/npc_bram_troubled.png",
+          "godotTargetSlot": "asset_registry.portraits.bram.troubled",
+          "reviewNotes": "Keep identity aligned with neutral portrait; only increase stress/troubled emotion cues."
+        }
+      ]
+    },
+    {
+      "batchId": "batch-8b-action-feedback-icons",
+      "assetCount": 5,
+      "assets": [
+        {
+          "id": "action_feedback_move",
+          "type": "action_feedback_icon",
+          "usage": "move_feedback",
+          "path": "assets/source/icons/action_feedback_move.png",
+          "promptRef": "docs/asset_generation_prompts.md#batch-8-action-feedback-icons",
+          "promptAnchor": "batch-8-action-feedback-icons",
+          "promptSummary": "Boot-print and trajectory arc icon for move confirmation.",
+          "godotTargetPath": "res://assets/icons/action_feedback_move.png",
+          "godotTargetSlot": "asset_registry.action_feedback.move_feedback",
+          "reviewNotes": "Verify readability at 32x32 and 64x64 before Godot import."
+        },
+        {
+          "id": "action_feedback_talk",
+          "type": "action_feedback_icon",
+          "usage": "talk_feedback",
+          "path": "assets/source/icons/action_feedback_talk.png",
+          "promptRef": "docs/asset_generation_prompts.md#batch-8-action-feedback-icons",
+          "promptAnchor": "batch-8-action-feedback-icons",
+          "promptSummary": "Speech-bubble icon with star accent for talk feedback.",
+          "godotTargetPath": "res://assets/icons/action_feedback_talk.png",
+          "godotTargetSlot": "asset_registry.action_feedback.talk_feedback",
+          "reviewNotes": "Verify readability at 32x32 and 64x64 before Godot import."
+        },
+        {
+          "id": "action_feedback_gift",
+          "type": "action_feedback_icon",
+          "usage": "gift_feedback",
+          "path": "assets/source/icons/action_feedback_gift.png",
+          "promptRef": "docs/asset_generation_prompts.md#batch-8-action-feedback-icons",
+          "promptAnchor": "batch-8-action-feedback-icons",
+          "promptSummary": "Gift-box icon with leaf/star accent for gift feedback.",
+          "godotTargetPath": "res://assets/icons/action_feedback_gift.png",
+          "godotTargetSlot": "asset_registry.action_feedback.gift_feedback",
+          "reviewNotes": "Verify readability at 32x32 and 64x64 before Godot import."
+        },
+        {
+          "id": "action_feedback_inspect",
+          "type": "action_feedback_icon",
+          "usage": "inspect_feedback",
+          "path": "assets/source/icons/action_feedback_inspect.png",
+          "promptRef": "docs/asset_generation_prompts.md#batch-8-action-feedback-icons",
+          "promptAnchor": "batch-8-action-feedback-icons",
+          "promptSummary": "Magnifier icon with star-rune accent for inspect feedback.",
+          "godotTargetPath": "res://assets/icons/action_feedback_inspect.png",
+          "godotTargetSlot": "asset_registry.action_feedback.inspect_feedback",
+          "reviewNotes": "Verify readability at 32x32 and 64x64 before Godot import."
+        },
+        {
+          "id": "action_feedback_event",
+          "type": "action_feedback_icon",
+          "usage": "event_feedback",
+          "path": "assets/source/icons/action_feedback_event.png",
+          "promptRef": "docs/asset_generation_prompts.md#batch-8-action-feedback-icons",
+          "promptAnchor": "batch-8-action-feedback-icons",
+          "promptSummary": "Star-lantern alert icon for event feedback.",
+          "godotTargetPath": "res://assets/icons/action_feedback_event.png",
+          "godotTargetSlot": "asset_registry.action_feedback.event_feedback",
+          "reviewNotes": "Verify readability at 32x32 and 64x64 before Godot import."
+        }
+      ]
+    },
+    {
+      "batchId": "batch-8c-life-ui-widgets",
+      "assetCount": 5,
+      "assets": [
+        {
+          "id": "ui_life_action_button_farm",
+          "type": "ui_widget",
+          "usage": "life_action_button",
+          "path": "assets/source/ui/ui_life_action_button_farm.png",
+          "promptRef": "docs/asset_generation_prompts.md#batch-8-life-ui-widgets",
+          "promptAnchor": "batch-8-life-ui-widgets",
+          "promptSummary": "Farm action button widget with idle/hover emphasis cues.",
+          "godotTargetPath": "res://assets/ui/ui_life_action_button_farm.png",
+          "godotTargetSlot": "asset_registry.life_ui.ui_life_action_button_farm",
+          "reviewNotes": "Verify text-safe area and interaction state hierarchy before Godot import."
+        },
+        {
+          "id": "ui_life_action_button_chat",
+          "type": "ui_widget",
+          "usage": "life_action_button",
+          "path": "assets/source/ui/ui_life_action_button_chat.png",
+          "promptRef": "docs/asset_generation_prompts.md#batch-8-life-ui-widgets",
+          "promptAnchor": "batch-8-life-ui-widgets",
+          "promptSummary": "Chat action button widget with social cue accent.",
+          "godotTargetPath": "res://assets/ui/ui_life_action_button_chat.png",
+          "godotTargetSlot": "asset_registry.life_ui.ui_life_action_button_chat",
+          "reviewNotes": "Verify text-safe area and interaction state hierarchy before Godot import."
+        },
+        {
+          "id": "ui_life_action_button_rest",
+          "type": "ui_widget",
+          "usage": "life_action_button",
+          "path": "assets/source/ui/ui_life_action_button_rest.png",
+          "promptRef": "docs/asset_generation_prompts.md#batch-8-life-ui-widgets",
+          "promptAnchor": "batch-8-life-ui-widgets",
+          "promptSummary": "Rest action button widget with recovery cue accent.",
+          "godotTargetPath": "res://assets/ui/ui_life_action_button_rest.png",
+          "godotTargetSlot": "asset_registry.life_ui.ui_life_action_button_rest",
+          "reviewNotes": "Verify text-safe area and interaction state hierarchy before Godot import."
+        },
+        {
+          "id": "ui_life_action_schedule_strip",
+          "type": "ui_widget",
+          "usage": "life_action_schedule",
+          "path": "assets/source/ui/ui_life_action_schedule_strip.png",
+          "promptRef": "docs/asset_generation_prompts.md#batch-8-life-ui-widgets",
+          "promptAnchor": "batch-8-life-ui-widgets",
+          "promptSummary": "Schedule strip widget with morning/noon/night slots.",
+          "godotTargetPath": "res://assets/ui/ui_life_action_schedule_strip.png",
+          "godotTargetSlot": "asset_registry.life_ui.ui_life_action_schedule_strip",
+          "reviewNotes": "Verify text-safe area and interaction state hierarchy before Godot import."
+        },
+        {
+          "id": "ui_life_action_result_toast",
+          "type": "ui_widget",
+          "usage": "life_action_feedback",
+          "path": "assets/source/ui/ui_life_action_result_toast.png",
+          "promptRef": "docs/asset_generation_prompts.md#batch-8-life-ui-widgets",
+          "promptAnchor": "batch-8-life-ui-widgets",
+          "promptSummary": "Action-result toast widget with icon slot and short text area.",
+          "godotTargetPath": "res://assets/ui/ui_life_action_result_toast.png",
+          "godotTargetSlot": "asset_registry.life_ui.ui_life_action_result_toast",
+          "reviewNotes": "Verify text-safe area and interaction state hierarchy before Godot import."
+        }
+      ]
+    }
+  ]
+}

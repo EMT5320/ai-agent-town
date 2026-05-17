@@ -291,6 +291,8 @@ assets/source/ui/night_diary_panel_anime.png
 - 以上条目只登记 backlog，不标记 `source_selected`。
 - prompt 引用统一落到 `docs/asset_generation_prompts.md` 的批次 8 锚点段落。
 - 等源图真实生成并筛选通过后，再补 `processedPath` / `godotPath`。
+- 批次编排、用途和 Godot 接入目标统一维护在 `docs/asset_batches/prompt_ready_backlog_batches.json`。
+- 生产导出清单使用 `python scripts/export_prompt_ready_assets.py`，用于按批次发图与人工筛选。
 
 ## 角色设定表
 
@@ -495,11 +497,14 @@ expression
 style
 promptSummary
 fullPromptRef
+promptBatchId
 sourceTool
 createdAt
 sourceSize
 processedPath
 godotPath
+godotTargetPath
+godotTargetSlot
 licenseNote
 status
 reviewNotes
@@ -510,7 +515,17 @@ reviewNotes
 - `variantGroup`：同一角色或同一 UI 组件的一组变体，例如 `npc_mira_portrait`。
 - `expression`：表情或状态，例如 `neutral`、`happy`、`troubled`。
 - `fullPromptRef`：完整提示词可单独放在 `assets/manifests/prompts/`，manifest 只保留引用。
+- `promptBatchId`：`prompt_ready` 资产所属生产批次，用于导出、排产和验收追踪。
+- `godotTargetPath`：`prompt_ready` 目标 Godot 路径，源图通过筛选后用于落库。
+- `godotTargetSlot`：`prompt_ready` 对应的 Godot 注册槽位，标记后续接入目标。
 - `reviewNotes`：记录筛选意见，方便下一轮重生成。
+
+批次导出约束：
+
+- `prompt_ready` 条目必须包含 `promptBatchId`、`fullPromptRef` 锚点、`usage`、`godotTargetPath`、`godotTargetSlot`。
+- 每次更新 backlog 后运行 `python scripts/export_prompt_ready_assets.py`，同步导出：
+  - `docs/asset_batches/prompt_ready_export.json`（机器可读）
+  - `docs/asset_batches/prompt_ready_export.md`（人工筛选）
 
 ## 生图执行顺序
 

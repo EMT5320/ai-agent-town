@@ -26,6 +26,8 @@ const PLAYER_LOCAL_MOVE_SPEED := 520.0
 const PLAYER_LOCAL_STOP_DISTANCE := 3.0
 const PLAYER_LOCAL_INTERACT_RADIUS := 86.0
 const PLAYER_LOCAL_INTERACT_EXIT_MARGIN := 28.0
+const MAP_CONTEXT_PANEL_WIDTH := 520.0
+const MAP_CONTEXT_PANEL_HEIGHT := 108.0
 # 地图移动 Debug 面板默认关闭；需要现场排查时临时改为 true。
 const MAP_MOVEMENT_DEBUG_ENABLED := false
 const MAP_DEBUG_NOTE_LIMIT := 5
@@ -72,7 +74,16 @@ var player_local_location_id := ""
 var player_local_anchor_id := ""
 var current_near_npc_id := ""
 var current_near_event_id := ""
+var current_near_anchor_id := ""
+var current_near_interactable_id := ""
 var map_hint_label: Label
+var map_context_panel: PanelContainer
+var map_context_title_label: Label
+var map_context_body_label: Label
+var map_context_candidates: Array[Dictionary] = []
+var map_context_selected_index := 0
+var map_context_sidebar_signature := ""
+var map_context_action_pending := false
 var map_debug_panel: PanelContainer
 var map_debug_label: Label
 var player_actor_node: Control
@@ -137,8 +148,23 @@ func _process(delta: float) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	# 鼠标落点由地图角色层直接处理，避免被全屏背景或 UI 焦点链路吞掉。
-	# 这里暂时保留 Godot 输入回调入口，后续接入快捷键时继续集中管理。
-	pass
+	# 键盘 E / Space 触发当前上下文动作，Tab / Q 切换候选动作。
+	if not (event is InputEventKey):
+		return
+	var key_event := event as InputEventKey
+	if not key_event.pressed or key_event.echo:
+		return
+	if key_event.keycode == KEY_E or key_event.keycode == KEY_SPACE:
+		if _trigger_current_map_context_action():
+			get_viewport().set_input_as_handled()
+		return
+	if key_event.keycode == KEY_TAB:
+		if _cycle_map_context_candidate(1):
+			get_viewport().set_input_as_handled()
+		return
+	if key_event.keycode == KEY_Q:
+		if _cycle_map_context_candidate(-1):
+			get_viewport().set_input_as_handled()
 
 
 func _refresh_scale_for_viewport() -> void:
@@ -788,6 +814,21 @@ func _on_end_phase_pressed() -> void:
 	await _submit_player_action_with_feedback("结束时段", payload)
 
 
+func _on_scene_fallback_interaction_pressed(interaction_id: String) -> void:
+	var interaction: Dictionary = world_sync.find_interaction_by_id(interaction_id)
+	if interaction.is_empty():
+		_set_status("兜底动作已过期，请刷新世界状态。")
+		return
+	if not _is_interaction_enabled(interaction):
+		_set_status("当前动作不可用：%s" % _interaction_reason(interaction))
+		return
+	if map_context_action_pending:
+		_set_status("已有动作在执行中，请稍候。")
+		return
+	map_context_action_pending = true
+	_execute_map_context_interaction_async(interaction.duplicate(true))
+
+
 func _submit_player_action_with_feedback(action_label: String, payload: Dictionary) -> void:
 	_set_status("正在执行：%s ..." % action_label)
 	var response = await api_client.post_player_action(payload)
@@ -983,6 +1024,11 @@ func _clear_map_proximity_focus() -> void:
 	# 切场景必须清掉旧场景的靠近目标和点击落点，避免单个旧焦点把新场景锁住。
 	current_near_npc_id = ""
 	current_near_event_id = ""
+	current_near_anchor_id = ""
+	current_near_interactable_id = ""
+	map_context_candidates.clear()
+	map_context_selected_index = 0
+	map_context_sidebar_signature = ""
 	player_local_has_click_target = false
 	last_proximity_debug = "已清理靠近焦点"
 
@@ -1010,6 +1056,9 @@ func _render_map_characters() -> void:
 		return
 	_clear_control_children(map_character_layer)
 	map_hint_label = null
+	map_context_panel = null
+	map_context_title_label = null
+	map_context_body_label = null
 	map_debug_panel = null
 	map_debug_label = null
 	player_actor_node = null
@@ -1107,36 +1156,23 @@ func _render_map_anchor_markers(bounds: Rect2) -> void:
 
 func _render_map_scene_actions(bounds: Rect2) -> void:
 	var offsets_by_anchor: Dictionary = {}
-	for interaction in world_sync.get_available_interactions():
-		if not (interaction is Dictionary):
+	for interactable in world_sync.get_interactables():
+		if not (interactable is Dictionary):
 			continue
-		if str(interaction.get("type", "")) != "scene_action":
-			continue
-		var target = interaction.get("target", {})
-		if not (target is Dictionary):
-			continue
-		var target_data: Dictionary = target
-		var location_id := str(target_data.get("locationId", ""))
+		var interactable_data: Dictionary = interactable
+		var location_id := str(interactable_data.get("locationId", ""))
 		if location_id != selected_location_id:
 			continue
-		var anchor_id := str(target_data.get("anchorId", ""))
+		var anchor_id := str(interactable_data.get("anchorId", ""))
 		var index := int(offsets_by_anchor.get(anchor_id, 0))
 		offsets_by_anchor[anchor_id] = index + 1
-		var button := Button.new()
-		button.name = "MapSceneAction_%s" % _safe_node_suffix(str(interaction.get("id", "")))
-		button.text = _scene_action_short_label(interaction)
-		button.focus_mode = Control.FOCUS_NONE
-		button.disabled = not _is_interaction_enabled(interaction)
-		button.tooltip_text = str(interaction.get("label", "场景行动"))
-		if button.disabled:
-			button.tooltip_text = _interaction_reason(interaction)
-		_style_button(button, 86)
-		button.size = Vector2(_scaled(104), _scaled(36))
 		var anchor_pos := _position_for_anchor_id(anchor_id, bounds, _scene_stage_center(bounds))
-		button.position = anchor_pos + Vector2(-button.size.x * 0.5, _scaled(24 + index * 40))
-		button.z_index = 18
-		button.pressed.connect(_on_scene_interaction_pressed.bind(str(interaction.get("id", ""))))
-		map_character_layer.add_child(button)
+		var hint := _create_map_label("交互体：%s" % _interactable_display_label(interactable_data), 208, 13)
+		hint.name = "MapInteractable_%s" % _safe_node_suffix(str(interactable_data.get("id", "")))
+		hint.position = anchor_pos + Vector2(-hint.size.x * 0.5, _scaled(18 + index * 22))
+		hint.modulate = Color(1.0, 1.0, 1.0, 0.72)
+		hint.z_index = 16
+		map_character_layer.add_child(hint)
 
 
 func _add_map_actor(owner_id: String, display_name: String, location_id: String, is_player: bool, occupancy: Dictionary, bounds: Rect2) -> void:
@@ -1312,6 +1348,101 @@ func _update_map_hint(text: String) -> void:
 		map_hint_label.text = text
 
 
+func _ensure_map_context_panel(bounds: Rect2) -> void:
+	if map_character_layer == null:
+		return
+	if map_context_panel == null or not is_instance_valid(map_context_panel):
+		map_context_panel = PanelContainer.new()
+		map_context_panel.name = "MapContextActions"
+		map_context_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		map_context_panel.z_index = 210
+		map_context_panel.add_theme_stylebox_override("panel", _make_panel_style(Color(0.09, 0.14, 0.11, 0.88), UI_GOLD_LIGHT, _scaled_int(12), _scaled_int(2), _scaled_int(10)))
+
+		var body := VBoxContainer.new()
+		body.name = "Body"
+		body.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		body.add_theme_constant_override("separation", _scaled_int(4))
+		map_context_panel.add_child(body)
+
+		map_context_title_label = Label.new()
+		map_context_title_label.name = "Title"
+		map_context_title_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		map_context_title_label.add_theme_font_size_override("font_size", _font_size(14))
+		map_context_title_label.add_theme_color_override("font_color", Color(1.0, 0.92, 0.66, 1.0))
+		body.add_child(map_context_title_label)
+
+		map_context_body_label = Label.new()
+		map_context_body_label.name = "Actions"
+		map_context_body_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		map_context_body_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		map_context_body_label.add_theme_font_size_override("font_size", _font_size(13))
+		map_context_body_label.add_theme_color_override("font_color", Color(0.94, 1.0, 0.91, 1.0))
+		map_context_body_label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.92))
+		map_context_body_label.add_theme_constant_override("shadow_offset_x", _scaled_int(1))
+		map_context_body_label.add_theme_constant_override("shadow_offset_y", _scaled_int(1))
+		body.add_child(map_context_body_label)
+	if map_context_panel.get_parent() != map_character_layer:
+		map_character_layer.add_child(map_context_panel)
+	var panel_size := Vector2(min(_scaled(MAP_CONTEXT_PANEL_WIDTH), bounds.size.x - _scaled(12)), _scaled(MAP_CONTEXT_PANEL_HEIGHT))
+	map_context_panel.custom_minimum_size = panel_size
+	map_context_panel.size = panel_size
+	map_context_panel.position = Vector2(bounds.position.x + _scaled(8), bounds.end.y - panel_size.y - _scaled(10))
+
+
+func _refresh_map_context_panel() -> void:
+	if map_character_layer == null:
+		return
+	_ensure_map_context_panel(_map_bounds())
+	if map_context_title_label == null or map_context_body_label == null:
+		return
+	if map_context_candidates.is_empty():
+		map_context_selected_index = 0
+		map_context_title_label.text = "附近动作（E/Space 执行，Tab/Q 切换）"
+		map_context_body_label.text = "当前附近没有可执行动作，继续移动靠近锚点、居民、事件或交互体。"
+		_update_map_hint("WASD 连续移动；点击当前场景空地可设置落点")
+		return
+	map_context_selected_index = int(clamp(map_context_selected_index, 0, map_context_candidates.size() - 1))
+	var candidate: Dictionary = map_context_candidates[map_context_selected_index]
+	var target_name := str(candidate.get("targetLabel", "当前目标"))
+	var lines: Array[String] = []
+	for index in range(map_context_candidates.size()):
+		var item: Dictionary = map_context_candidates[index]
+		var prefix := "▶" if index == map_context_selected_index else "·"
+		var state := "可执行" if bool(item.get("enabled", false)) else "暂不可用"
+		var reason := str(item.get("reason", ""))
+		if not bool(item.get("enabled", false)) and not reason.is_empty():
+			state = "%s（%s）" % [state, reason]
+		lines.append("%s %s [%s]" % [prefix, str(item.get("label", "动作")), state])
+	map_context_title_label.text = "附近动作 · %s（E/Space 执行，Tab/Q 切换）" % target_name
+	map_context_body_label.text = "\n".join(lines)
+	var selected_label := str(candidate.get("label", "动作"))
+	if bool(candidate.get("enabled", false)):
+		_update_map_hint("当前动作：%s，按 E 或 Space 执行；Tab/Q 切换。" % selected_label)
+	else:
+		var selected_reason := str(candidate.get("reason", "后端暂未开放该动作"))
+		_update_map_hint("当前动作：%s（暂不可用：%s），继续移动或按 Tab/Q 切换。" % [selected_label, selected_reason])
+	if map_context_panel != null and map_context_panel.get_parent() == map_character_layer:
+		map_character_layer.move_child(map_context_panel, map_character_layer.get_child_count() - 1)
+
+
+func _cycle_map_context_candidate(direction: int) -> bool:
+	if map_context_candidates.is_empty():
+		return false
+	var count := map_context_candidates.size()
+	if count <= 1:
+		_refresh_map_context_panel()
+		if scene_action_list != null:
+			_render_scene_actions()
+		return false
+	map_context_selected_index = (map_context_selected_index + direction) % count
+	if map_context_selected_index < 0:
+		map_context_selected_index += count
+	_refresh_map_context_panel()
+	if scene_action_list != null:
+		_render_scene_actions()
+	return true
+
+
 func _ensure_map_debug_label(bounds: Rect2) -> void:
 	if not MAP_MOVEMENT_DEBUG_ENABLED or map_character_layer == null:
 		return
@@ -1401,6 +1532,141 @@ func _debug_distance(value: float) -> String:
 	return "%.1f" % value
 
 
+func _trigger_current_map_context_action() -> bool:
+	if map_context_action_pending:
+		_set_status("当前动作仍在执行中，请稍候。")
+		return true
+	if map_context_candidates.is_empty():
+		_set_status("附近暂无可执行动作，先移动到锚点或交互体附近。")
+		return false
+	map_context_selected_index = int(clamp(map_context_selected_index, 0, map_context_candidates.size() - 1))
+	var candidate: Dictionary = map_context_candidates[map_context_selected_index]
+	if not bool(candidate.get("enabled", false)):
+		var reason := str(candidate.get("reason", "后端暂未开放该动作"))
+		_set_status("动作暂不可用：%s" % reason)
+		return true
+	var interaction = candidate.get("interaction", {})
+	if not (interaction is Dictionary) or (interaction as Dictionary).is_empty():
+		_set_status("动作数据已过期，请刷新世界状态后重试。")
+		return true
+	map_context_action_pending = true
+	_execute_map_context_interaction_async((interaction as Dictionary).duplicate(true))
+	return true
+
+
+func _execute_map_context_interaction_async(interaction: Dictionary) -> void:
+	var action_type := str(interaction.get("type", ""))
+	var target = interaction.get("target", {})
+	var target_data: Dictionary = target if target is Dictionary else {}
+	var payload := _payload_from_interaction(interaction)
+	match action_type:
+		"talk":
+			await _submit_talk(str(target_data.get("id", "")))
+		"give_gift":
+			await _submit_gift(str(target_data.get("id", "")))
+		"inspect":
+			var event_id := str(target_data.get("id", payload.get("eventId", "")))
+			var event_location := str(target_data.get("locationId", payload.get("locationId", selected_location_id)))
+			await _on_inspect_event_pressed(event_id, event_location)
+		"attend_event":
+			var event_id := str(payload.get("eventId", target_data.get("id", "")))
+			var event_location := str(payload.get("locationId", target_data.get("locationId", selected_location_id)))
+			var choice_id := str(payload.get("choice", ""))
+			if choice_id.is_empty():
+				_set_status("事件动作缺少 choice 参数：%s" % str(interaction.get("id", "attend_event")))
+			else:
+				await _on_attend_event_choice_pressed(event_id, event_location, choice_id)
+		"move_to_anchor":
+			var anchor_id := str(target_data.get("id", payload.get("anchorId", "")))
+			var location_id := str(target_data.get("locationId", payload.get("locationId", selected_location_id)))
+			await _on_move_to_anchor_pressed(anchor_id, location_id)
+		"scene_action":
+			await _on_scene_interaction_pressed(str(interaction.get("id", "")))
+		"farm_action":
+			if payload.is_empty():
+				_set_status("农场动作缺少 payload：%s" % str(interaction.get("id", "farm_action")))
+			else:
+				await _submit_player_action_with_feedback(str(interaction.get("label", "农场行动")), payload)
+		"end_phase":
+			await _on_end_phase_pressed()
+		_:
+			if payload.is_empty():
+				_set_status("暂不支持该动作：%s" % action_type)
+			else:
+				await _submit_player_action_with_feedback(str(interaction.get("label", action_type)), payload)
+	map_context_action_pending = false
+
+
+func _rebuild_map_context_candidates() -> void:
+	var candidates: Array[Dictionary] = []
+	var seen_ids: Dictionary = {}
+	var near_anchor := current_near_anchor_id
+	var near_interactable := current_near_interactable_id
+	var near_npc := current_near_npc_id
+	var near_event := current_near_event_id
+	for interaction in world_sync.get_available_interactions():
+		if not (interaction is Dictionary):
+			continue
+		var interaction_data: Dictionary = interaction
+		var target = interaction_data.get("target", {})
+		if not (target is Dictionary):
+			continue
+		var target_data: Dictionary = target
+		var location_id := str(target_data.get("locationId", ""))
+		if not location_id.is_empty() and location_id != selected_location_id:
+			continue
+		var action_type := str(interaction_data.get("type", ""))
+		var target_kind := str(target_data.get("kind", ""))
+		var target_id := str(target_data.get("id", ""))
+		var match_context := false
+		var target_label := ""
+		if action_type == "talk" or action_type == "give_gift":
+			match_context = target_kind == "npc" and target_id == near_npc
+			target_label = "居民"
+		elif action_type == "inspect" or action_type == "attend_event":
+			match_context = target_kind == "event" and target_id == near_event
+			target_label = "事件"
+		elif action_type == "scene_action" or action_type == "farm_action":
+			var target_anchor_id := str(target_data.get("anchorId", ""))
+			match_context = (not near_interactable.is_empty() and target_id == near_interactable) or (not near_anchor.is_empty() and target_anchor_id == near_anchor)
+			target_label = "交互体"
+		elif action_type == "move_to_anchor":
+			match_context = target_kind == "anchor" and target_id == near_anchor
+			target_label = "锚点"
+		if not match_context:
+			continue
+		var interaction_id := str(interaction_data.get("id", ""))
+		if interaction_id.is_empty():
+			interaction_id = "%s:%s:%s" % [action_type, target_kind, target_id]
+		if seen_ids.has(interaction_id):
+			continue
+		seen_ids[interaction_id] = true
+		var enabled := _is_interaction_enabled(interaction_data)
+		candidates.append({
+			"id": interaction_id,
+			"label": str(interaction_data.get("label", action_type)),
+			"enabled": enabled,
+			"reason": _interaction_reason(interaction_data) if not enabled else "",
+			"targetLabel": target_label,
+			"interaction": interaction_data.duplicate(true),
+		})
+	map_context_candidates = candidates
+	if map_context_candidates.is_empty():
+		map_context_selected_index = 0
+	else:
+		map_context_selected_index = int(clamp(map_context_selected_index, 0, map_context_candidates.size() - 1))
+	var signature_parts: Array[String] = []
+	for candidate in map_context_candidates:
+		signature_parts.append("%s:%s" % [str(candidate.get("id", "")), str(candidate.get("enabled", false))])
+	signature_parts.append("selected=%d" % map_context_selected_index)
+	var signature := "|".join(signature_parts)
+	if signature != map_context_sidebar_signature:
+		map_context_sidebar_signature = signature
+		if scene_action_list != null:
+			_render_scene_actions()
+	_refresh_map_context_panel()
+
+
 func _update_player_target_marker() -> void:
 	if map_character_layer == null:
 		return
@@ -1432,14 +1698,23 @@ func _update_map_proximity_feedback() -> void:
 	# 靠近反馈只控制高亮与可点状态，交互提交仍走既有 talk/give_gift/inspect/attend_event。
 	if not player_local_initialized or map_character_layer == null:
 		return
+	var bounds := _map_bounds()
 	var interact_radius := _scaled(PLAYER_LOCAL_INTERACT_RADIUS)
 	var exit_radius := interact_radius + _scaled(PLAYER_LOCAL_INTERACT_EXIT_MARGIN)
 	var nearest_npc_name := ""
 	var nearest_event_title := ""
+	var nearest_anchor_id := ""
+	var nearest_anchor_kind := ""
+	var nearest_interactable_id := ""
 	var nearest_npc_distance := INF
 	var nearest_event_distance := INF
+	var nearest_anchor_distance := INF
+	var nearest_interactable_distance := INF
 	var nearest_npc_actor: Control = null
 	var nearest_event_marker: TextureButton = null
+	var previous_anchor_id := ""
+	var previous_anchor_kind := ""
+	var previous_interactable_id := ""
 	var previous_npc_name := ""
 	var previous_npc_actor: Control = null
 	var previous_event_title := ""
@@ -1481,17 +1756,60 @@ func _update_map_proximity_feedback() -> void:
 				nearest_npc_name = str(actor.get_meta("displayName", actor.get_meta("agentId", "居民")))
 				nearest_npc_actor = actor
 
+	for anchor in world_sync.get_anchors():
+		if not (anchor is Dictionary):
+			continue
+		var anchor_data: Dictionary = anchor
+		var anchor_id := str(anchor_data.get("id", ""))
+		var anchor_location := str(anchor_data.get("locationId", ""))
+		if anchor_id.is_empty() or anchor_location != selected_location_id:
+			continue
+		var anchor_pos := _position_for_anchor(anchor_data, bounds, _scene_stage_center(bounds))
+		var distance := player_local_position.distance_to(anchor_pos)
+		if anchor_id == current_near_anchor_id and distance <= exit_radius:
+			previous_anchor_id = anchor_id
+			previous_anchor_kind = _anchor_kind_label(str(anchor_data.get("kind", "")))
+		if distance <= interact_radius and distance < nearest_anchor_distance:
+			nearest_anchor_distance = distance
+			nearest_anchor_id = anchor_id
+			nearest_anchor_kind = _anchor_kind_label(str(anchor_data.get("kind", "")))
+	for interactable in world_sync.get_interactables():
+		if not (interactable is Dictionary):
+			continue
+		var interactable_data: Dictionary = interactable
+		var interactable_id := str(interactable_data.get("id", ""))
+		var interactable_location := str(interactable_data.get("locationId", ""))
+		if interactable_id.is_empty() or interactable_location != selected_location_id:
+			continue
+		var interactable_anchor_id := str(interactable_data.get("anchorId", ""))
+		var anchor_pos := _position_for_anchor_id(interactable_anchor_id, bounds, _scene_stage_center(bounds))
+		var distance := player_local_position.distance_to(anchor_pos)
+		if interactable_id == current_near_interactable_id and distance <= exit_radius:
+			previous_interactable_id = interactable_id
+		if distance <= interact_radius and distance < nearest_interactable_distance:
+			nearest_interactable_distance = distance
+			nearest_interactable_id = interactable_id
+
 	if previous_npc_actor != null:
 		nearest_npc_actor = previous_npc_actor
 		nearest_npc_name = previous_npc_name
 	if previous_event_marker != null:
 		nearest_event_marker = previous_event_marker
 		nearest_event_title = previous_event_title
+	if not previous_anchor_id.is_empty():
+		nearest_anchor_id = previous_anchor_id
+		nearest_anchor_kind = previous_anchor_kind
+	if not previous_interactable_id.is_empty():
+		nearest_interactable_id = previous_interactable_id
 	current_near_npc_id = str(nearest_npc_actor.get_meta("agentId", "")) if nearest_npc_actor != null else ""
 	current_near_event_id = str(nearest_event_marker.get_meta("eventId", "")) if nearest_event_marker != null else ""
-	last_proximity_debug = "npcDist=%s eventDist=%s radius=%.1f exit=%.1f" % [
+	current_near_anchor_id = nearest_anchor_id
+	current_near_interactable_id = nearest_interactable_id
+	last_proximity_debug = "npcDist=%s eventDist=%s anchorDist=%s interactableDist=%s radius=%.1f exit=%.1f" % [
 		_debug_distance(nearest_npc_distance),
 		_debug_distance(nearest_event_distance),
+		_debug_distance(nearest_anchor_distance),
+		_debug_distance(nearest_interactable_distance),
 		interact_radius,
 		exit_radius,
 	]
@@ -1531,12 +1849,18 @@ func _update_map_proximity_feedback() -> void:
 				var gift_enabled: bool = bool(actor.get_meta("giftEnabled", true))
 				gift_marker.disabled = not (is_near and gift_enabled)
 				gift_marker.modulate = Color(1.0, 1.0, 1.0, 1.0 if is_near and gift_enabled else 0.34)
-	var hint := "WASD 连续移动；点击当前场景空地可设置落点"
-	if not nearest_event_title.is_empty():
-		hint = "已靠近事件：%s，点击事件标记查看细节" % nearest_event_title
-	elif not nearest_npc_name.is_empty():
-		hint = "已靠近居民：%s，可点小人或聊天 / 送礼标记" % nearest_npc_name
-	_update_map_hint(hint)
+	_rebuild_map_context_candidates()
+	if map_context_candidates.is_empty():
+		var fallback_hint := "WASD 连续移动；点击当前场景空地可设置落点"
+		if not nearest_interactable_id.is_empty():
+			fallback_hint = "已靠近交互体：%s，等待后端动作开放。" % nearest_interactable_id
+		elif not nearest_anchor_id.is_empty():
+			fallback_hint = "已靠近锚点：%s（%s）" % [nearest_anchor_id, nearest_anchor_kind]
+		elif not nearest_event_title.is_empty():
+			fallback_hint = "已靠近事件：%s，点击事件标记查看细节" % nearest_event_title
+		elif not nearest_npc_name.is_empty():
+			fallback_hint = "已靠近居民：%s，可点小人或聊天 / 送礼标记" % nearest_npc_name
+		_update_map_hint(fallback_hint)
 	if map_hint_label != null and map_hint_label.get_parent() == map_character_layer:
 		map_character_layer.move_child(map_hint_label, map_character_layer.get_child_count() - 1)
 
@@ -1568,68 +1892,45 @@ func _render_scene_actions() -> void:
 	var action_budget := int(world_sync.current_state.get("clock", {}).get("actionBudget", 0))
 	var summary := Label.new()
 	summary.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	summary.text = "当前位置：%s · %s\n行动预算：%d" % [_anchor_kind_label(anchor_kind), anchor_id, action_budget]
+	summary.text = "当前位置：%s · %s\n行动预算：%d\n地图主交互：靠近目标后按 E/Space 执行，Tab/Q 切换候选。" % [_anchor_kind_label(anchor_kind), anchor_id, action_budget]
 	_style_body_label(summary, 14)
 	scene_action_list.add_child(summary)
 
-	var anchor_buttons_added := 0
-	for anchor in world_sync.get_anchors():
-		if not (anchor is Dictionary):
-			continue
-		var anchor_location := str(anchor.get("locationId", ""))
-		if anchor_location != selected_location_id:
-			continue
-		var target_anchor_id := str(anchor.get("id", ""))
-		var interaction: Dictionary = world_sync.find_interaction("move_to_anchor", "anchor", target_anchor_id)
-		var button := Button.new()
-		button.text = "前往：%s" % _anchor_display_label(anchor)
-		button.disabled = target_anchor_id == anchor_id or (not interaction.is_empty() and not _is_interaction_enabled(interaction))
-		button.tooltip_text = "移动到 %s" % target_anchor_id
-		if button.disabled and target_anchor_id == anchor_id:
-			button.tooltip_text = "当前所在锚点"
-		elif button.disabled and not interaction.is_empty():
-			button.tooltip_text = _interaction_reason(interaction)
-		_style_button(button)
-		button.pressed.connect(_on_move_to_anchor_pressed.bind(target_anchor_id, anchor_location))
-		scene_action_list.add_child(button)
-		anchor_buttons_added += 1
-
-	var action_buttons_added := 0
-	for interaction in world_sync.get_available_interactions():
-		if not (interaction is Dictionary):
-			continue
-		if str(interaction.get("type", "")) != "scene_action":
-			continue
-		var target = interaction.get("target", {})
-		if not (target is Dictionary):
-			continue
-		var target_data: Dictionary = target
-		if str(target_data.get("locationId", "")) != selected_location_id:
-			continue
-		var action_button := Button.new()
-		action_button.text = "执行：%s" % str(interaction.get("label", "场景行动"))
-		action_button.disabled = not _is_interaction_enabled(interaction)
-		action_button.tooltip_text = str(interaction.get("label", "场景行动"))
-		if action_button.disabled:
-			action_button.tooltip_text = _interaction_reason(interaction)
-		_style_button(action_button)
-		action_button.pressed.connect(_on_scene_interaction_pressed.bind(str(interaction.get("id", ""))))
-		scene_action_list.add_child(action_button)
-		action_buttons_added += 1
+	if map_context_candidates.is_empty():
+		var empty_hint := Label.new()
+		empty_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		empty_hint.text = "当前附近没有候选动作。可先移动到锚点、事件或居民附近。"
+		_style_body_label(empty_hint, 14)
+		scene_action_list.add_child(empty_hint)
+	else:
+		var fallback_title := Label.new()
+		fallback_title.text = "调试兜底按钮（与地图候选同步）"
+		_style_section_label(fallback_title, 15)
+		scene_action_list.add_child(fallback_title)
+		for index in range(map_context_candidates.size()):
+			var candidate: Dictionary = map_context_candidates[index]
+			var interaction = candidate.get("interaction", {})
+			if not (interaction is Dictionary):
+				continue
+			var interaction_data: Dictionary = interaction
+			var button := Button.new()
+			var prefix := "▶ " if index == map_context_selected_index else ""
+			button.text = "%s%s" % [prefix, str(candidate.get("label", "动作"))]
+			button.tooltip_text = "地图上下文候选；可用快捷键 E/Space 执行，Tab/Q 切换。"
+			button.disabled = not bool(candidate.get("enabled", false))
+			if button.disabled:
+				button.tooltip_text = str(candidate.get("reason", "后端暂未开放该动作"))
+			_style_button(button)
+			button.pressed.connect(_on_scene_fallback_interaction_pressed.bind(str(interaction_data.get("id", ""))))
+			scene_action_list.add_child(button)
 
 	var end_phase_interaction: Dictionary = world_sync.find_interaction_by_id("end_phase")
 	var end_phase_button := Button.new()
-	end_phase_button.text = "结束当前时段"
+	end_phase_button.text = "结束当前时段（兜底）"
 	end_phase_button.disabled = not end_phase_interaction.is_empty() and not _is_interaction_enabled(end_phase_interaction)
 	_style_button(end_phase_button)
 	end_phase_button.pressed.connect(_on_end_phase_pressed)
 	scene_action_list.add_child(end_phase_button)
-
-	if anchor_buttons_added == 0 and action_buttons_added == 0:
-		var empty_hint := Label.new()
-		empty_hint.text = "当前场景暂无可执行行动。"
-		_style_body_label(empty_hint, 14)
-		scene_action_list.add_child(empty_hint)
 
 
 func _render_npcs() -> void:
@@ -1996,6 +2297,18 @@ func _scene_action_short_label(interaction: Dictionary) -> String:
 	label = label.replace("farm_plot_01", "1号田")
 	label = label.replace("farm_plot_02", "2号田")
 	return label
+
+
+func _interactable_display_label(interactable: Dictionary) -> String:
+	var interactable_id := str(interactable.get("id", ""))
+	var kind := str(interactable.get("kind", "interactable"))
+	if kind == "farm_plot":
+		return interactable_id.replace("farm_plot_", "田块 ")
+	if kind == "notice_board":
+		return "公告板"
+	if kind == "event_marker":
+		return "事件点"
+	return interactable_id if not interactable_id.is_empty() else kind
 
 
 func _safe_node_suffix(raw: String) -> String:

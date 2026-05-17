@@ -253,9 +253,17 @@ visual novel UI asset for anime light fantasy farming life sim, transparent back
 ## 生成批次 8：表情差分 + 行动反馈图标 + 生活行动 UI 小组件（backlog）
 
 > 本批次仅写入可校验的 prompt 计划，尚未生成源图。对应 manifest 条目统一使用 `status=prompt_ready`。
+> 批次拆分与导出字段：`batch-8a-expression-delta`、`batch-8b-action-feedback-icons`、`batch-8c-life-ui-widgets`。
+> 每个 `prompt_ready` 条目都需要补齐 `promptBatchId`、`godotTargetPath`、`godotTargetSlot`。
+> 批次分组定义：`docs/asset_batches/prompt_ready_backlog_batches.json`。
+> 导出生产清单命令：`python scripts/export_prompt_ready_assets.py`（输出到 `docs/asset_batches/prompt_ready_export.json` 与 `docs/asset_batches/prompt_ready_export.md`）。
 
 ### 表情差分（`happy` / `troubled`）
 <a id="batch-8-expression-delta"></a>
+
+- `promptBatchId`：`batch-8a-expression-delta`
+- `godotTargetPath`：`res://assets/characters/<asset_id>.png`
+- `godotTargetSlot`：`asset_registry.portraits.<ownerId>.<expression>`
 
 统一追加：
 ```text
@@ -280,6 +288,10 @@ same character, same outfit, same hairstyle, same accessories, preserve neutral 
 ### 行动反馈图标（action feedback）
 <a id="batch-8-action-feedback-icons"></a>
 
+- `promptBatchId`：`batch-8b-action-feedback-icons`
+- `godotTargetPath`：`res://assets/icons/<asset_id>.png`
+- `godotTargetSlot`：`asset_registry.action_feedback.<usage>`
+
 统一追加：
 ```text
 anime UI feedback icon, transparent background, centered symbol, readable at 32x32 and 64x64, one accent color + one outline color, no text, no watermark
@@ -293,6 +305,10 @@ anime UI feedback icon, transparent background, centered symbol, readable at 32x
 
 ### 生活行动 UI 小组件（life action widgets）
 <a id="batch-8-life-ui-widgets"></a>
+
+- `promptBatchId`：`batch-8c-life-ui-widgets`
+- `godotTargetPath`：`res://assets/ui/<asset_id>.png`
+- `godotTargetSlot`：`asset_registry.life_ui.<asset_id>`
 
 统一追加：
 ```text
