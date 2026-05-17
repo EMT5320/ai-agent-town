@@ -6,13 +6,21 @@ var _http: HTTPRequest
 
 
 func get_world_state() -> Dictionary:
-	# Godot 游戏客户端只读取后端权威状态。
+	# Godot 客户端只读取后端权威状态。
 	return await _request_json("GET", "/api/world/state", {})
 
 
 func post_player_action(action: Dictionary) -> Dictionary:
 	# 玩家动作统一进入后端，后端负责事件、关系、记忆和 Debug 记录。
 	return await _request_json("POST", "/api/player/action", action)
+
+
+func tick(delta_seconds: float, speed: float = 1.0) -> Dictionary:
+	# 世界时钟通过 tick 推进后端权威状态。
+	return await _request_json("POST", "/api/world/tick", {
+		"deltaSeconds": delta_seconds,
+		"speed": speed,
+	})
 
 
 func _ensure_http() -> void:

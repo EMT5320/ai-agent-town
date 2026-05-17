@@ -42,6 +42,7 @@ scope: new-session entrypoint, boundaries, commands, and next steps
 - 星灯祭结算会输出统一 `event_skill_outcome.v1`，API `eventResult`、`town.event_resolved.payload.outcomeRecord` 和 `completedEvents[].resolution.outcomeRecord` 共用该记录。
 - 服务端已透出 `playerAnchor`，并为 `move_to_anchor` 与 `scene_action` 返回统一 `actionFeedback`。
 - `/api/world/state` 已新增 `npcSchedules` 与 `lifeActionPlan` 只读快照，版本为 `life_action_plan.v1`，用于把 NPC 深度卡生活行动、谣言与关系节拍接入运行时可视化。
+- `POST /api/world/tick` 已落地，走 `LifeActionExecutor` 推进规则生活行动，返回 `clock`、`events` 与 `agents` diff；tick 事件已覆盖 `npc.move_started`、`npc.move_progress`、`npc.arrived` 和 `npc.action_*`。
 
 ### Content Codex / NPC 深度卡
 
@@ -66,7 +67,8 @@ scope: new-session entrypoint, boundaries, commands, and next steps
 ### Godot 客户端
 
 - `clients/godot/` 是 Godot 4.x 项目骨架。
-- 已有 `ApiClient`、`WorldSync`、`AssetRegistry`。
+- `project.godot` 默认主场景已切到 `res://scenes/world_main.tscn`；`npm.cmd run client:run` 会直接打开 Phase 1 tick 可视化场景，旧 `res://scenes/main.tscn` 保留为 legacy 回看入口。
+- 已有 `ApiClient`、`WorldSync`、`AssetRegistry`，并新增 `WorldClockService` / `EventBusService` autoload。
 - 主场景已接入 3 张地点背景、星灯祭事件 CG，以及玩家 + 6 个首发 NPC 的 `neutral` 半身立绘。
 - 已支持地点按钮、背景切换、NPC 选择、VN 风格底部对话面板、聊天动作提交。
 - 已新增事件区：展示 `activeEvents`、调用 `inspect` 查看星灯祭事件、渲染 choices、调用 `attend_event` 并展示 NPC 台词、关系变化、记忆写入和夜间反思摘要。
@@ -78,7 +80,7 @@ scope: new-session entrypoint, boundaries, commands, and next steps
 - 地图层已补 UI 点击穿透、按钮禁用键盘焦点和 WASD 物理键兜底，降低空地点击被透明 UI 吃掉、移动键被按钮焦点干扰的概率。
 - 当前场景点击落点改为先修正到可行走边界再接受，地图舞台 bounds 改为随窗口动态放宽，玩家出生点从底部边缘上移到舞台下中区，靠近目标增加滞回，NPC 小人保持可点，减少广场 / 酒馆的卡住体感。
 - 地图上下文动作面板已接入：靠近锚点 / 交互体 / 居民 / 事件后生成候选动作，`E`/`Space` 执行，`Tab`/`Q` 切换；左侧“场景行动”降级为调试兜底，VN 面板继续展示后端 `actionFeedback`。
-- `check_godot_project.py`、Godot headless import、`npm.cmd run client:env` 和 `npm.cmd run client:run:check` 已通过；2026-05-16 主人已完成上一版真实窗口人工验收，2026-05-17 主人确认点击落点已正常，本轮地图上下文动作 / 场景行动 / 行动反馈仍需主人复验。
+- `check_godot_project.py`、Godot headless import、`npm.cmd run client:env` 和 `npm.cmd run client:run:check` 已通过；`client:env` 会额外 headless 加载 `world_main.tscn`。2026-05-16 主人已完成上一版真实窗口人工验收；本轮 `world_main` 默认入口、Tick NPC 移动与 HUD 暂停/倍速仍需主人窗口复验。
 
 ### 资产与文档治理
 
@@ -110,6 +112,7 @@ npm.cmd run client:run:check
 npm.cmd run client:env
 npm.cmd run start
 npm.cmd run client:run
+npm.cmd run client:run:legacy
 git status --short
 git branch --show-current
 git log --oneline -8
@@ -125,16 +128,17 @@ git diff --check
 - `npm.cmd run content:check` 校验 6 份 NPC 深度卡、关系阶段、送礼反应、独白种子和资产引用。
 - `npm.cmd run smoke` 重点验证后端 Runtime、Director v0、Event Skill、Debug 字段和 LLM smoke 跳过/执行/fallback 状态；强制真实云端通过时设置 `AGENT_TOWN_REQUIRE_REAL_LLM_SMOKE=1`。
 - `npm.cmd run asset:check` 校验资产路径、prompt 引用、PNG 尺寸和 Godot 引用。
-- `check_godot_project.py`、Godot headless import、`npm.cmd run client:env` 和 `npm.cmd run client:run:check` 已通过；2026-05-16 主人已完成上一版真实窗口人工验收，2026-05-17 主人确认点击落点已正常，本轮锚点 / 场景行动 / 行动反馈仍需主人复验。
+- `check_godot_project.py`、Godot headless import、`npm.cmd run client:env` 和 `npm.cmd run client:run:check` 已通过；当前默认主场景为 `world_main.tscn`，legacy UI 可用 `client:run:legacy` 回看。
 - `npm.cmd run client:run:check` 只检查 Godot 运行入口，不打开真实游戏窗口。
-- `npm.cmd run client:run` 会打开真实 Godot 游戏窗口，适合人工验收。
+- `npm.cmd run client:run` 会打开真实 Godot 游戏窗口，当前默认进入 `world_main.tscn`。
+- `npm.cmd run client:run:legacy` 会打开旧 `main.tscn`，用于回看 P0 UI 路径。
 
 ## 6. 下一轮最短开发入口
 
 1. 固定离线基线：运行 `npm.cmd run context:check`、`npm.cmd run check`、`npm.cmd run smoke`、`npm.cmd run asset:check`、`npm.cmd run client:env`、`npm.cmd run client:run:check`。
 2. 生产化计划入口：读取 `docs/production_roadmap.md`，确认阶段 1 "活着的世界"关键决策未变化；阶段 1 内该文档是路线源。
-3. Phase 1 sprint 主线：并行新建 `world_main.tscn`，旧 `main.tscn` / `main.gd` 保留原路径并标记 legacy；默认不继续扩写旧 UI 主导布局。
-4. D1 第一动作：新建 `backend/app/simulation/life_action_executor.py` 雏形与单元测试；并行新建 `clients/godot/scripts/core/world_clock.gd`、`event_bus.gd` 和 `world_main.tscn` 骨架。
-5. 阶段 1 事件通道：先用 `/api/world/tick` 响应里的 events 驱动 Godot `EventBus`；SSE 作为独立长连接增强，完成基础 tick 闭环后再接。
-6. 阶段 1 表现通道：NPC Controller 先使用 anchor graph + 直线插值、头顶动作图标和 idle bobbing；Navigation2D 进入后置增强清单。
+3. Phase 1 sprint 已完成 D1-D2 基础闭环：`LifeActionExecutor`、`POST /api/world/tick`、`WorldClockService`、`EventBusService`、`NpcController` 与 `world_main.tscn` 骨架均已落地。
+4. 当前默认客户端入口：`npm.cmd run start` 启动后端，再另开终端运行 `npm.cmd run client:run`，会进入 `world_main.tscn` 观察 NPC tick 移动；旧 UI 用 `npm.cmd run client:run:legacy` 回看。
+5. 下一步 Phase 1 sprint：把 `world_main` 从验证骨架推进到可验收玩法入口，优先补相机/玩家控制、VN 交互、NPC idle bobbing / 行动标签和 30 秒录屏验收。
+6. 阶段 1 事件通道继续先用 `/api/world/tick` 响应 events 驱动 Godot `EventBus`；SSE 仍作为后置增强。
 7. 30 秒验收标尺：玩家不操作时能看到至少 3 个 NPC 在大地图上走动或做事，玩家可暂停 / 恢复世界时间，并能靠近 NPC 按 `E` 弹出 VN 对话。

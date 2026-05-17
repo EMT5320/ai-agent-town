@@ -16,10 +16,16 @@ required_files = [
     GODOT_ROOT / "project.godot",
     GODOT_ROOT / "README.md",
     GODOT_ROOT / "scenes" / "main.tscn",
+    GODOT_ROOT / "scenes" / "world_main.tscn",
     GODOT_ROOT / "scripts" / "asset_registry.gd",
     GODOT_ROOT / "scripts" / "main.gd",
     GODOT_ROOT / "scripts" / "api_client.gd",
     GODOT_ROOT / "scripts" / "world_sync.gd",
+    GODOT_ROOT / "scripts" / "core" / "world_clock.gd",
+    GODOT_ROOT / "scripts" / "core" / "event_bus.gd",
+    GODOT_ROOT / "scripts" / "world" / "npc_controller.gd",
+    GODOT_ROOT / "scripts" / "world" / "town_map.gd",
+    GODOT_ROOT / "scripts" / "ui" / "hud.gd",
 ]
 
 for file_path in required_files:
@@ -28,17 +34,47 @@ for file_path in required_files:
 
 project = read(GODOT_ROOT / "project.godot")
 scene = read(GODOT_ROOT / "scenes" / "main.tscn")
+world_main_scene = read(GODOT_ROOT / "scenes" / "world_main.tscn")
 asset_registry = read(GODOT_ROOT / "scripts" / "asset_registry.gd")
 api_client = read(GODOT_ROOT / "scripts" / "api_client.gd")
 main_script = read(GODOT_ROOT / "scripts" / "main.gd")
 world_sync = read(GODOT_ROOT / "scripts" / "world_sync.gd")
+world_clock = read(GODOT_ROOT / "scripts" / "core" / "world_clock.gd")
+event_bus = read(GODOT_ROOT / "scripts" / "core" / "event_bus.gd")
+npc_controller = read(GODOT_ROOT / "scripts" / "world" / "npc_controller.gd")
+town_map = read(GODOT_ROOT / "scripts" / "world" / "town_map.gd")
+hud = read(GODOT_ROOT / "scripts" / "ui" / "hud.gd")
 
 checks = {
-    "project main scene": 'run/main_scene="res://scenes/main.tscn"' in project,
+    "project main scene": 'run/main_scene="res://scenes/world_main.tscn"' in project,
+    "legacy main scene kept": 'path="res://scripts/main.gd"' in scene,
     "scene script": 'path="res://scripts/main.gd"' in scene,
+    "world main scene script": 'path="res://scripts/world/town_map.gd"' in world_main_scene,
+    "world main scene hud": 'path="res://scripts/ui/hud.gd"' in world_main_scene,
     "world state endpoint": '"/api/world/state"' in api_client,
     "player action endpoint": '"/api/player/action"' in api_client,
+    "world tick endpoint": '"/api/world/tick"' in api_client and "func tick(" in api_client,
     "api class": "class_name ApiClient" in api_client,
+    "project autoload world clock": 'WorldClockService="*res://scripts/core/world_clock.gd"' in project,
+    "project autoload event bus": 'EventBusService="*res://scripts/core/event_bus.gd"' in project,
+    "world clock class": "class_name WorldClock" in world_clock,
+    "world clock signals": "signal tick_requested" in world_clock and "signal tick_received" in world_clock,
+    "world clock tick request": "_api_client.tick(" in world_clock and "func set_paused" in world_clock and "func set_speed" in world_clock,
+    "world clock speed contract": "tick_interval_seconds * speed" not in world_clock,
+    "event bus class": "class_name EventBus" in event_bus,
+    "event bus tick consume": "_on_world_clock_tick_received" in event_bus and "tick_events_received.emit" in event_bus,
+    "event bus npc dispatch": "signal npc_motion_event" in event_bus and "signal npc_action_event" in event_bus,
+    "event bus eventstore payload flatten": "_normalize_event_payload" in event_bus and 'event_payload.get("payload", {})' in event_bus,
+    "npc controller class": "class_name NpcController" in npc_controller,
+    "npc controller state machine": "enum NpcState" in npc_controller and "IDLE" in npc_controller and "WALKING" in npc_controller and "PERFORMING" in npc_controller,
+    "npc controller anchor lerp": "configure_anchor_graph" in npc_controller and "lerp(" in npc_controller and "ActionLabel" in npc_controller,
+    "npc controller authoritative move": "后端当前直接下发起点和终点" in npc_controller and "Path?" not in npc_controller,
+    "town map class": "class_name TownMap" in town_map,
+    "town map stage layout": "STAGE_ORDER" in town_map and "_build_stage_placeholders" in town_map and "_build_anchor_graph" in town_map,
+    "town map npc wiring": "_ensure_npc_controller" in town_map and "_on_npc_motion_event" in town_map,
+    "town map backend ids": "farm_house_door" in town_map and "tavern_stage" in town_map and "DEMO_SPAWN_ANCHORS" in town_map and "npc_kai" not in town_map,
+    "hud class": "class_name WorldHud" in hud,
+    "hud clock speed controls": "_on_pause_pressed" in hud and "_on_speed_pressed" in hud and "_on_tick_clock_updated" in hud,
     "asset registry class": "class_name AssetRegistry" in asset_registry,
     "asset registry backgrounds": "farm_day_anime.png" in asset_registry and "tavern_evening_anime.png" in asset_registry,
     "asset registry portraits": "npc_orren_neutral.png" in asset_registry and "player_farmer_neutral.png" in asset_registry,

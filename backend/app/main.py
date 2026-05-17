@@ -28,6 +28,13 @@ class TownApplication:
     def step_simulation(self, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         return self.runtime.step(actor_id=(payload or {}).get("actorId", "developer"))
 
+    def world_tick(self, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+        """按客户端提供的游戏时间步长推进世界。"""
+        data = payload or {}
+        delta_seconds = float(data.get("deltaSeconds", 0.0))
+        speed = float(data.get("speed", 1.0))
+        return self.runtime.tick(delta_seconds=delta_seconds, speed=speed)
+
     def command(self, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         return apply_developer_command(self.runtime, payload or {})
 
@@ -118,6 +125,11 @@ def create_handler(app: TownApplication, project_root: Path):
             route = self.path.split("?", 1)[0]
             if route == "/api/step":
                 return self.write_json(app.step_simulation(payload))
+            if route == "/api/world/tick":
+                try:
+                    return self.write_json(app.world_tick(payload))
+                except ValueError as error:
+                    return self.write_json({"ok": False, "error": str(error)}, HTTPStatus.BAD_REQUEST)
             if route == "/api/player/action":
                 try:
                     return self.write_json(app.player_action(payload))

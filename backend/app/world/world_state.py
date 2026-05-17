@@ -382,7 +382,9 @@ def public_game_world(world: dict[str, Any], recent_events: list[dict[str, Any]]
     view = public_world(world)
     location_ids = set(DAY1_LOCATION_IDS)
     npc_ids = set(DAY1_NPC_IDS)
-    npc_presence = build_npc_presence(world)
+    # Tick 执行器会维护运行期 npcPresence；仅在缺失时回退到软日程快照。
+    runtime_presence = world.get("npcPresence")
+    npc_presence = deepcopy(runtime_presence) if isinstance(runtime_presence, list) and runtime_presence else build_npc_presence(world)
     presence_by_agent = {item["agentId"]: item for item in npc_presence}
     npcs = [agent for agent in view["agents"] if agent["id"] in npc_ids]
     for agent in npcs:

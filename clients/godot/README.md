@@ -4,16 +4,19 @@
 
 ## 当前能力
 
-- 主场景：`scenes/main.tscn`
-- API 客户端：`scripts/api_client.gd`
+- 默认主场景：`scenes/world_main.tscn`
+- Legacy 回看场景：`scenes/main.tscn`
+- API 客户端：`scripts/api_client.gd`，包含 `GET /api/world/state`、`POST /api/player/action` 与 `POST /api/world/tick`
 - 资产注册：`scripts/asset_registry.gd`
 - 世界状态缓存：`scripts/world_sync.gd`
 - 运行后读取：`GET /api/world/state`
 - 玩家动作统一通过：`POST /api/player/action`
+- 世界时间推进：`POST /api/world/tick`，由 `WorldClockService` 驱动，`EventBusService` 分发 NPC 移动和行动事件
 - 已能加载 3 张地点背景和玩家 + 6 个首发 NPC 的 `neutral` 半身立绘
 - 已能展示 `activeEvents` 中的星灯祭供应短缺事件，并通过 `inspect` / `attend_event` 展示选择结果
 - 已支持地图上下文交互：靠近锚点 / 交互体 / 居民 / 事件后显示候选动作，`E`/`Space` 执行，`Tab`/`Q` 切换
-- 可通过一条命令直接运行当前 P0 游戏窗口
+- `world_main.tscn` 已接入三场景横向拼图、HUD 暂停/倍速和 NPC tick 移动骨架
+- 可通过一条命令直接运行当前 Phase 1 可视化窗口
 
 ## 本地启动
 
@@ -35,7 +38,13 @@
    npm.cmd run client:run
    ```
 
-   该命令会先执行 Godot 资源导入，再打开游戏窗口。
+   该命令会先执行 Godot 资源导入，再打开默认 `world_main.tscn` 游戏窗口。
+
+   如果需要回看旧 P0 UI 场景：
+
+   ```powershell
+   npm.cmd run client:run:legacy
+   ```
 
    如果需要进入编辑器：
 
@@ -67,11 +76,11 @@
 
 3. 在游戏窗口内人工检查：
 
-   - 地点切换与背景切换可用。
-   - WASD 与空地点击移动可用，靠近目标后能看到上下文候选动作。
-   - `E`/`Space` 可提交当前候选动作，`Tab`/`Q` 可切换候选。
-   - 侧栏“场景行动”只作为调试兜底，地图上下文交互是主路径。
-   - 事件区可看到 `activeEvents` 中的“星灯祭供应短缺”。
+   - 默认窗口进入 `world_main.tscn`，能看到 farm / plaza / tavern 三场景横向拼图。
+   - 后端运行时，HUD 时间会随 tick 更新，Pause/Resume 和 1x/2x/4x 按钮可见。
+   - 至少 3 个 NPC 会根据 `/api/world/tick` 返回事件移动或进入行动状态。
+   - 如果后端未启动，HUD 应显示 tick 请求失败，场景本身仍可打开。
+   - 如需验证旧 P0 UI，使用 `npm.cmd run client:run:legacy` 后再检查地点切换、地图上下文候选和事件区。
 
 4. 点击“查看事件”后人工检查：
 
@@ -88,8 +97,8 @@
 
 ## 下一步
 
-- 在真实窗口复验三场景移动稳定性、地图上下文候选、快捷键执行和行动反馈。
-- 将后端 `npcSchedules` / `lifeActionPlan` 做成轻量日程可视化。
+- 在真实窗口复验默认 `world_main` 的 NPC 自动走动、HUD 暂停/倍速和三场景横向拼图。
+- 为 `world_main` 补玩家控制、相机跟随、VN 交互和轻量日程可视化。
 - 接入背包物品选择，让送礼和事件消耗从固定兜底走向玩家选择。
 - 等行动反馈图标和生活 UI 组件通过人工筛选后，再接入 `AssetRegistry`。
 

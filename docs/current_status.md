@@ -46,11 +46,12 @@ scope: current implementation facts, verification state, and work constraints
 - Python HTTP 服务入口已存在。
 - 世界状态初始化、10 个初始 NPC、5 个地点、关系图谱、基础状态数值和 Agent 记忆列表已存在。
 - 时间推进、Agent 轮换调度、事件记录和公开状态导出已存在。
-- 玩家游戏 API 已存在：`GET /api/world/state`、`POST /api/player/action`。
+- 玩家游戏 API 已存在：`GET /api/world/state`、`POST /api/player/action`、`POST /api/world/tick`。
 - 玩家动作已覆盖 `move`、`move_to_anchor`、`scene_action`、`farm_action`、`end_phase`、`talk`、`give_gift`、`inspect`、`attend_event`。
 - 星灯祭供应短缺事件已有查看、选择、关系变化、即时记忆、事件反应、夜间反思和结算记录。
 - `/api/player/action` 的根节点、`result` 和 `state` 均带有 Godot 可直接展示的 `memoryEvidence`、`relationshipEvidence`、`playerProfile`、`currentObjective`、`availableInteractions`；锚点移动和场景行动会返回统一 `actionFeedback`。
 - `GET /api/world/state` 已新增 `npcSchedules` 与 `lifeActionPlan`，由 `backend/app/simulation/life_action_planner.py` 根据 NPC 深度卡 seeds、当前 Presence、锚点和交互体生成只读快照；`slice.scheduleSnapshotVersion=life_action_plan.v1`。
+- `POST /api/world/tick` 已接入 `LifeActionExecutor`，按游戏时间推进 NPC 生活行动，返回 `clock`、EventStore 包装后的 `events` 和 `agents` diff；移动事件已透出 `npcId/fromAnchorId/toAnchorId` 供 Godot 扁平化消费。
 
 ### Director / Skill
 
@@ -84,8 +85,9 @@ scope: current implementation facts, verification state, and work constraints
 
 ### Godot 客户端
 
-- `clients/godot/` 已有 Godot 4.x 项目、主场景、`ApiClient`、`WorldSync`、`AssetRegistry`。
-- 主场景代码已能读取世界状态、渲染背景、列出地点和 NPC、展示半身立绘、提交聊天动作。
+- `clients/godot/` 已有 Godot 4.x 项目、默认主场景 `scenes/world_main.tscn`、legacy 场景 `scenes/main.tscn`、`ApiClient`、`WorldSync`、`AssetRegistry`。
+- legacy 主场景代码仍能读取世界状态、渲染背景、列出地点和 NPC、展示半身立绘、提交聊天动作；`npm.cmd run client:run:legacy` 用于回看该路径。
+- 新默认 `world_main.tscn` 已接入三场景横向拼图、`WorldClockService`、`EventBusService`、`NpcController`、HUD 暂停/倍速，以及 `/api/world/tick` 返回事件驱动的 NPC 移动/行动状态。
 - 主场景已能渲染地图角色层，显示玩家和当前场景 NPC / event marker，并提供 talk / gift / event 交互 marker。
 - 主场景已新增本地地图移动与靠近反馈：WASD 独立连续移动、点击当前场景空地设置落点、显示落点标记、玩家小人平滑移动、靠近最近 NPC / 事件后只高亮一个交互目标；玩家出生点与 NPC 比例站位槽分离并从底部边缘上移，交互半径已收紧并加入退出滞回；该坐标不写回后端。
 - 主场景已接入地图上下文动作：靠近服务端锚点、交互体、居民或事件后生成候选动作，`E`/`Space` 执行，`Tab`/`Q` 切换；侧栏“场景行动”保留为调试兜底。
@@ -97,9 +99,9 @@ scope: current implementation facts, verification state, and work constraints
 - 主场景已能列出 `activeEvents`，点击“查看事件”调用 `inspect`，渲染事件标题、摘要和 choices。
 - 主场景已能点击事件选项调用 `attend_event`，并在 VN 面板中展示 NPC 台词、关系变化、记忆写入和夜间反思摘要。
 - `AssetRegistry` 已接入星灯祭事件 CG，并支持 `happy` / `troubled` 表情缺图时回退 `neutral`。
-- `scripts/check_godot_project.py` 会检查主场景、脚本、API 字符串、首批资产和 `.import` 元数据。
+- `scripts/check_godot_project.py` 会检查默认 `world_main.tscn`、legacy `main.tscn`、脚本、API 字符串、首批资产和 `.import` 元数据。
 - `clients/godot/assets/sprites/` 已包含玩家和 6 个 NPC 的 `map_idle` PNG，以及 talk / gift / event 三类交互标记和对应 `.import`。
-- 2026-05-16 主人已完成真实窗口人工验收，基本可用；后续人工验收重点转为玩法深度、地图操作手感和内容节奏。
+- 2026-05-16 主人已完成旧 P0 真实窗口人工验收，基本可用；2026-05-17 本轮默认 `world_main` 入口尚未由主人做真实窗口可视化验收。
 
 ### 资产管线
 
@@ -113,7 +115,7 @@ scope: current implementation facts, verification state, and work constraints
 
 ## 4. 当前主要缺口
 
-1. **玩法深度主线**：真实窗口基础链路已通过，WASD、点击落点、落点标记、当前场景过滤、动态移动范围、单目标靠近反馈、去背景、UI 点击穿透、玩家 / NPC 分离站位槽、玩家出生点上移、收紧交互半径、点击边界修正、靠近滞回、地图上下文候选、快捷键执行、服务端锚点、`scene_action` 和 `actionFeedback` 已落地；仍需要主人复验三场景手感、地图候选动作、农场行动和行动反馈显示，并继续推进日程可视化。
+1. **玩法深度主线**：旧 P0 窗口基础链路已通过；新默认 `world_main` 已具备 tick 驱动 NPC 移动骨架、HUD 暂停/倍速和三场景横向拼图，但仍需要主人用 `npm.cmd run start` + `npm.cmd run client:run` 做真实窗口可视化验收，并继续补玩家控制、VN 交互、日程可视化和更自然的生活节奏。
 2. **Content Codex 二阶段接入**：`monologueSeeds` 已接入夜间反思/RAG；`gossipHooks` 已进入对话证据选择、传播草案、validator 和运行时校验事件；`lifeActionSeeds` / `dailyRumorBeats` / `relationshipBeatSeeds` 已进入 `npcSchedules` / `lifeActionPlan` 快照，仍需扩展为 NPC 实际工具行动、记忆 / 关系层谣言传播。
 3. **Event Skill 数据化深度**：当前已有 schema 和单技能注册表，画像证据、`styleSignal`、事件反应记忆、asset hints 与通用 fallback 台词模板已迁入 Skill；更多结算模板和复用测试仍需推进。
 4. **真实 LLM 证据刷新**：当前本机 `config/models.json` 已跑通真实 smoke；切换模型、key 或 profile 后，需要重新验证 DeepSeek / OpenAI-compatible profile 的真实延迟、成本、错误和 fallback。
@@ -142,6 +144,7 @@ npm.cmd run client:env
 npm.cmd run client:run:check
 npm.cmd run start
 npm.cmd run client:run
+npm.cmd run client:run:legacy
 git diff --check
 ```
 
@@ -168,12 +171,12 @@ Get-Content docs\daytime_integration_handoff.md
 
 2026-05-16，主人已运行真实 Godot 窗口并确认当前基础体验基本无问题。该结论覆盖：地点切换、背景切换、NPC 选择、`talk` 提交、星灯祭事件查看、choices 展示和事件结算展示。
 
-仍需人工未验收的内容：本轮新增的地图上下文候选面板、`E`/`Space` 执行动作、`Tab`/`Q` 切换候选、场景行动、行动反馈显示、三场景移动稳定性，以及后续新增的表情差分、UI 组件和真实 LLM profile 切换。
+仍需人工未验收的内容：默认 `world_main.tscn` 真实窗口观感、NPC 自动走动/行动、HUD 暂停/倍速、后端未启动时的错误提示、后续玩家控制与 VN 交互，以及表情差分、UI 组件和真实 LLM profile 切换。
 
 ## 8. 下一轮建议
 
 1. 文档治理已把真实窗口验收记录为已人工确认；后续每轮继续只更新已验证事实、剩余缺口和下一步。
-2. Godot 玩法线先复验三场景移动稳定性、地图上下文候选、农场 `scene_action` 和 `actionFeedback` 显示，再把 `npcSchedules` / `lifeActionPlan` 做成轻量日程可视化。
+2. Godot 玩法线先复验默认 `world_main`：启动后端后运行 `npm.cmd run client:run`，确认 NPC 自动移动、HUD 暂停/倍速和三场景横向拼图可见，再补玩家控制、VN 交互和轻量日程可视化。
 3. 内容线优先让 `lifeActionPlan` 驱动 NPC 实际行动候选，再把 `gossip.propagation_validated` 从校验事件扩展为第一版谣言记忆 / 关系传播。
 4. 后端线继续收紧 Event Skill 数据化：用 Skill 定义驱动更多结算模板和复用测试。
 5. LLM / Debug 线在切换模型、key 或 profile 后刷新真实 smoke，记录 dialogue / event_reaction / night_reflection 的真实输出、延迟和 fallback。

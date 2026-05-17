@@ -569,6 +569,7 @@ def assert_http_debug_endpoints(api_app) -> dict:
         model_config = fetch("/api/model-config")
         model_reload = post("/api/model-config/reload", {})
         world_state = fetch("/api/world/state")
+        world_tick = post("/api/world/tick", {"deltaSeconds": 5.0, "speed": 1.0})
         http_action = post("/api/player/action", {"type": "talk", "targetId": "mira", "locationId": "plaza", "topic": "http_contract", "message": "请确认后端动作契约。"})
         debug = fetch("/api/debug", {"skillId": STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID, "limit": "20"})
         skill = fetch("/api/debug/skill", {"skillId": STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID})
@@ -584,6 +585,25 @@ def assert_http_debug_endpoints(api_app) -> dict:
         raise RuntimeError("HTTP /api/model-config/reload 应返回 ok=true")
     assert_model_config_contract(model_reload["modelConfig"], "HTTP /api/model-config/reload")
     assert_game_state_contract(world_state, "HTTP /api/world/state")
+    for field in ("clock", "events", "agents"):
+        if field not in world_tick:
+            raise RuntimeError(f"HTTP /api/world/tick 缺少字段：{field}")
+    clock = world_tick["clock"]
+    if not isinstance(clock, dict) or any(field not in clock for field in ("day", "hour", "minute", "phase")):
+        raise RuntimeError("HTTP /api/world/tick.clock 应包含 day/hour/minute/phase")
+    if not isinstance(world_tick["events"], list):
+        raise RuntimeError("HTTP /api/world/tick.events 应为数组")
+    if not isinstance(world_tick["agents"], list):
+        raise RuntimeError("HTTP /api/world/tick.agents 应为数组")
+    if not any(str(event.get("type", "")).startswith("npc.") for event in world_tick["events"]):
+        raise RuntimeError("HTTP /api/world/tick.events 应至少包含一个 npc.* 事件")
+    move_payloads = [
+        event.get("payload", {})
+        for event in world_tick["events"]
+        if str(event.get("type", "")).startswith("npc.move") and isinstance(event.get("payload"), dict)
+    ]
+    if not any(payload.get("npcId") and payload.get("fromAnchorId") and payload.get("toAnchorId") for payload in move_payloads):
+        raise RuntimeError("HTTP /api/world/tick 的移动事件应透出 npcId/fromAnchorId/toAnchorId")
     assert_player_action_contract(http_action, "HTTP /api/player/action")
     assert_debug_snapshot_contract(debug, "/api/debug")
     if "attend_event" not in skill.get("actions", {}):

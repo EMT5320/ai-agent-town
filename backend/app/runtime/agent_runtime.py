@@ -31,6 +31,7 @@ from app.providers.response_parser import parse_feature_response
 from app.providers.rule_based_provider import RuleBasedProvider
 from app.runtime.action_executor import execute_action, maybe_population_event
 from app.runtime.action_parser import parse_provider_output
+from app.simulation import LifeActionExecutor, build_life_action_plan_snapshot
 from app.skills import (
     STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID,
     EventChoiceOutcome,
@@ -75,11 +76,14 @@ class AgentRuntime:
 
     def __init__(self, provider_mode: str | None = None, model_config_path: str | None = None) -> None:
         self.world = create_initial_world()
+        self.world["clock"].setdefault("minute", 0)
+        self.world["clock"].setdefault("_daySeconds", float((int(self.world["clock"].get("hour", 8)) - 8) * 3600))
         self.npc_deep_cards: dict[str, NpcDeepCard] = load_all_npc_deep_cards()
         self.event_store = EventStore()
         self.model_config = ModelConfigStore(model_config_path)
         self.rule_provider = RuleBasedProvider()
         self.cloud_provider = CloudApiProvider()
+        self.life_action_executor = LifeActionExecutor()
         self.provider_mode_override = provider_mode
         self.provider_mode = self._resolve_runtime_provider_mode()
         self.event_skills = {skill.skill_id: skill for skill in list_event_skills()}
@@ -792,6 +796,160 @@ class AgentRuntime:
         self.event_store.add_snapshot(self.world)
         self.event_store.append("runtime.step", {"actorId": actor_id, "tick": self.world["clock"]["tick"], "day": self.world["clock"]["day"], "hour": self.world["clock"]["hour"], "actors": [agent["id"] for agent in actors]})
         return {"decisions": decisions, "state": self.get_public_state()}
+
+    def tick(self, delta_seconds: float, speed: float = 1.0) -> dict[str, Any]:
+        """按游戏时间推进 NPC 行动并输出最小事件/差异快照。"""
+        if self.world["clock"].get("paused"):
+            return {"clock": self._tick_clock_payload(), "events": [], "agents": [], "skipped": True, "reason": "paused"}
+
+        game_seconds = max(0.0, float(delta_seconds)) * max(0.0, float(speed))
+        self._advance_clock_by_game_seconds(game_seconds)
+        if not isinstance(self.world.get("npcPresence"), list) or not self.world["npcPresence"]:
+            self.world["npcPresence"] = build_npc_presence(self.world)
+            sync_agents_from_presence(self.world, self.world["npcPresence"])
+
+        schedules, plan = build_life_action_plan_snapshot(self.world, self.world["npcPresence"])
+        selected_actions = self._build_tick_selected_actions(schedules=schedules, plan=plan)
+        execution = self.life_action_executor.tick(
+            world=self.world,
+            selected_actions=selected_actions,
+            delta_seconds=game_seconds,
+        )
+
+        tick_events: list[dict[str, Any]] = []
+        for payload in execution.get("events", []):
+            event_type = str(payload.get("type") or "")
+            if not event_type:
+                continue
+            stored = self.event_store.append(event_type, {key: value for key, value in payload.items() if key != "type"})
+            tick_events.append(stored)
+
+        for completion in execution.get("completedActions", []):
+            self._apply_life_action_completion(completion)
+
+        self._run_director_v0()
+        self.event_store.add_snapshot(self.world)
+        self.event_store.append(
+            "runtime.tick",
+            {
+                "deltaSeconds": round(game_seconds, 3),
+                "speed": round(max(0.0, float(speed)), 3),
+                "tick": self.world["clock"]["tick"],
+                "phase": self.world["clock"]["phase"],
+                "npcEventCount": len(tick_events),
+                "agentDiffCount": len(execution.get("agents", [])),
+            },
+        )
+        return {
+            "clock": self._tick_clock_payload(),
+            "events": [self._debug_safe_event(event) for event in tick_events],
+            "agents": execution.get("agents", []),
+        }
+
+    def _build_tick_selected_actions(self, *, schedules: list[dict[str, Any]], plan: dict[str, Any]) -> list[dict[str, Any]]:
+        """把 planner 快照转换成 executor 可直接消费的最小动作集。"""
+        schedule_map = {str(item.get("npcId") or ""): item for item in schedules if isinstance(item, dict) and item.get("npcId")}
+        selected: list[dict[str, Any]] = []
+        for action in plan.get("selectedActions", []):
+            if not isinstance(action, dict):
+                continue
+            npc_id = str(action.get("npcId") or "")
+            if not npc_id:
+                continue
+            action_id = str(action.get("actionId") or "")
+            schedule = schedule_map.get(npc_id, {})
+            active = schedule.get("activeLifeAction") if isinstance(schedule.get("activeLifeAction"), dict) else {}
+            space_candidates = active.get("spaceActionCandidates") if isinstance(active.get("spaceActionCandidates"), list) else []
+            current_anchor_id = str(action.get("anchorId") or schedule.get("anchorId") or "")
+            runtime_state = self.world.get("lifeActionRuntime", {}).get(npc_id)
+            if isinstance(runtime_state, dict) and runtime_state.get("actionId") == action_id and runtime_state.get("targetAnchorId"):
+                target_anchor_id = str(runtime_state.get("targetAnchorId") or "")
+                target_location_id = str(runtime_state.get("targetLocationId") or action.get("locationId") or "")
+            else:
+                space_choice = next(
+                    (
+                        item
+                        for item in space_candidates
+                        if isinstance(item, dict) and item.get("anchorId") and str(item.get("anchorId")) != current_anchor_id
+                    ),
+                    {},
+                )
+                if not space_choice:
+                    space_choice = next((item for item in space_candidates if isinstance(item, dict) and item.get("anchorId")), {})
+                target_anchor_id = str(space_choice.get("anchorId") or action.get("anchorId") or "")
+                target_location_id = str(space_choice.get("locationId") or action.get("locationId") or "")
+            selected.append(
+                {
+                    "npcId": npc_id,
+                    "actionId": action_id,
+                    "summary": str(action.get("summary") or active.get("summary") or ""),
+                    "targetAnchorId": target_anchor_id,
+                    "targetLocationId": target_location_id,
+                    "relatedNpcIds": list(active.get("relatedNpcIds") or []),
+                }
+            )
+        return selected
+
+    def _advance_clock_by_game_seconds(self, delta_seconds: float) -> None:
+        """只基于游戏时间推进时钟，避免任何墙钟依赖。"""
+        clock = self.world["clock"]
+        previous_phase = str(clock.get("phase") or "morning")
+        day = int(clock.get("day", 1))
+        day_seconds = float(clock.get("_daySeconds", (int(clock.get("hour", 8)) - 8) * 3600 + int(clock.get("minute", 0)) * 60))
+        day_seconds += max(0.0, delta_seconds)
+        day_span_seconds = 14 * 3600.0
+        while day_seconds >= day_span_seconds:
+            day += 1
+            day_seconds -= day_span_seconds
+        hour = 8 + int(day_seconds // 3600)
+        minute = int((day_seconds % 3600) // 60)
+        next_phase = "night" if hour >= 21 else ("evening" if hour >= 18 else ("afternoon" if hour >= 14 else ("noon" if hour >= 12 else "morning")))
+
+        clock["day"] = day
+        clock["hour"] = hour
+        clock["minute"] = minute
+        clock["_daySeconds"] = day_seconds
+        clock["tick"] = int(clock.get("tick", 0)) + 1
+        clock["phase"] = next_phase
+        if next_phase != previous_phase:
+            clock["actionBudget"] = action_budget_for_phase(next_phase)
+
+    def _tick_clock_payload(self) -> dict[str, Any]:
+        """输出 /api/world/tick 的紧凑时钟结构。"""
+        clock = self.world.get("clock", {})
+        return {
+            "day": int(clock.get("day", 1)),
+            "hour": int(clock.get("hour", 8)),
+            "minute": int(clock.get("minute", 0)),
+            "phase": str(clock.get("phase") or "morning"),
+            "tick": int(clock.get("tick", 0)),
+        }
+
+    def _apply_life_action_completion(self, completion: dict[str, Any]) -> None:
+        """动作完成时复用既有 runtime 行动执行路径写入副作用。"""
+        npc_id = str(completion.get("npcId") or "")
+        agent = self.world.get("agents", {}).get(npc_id)
+        if not isinstance(agent, dict):
+            return
+        runtime_action = self._map_life_completion_to_runtime_action(completion)
+        execute_action(self.world, agent, runtime_action, self.event_store)
+
+    def _map_life_completion_to_runtime_action(self, completion: dict[str, Any]) -> dict[str, Any]:
+        """把 life action 归一化到现有 execute_action 契约。"""
+        action_id = str(completion.get("actionId") or "").lower()
+        summary = str(completion.get("summary") or "")
+        related_ids = [str(item) for item in completion.get("relatedNpcIds", []) if str(item)]
+        if "farm" in action_id:
+            return {"action": "work", "args": {"job": "farm"}}
+        if "shop" in action_id or "market" in action_id or "trade" in action_id:
+            return {"action": "work", "args": {"job": "service"}}
+        if "chat" in action_id or "talk" in action_id or related_ids:
+            target_npc_id = next((item for item in related_ids if item in self.world.get("agents", {})), "")
+            if target_npc_id and target_npc_id != str(completion.get("npcId") or ""):
+                return {"action": "talkTo", "args": {"npc": target_npc_id, "message": summary or "聊聊近况。"}}
+        if "rest" in action_id or "home" in action_id:
+            return {"action": "rest"}
+        return {"action": "remember", "memory_to_save": summary or f"{completion.get('npcId')} 完成了生活行动。"}
 
     def pick_actors(self) -> list[dict[str, Any]]:
         agents = living_agents(self.world)

@@ -1,7 +1,8 @@
 param(
     [switch]$DryRun,
     [switch]$Run,
-    [switch]$Editor
+    [switch]$Editor,
+    [string]$Scene = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -52,6 +53,13 @@ if (-not $godot) {
 $arguments = @("--editor", "--path", $projectDir)
 if ($mode -eq "run") {
     $arguments = @("--path", $projectDir)
+    # -Scene is only appended in run mode; empty value uses project.godot main scene.
+    if (-not [string]::IsNullOrWhiteSpace($Scene)) {
+        if ($Scene -notmatch "^res://.+\.tscn$") {
+            throw "Scene must be a Godot scene path like res://scenes/world_main.tscn."
+        }
+        $arguments += $Scene
+    }
 }
 $importArguments = @("--headless", "--import", "--path", $projectDir)
 

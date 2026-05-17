@@ -103,6 +103,19 @@ def main() -> None:
         if marker in project_output:
             raise SystemExit(project_output)
 
+    world_scene_check = subprocess.run(
+        [str(godot), "--headless", "--path", "clients/godot", "res://scenes/world_main.tscn", "--quit-after", "5", "--verbose"],
+        cwd=PROJECT_ROOT,
+        env=env,
+        **CAPTURE_TEXT,
+    )
+    if world_scene_check.returncode != 0:
+        raise SystemExit(world_scene_check.stderr or world_scene_check.stdout or "Godot world_main 场景检查失败。")
+    world_scene_output = f"{world_scene_check.stdout}\n{world_scene_check.stderr}"
+    for marker in fatal_markers:
+        if marker in world_scene_output:
+            raise SystemExit(world_scene_output)
+
     print("[client-env] ok", {"godot": str(godot), "version": version.stdout.strip()})
 
 
