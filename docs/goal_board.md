@@ -27,6 +27,7 @@ scope: lane board, write boundaries, and handoff format
 - `npm.cmd run client:env`：通过，Godot 4.6.2 headless 项目打开检查通过。
 - `npm.cmd run client:run:check`：通过 DryRun，当前默认运行入口指向 `world_main.tscn`。
 - Godot headless `world_main.tscn` 加载：通过，已加载 3 张地点背景和 6 张 NPC `map_idle` 小人贴图，日志未出现脚本解析错误或资源加载错误。
+- `world_main` 玩家闭环：代码已接入玩家 `map_idle`、WASD / 方向键移动、`Camera2D` 跟随、靠近 NPC 后 `E` 键提交后端 `talk`、`WorldVnPanel` 对话弹层；已通过 headless 加载，真实窗口仍待主人复验。
 - `npm.cmd run client:run:legacy:check`：通过 DryRun，旧 P0 UI 可通过 `res://scenes/main.tscn` 回看。
 - Godot headless import / quit：通过，脚本可加载；退出时仅出现 Godot ObjectDB leak warning。
 - 真实 Godot 窗口：2026-05-16 主人已人工验收上一版基础体验；2026-05-17 主人确认点击移动已正常，但仍反馈三场景中必有一处卡住，中央广场为主、酒馆偶发；本轮补点击边界修正、动态 bounds、玩家出生点上移、靠近滞回和地点短窗收紧后仍需主人复验。
@@ -70,7 +71,7 @@ scope: lane board, write boundaries, and handoff format
 ### 部分完成
 
 - Content Codex 首批数据已可用；`monologueSeeds` 已接入夜间反思/RAG，`gossipHooks` 已进入对话证据选择、传播草案、validator 和运行时校验事件，`lifeActionSeeds` / `dailyRumorBeats` / `relationshipBeatSeeds` 已进入 `npcSchedules` / `lifeActionPlan` 快照，后续需要驱动实际 NPC 行动、记忆 / 关系扩散。
-- Godot 事件交互、地图角色层、本地移动与靠近反馈已通过代码检查、headless 检查和 dry-run；上一版真实窗口已由主人验收；新默认 `world_main` 已通过视觉可读性修复与 headless 加载，真实窗口仍待主人复验。
+- Godot 事件交互、地图角色层、本地移动与靠近反馈已通过代码检查、headless 检查和 dry-run；上一版真实窗口已由主人验收；新默认 `world_main` 已通过视觉可读性修复、玩家移动 / `E` talk 接入与 headless 加载，真实窗口仍待主人复验。
 - Godot 已从纯背景图和简单 UI 点击推进到可移动舞台层，并已接入地图上下文候选、快捷键执行、服务端锚点、生活场景行动和行动反馈；后续缺口转为日程可视化与更自然的生活节奏。
 - Event Skill 仍只有星灯祭单技能，部分结算逻辑仍有 Runtime 硬编码。
 - LLM profile 可配置，Web 观察台已追加配置查看、热重载和对话 smoke 入口；当前本机 `config/models.json` 已跑通真实云端 smoke，切换模型、key 或 profile 后需要刷新。
@@ -99,7 +100,7 @@ scope: lane board, write boundaries, and handoff format
 
 2026-05-16 主人已完成上一版真实 Godot 窗口人工验收，基础体验基本无阻断问题。已覆盖地点切换、背景切换、NPC 选择、`talk` 提交、星灯祭事件查看、choices 与事件结算展示。
 
-后续人工验收重点转为新默认 `world_main` 与下一批扩展：背景和小人是否足够可读、NPC 自动走动/行动规律、路径线与底部 tick 状态提示、HUD 暂停/倍速、三场景横向拼图、玩家控制、VN 交互、日程可视化、表情差分和真实 LLM profile 切换。
+后续人工验收重点转为新默认 `world_main` 与下一批扩展：背景和小人是否足够可读、NPC 自动走动/行动规律、路径线与底部 tick 状态提示、HUD 暂停/倍速、三场景横向拼图、玩家移动、`E` 键 talk、VN 弹层、日程可视化、表情差分和真实 LLM profile 切换。
 
 ## 6. 并行任务拆分建议
 
@@ -129,7 +130,7 @@ scope: lane board, write boundaries, and handoff format
 ## 8. 下一轮推荐排程
 
 1. 文档与治理：保持本轮状态收紧后的 checkpoint，后续只记录已验证变化。
-2. Phase 1 sprint：D1-D2 tick 闭环和新 `world_main.tscn` 骨架已落地；下一轮推进 D3-D4 的可视玩法入口、玩家控制和 VN 交互。
+2. Phase 1 sprint：D1-D2 tick 闭环、新 `world_main.tscn` 骨架、玩家本地控制和 `E` 键后端 talk 已落地；下一轮推进轻量日程可视化、事件远处提示和更自然的生活节奏反馈。
 3. Godot 玩法客户端：`npm.cmd run client:run` 默认进入 `world_main.tscn`；旧 `main.tscn` / `main.gd` 通过 `npm.cmd run client:run:legacy` 保留回看入口。
 4. Content Codex：阶段 1 只把 `lifeActionSeeds` 作为规则 NPC 行动素材输入；谣言记忆 / 关系扩散留到阶段 2。
 5. 后端：围绕 `LifeActionExecutor`、`runtime.tick(delta_seconds)` 和 `POST /api/world/tick` 做最小增量，不扩写新的复杂 Director 能力。

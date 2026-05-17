@@ -24,8 +24,10 @@ required_files = [
     GODOT_ROOT / "scripts" / "core" / "world_clock.gd",
     GODOT_ROOT / "scripts" / "core" / "event_bus.gd",
     GODOT_ROOT / "scripts" / "world" / "npc_controller.gd",
+    GODOT_ROOT / "scripts" / "world" / "player_controller.gd",
     GODOT_ROOT / "scripts" / "world" / "town_map.gd",
     GODOT_ROOT / "scripts" / "ui" / "hud.gd",
+    GODOT_ROOT / "scripts" / "ui" / "vn_panel.gd",
 ]
 
 for file_path in required_files:
@@ -42,8 +44,10 @@ world_sync = read(GODOT_ROOT / "scripts" / "world_sync.gd")
 world_clock = read(GODOT_ROOT / "scripts" / "core" / "world_clock.gd")
 event_bus = read(GODOT_ROOT / "scripts" / "core" / "event_bus.gd")
 npc_controller = read(GODOT_ROOT / "scripts" / "world" / "npc_controller.gd")
+player_controller = read(GODOT_ROOT / "scripts" / "world" / "player_controller.gd")
 town_map = read(GODOT_ROOT / "scripts" / "world" / "town_map.gd")
 hud = read(GODOT_ROOT / "scripts" / "ui" / "hud.gd")
+vn_panel = read(GODOT_ROOT / "scripts" / "ui" / "vn_panel.gd")
 
 checks = {
     "project main scene": 'run/main_scene="res://scenes/world_main.tscn"' in project,
@@ -71,9 +75,17 @@ checks = {
     "npc controller authoritative move": "后端当前直接下发起点和终点" in npc_controller and "Path?" not in npc_controller,
     "npc controller sprite appearance": "Sprite2D" in npc_controller and "configure_appearance" in npc_controller and "FallbackBody" in npc_controller,
     "npc controller idle bobbing": "_update_idle_bobbing" in npc_controller and "GroundShadow" in npc_controller,
+    "player controller class": "class_name PlayerController" in player_controller,
+    "player controller local movement": "Input.is_key_pressed" in player_controller and "interaction_origin" in player_controller and "set_world_bounds" in player_controller,
+    "vn panel class": "class_name WorldVnPanel" in vn_panel,
+    "vn panel backend status": "show_busy" in vn_panel and "show_dialogue" in vn_panel and "show_hint" in vn_panel,
     "town map class": "class_name TownMap" in town_map,
     "town map stage visuals": "STAGE_ORDER" in town_map and "_build_stage_visuals" in town_map and "get_location_background" in town_map,
     "town map route readability": "_update_route_line" in town_map and "Line2D" in town_map and "WorldEventLabel" in town_map,
+    "town map player loop": "PlayerControllerScript" in town_map and "_spawn_player" in town_map and "_update_nearest_npc_hint" in town_map,
+    "town map backend talk": "_submit_talk" in town_map and "post_player_action" in town_map and "world_map_greeting" in town_map,
+    "town map vn panel": "VnPanelScript" in town_map and "show_dialogue" in town_map and "show_busy" in town_map,
+    "town map camera follow": "Camera2D" in town_map and "make_current" in town_map,
     "town map npc wiring": "_ensure_npc_controller" in town_map and "_on_npc_motion_event" in town_map,
     "town map backend ids": "farm_house_door" in town_map and "tavern_stage" in town_map and "DEMO_SPAWN_ANCHORS" in town_map and "npc_kai" not in town_map,
     "hud class": "class_name WorldHud" in hud,

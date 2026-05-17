@@ -88,6 +88,7 @@ scope: current implementation facts, verification state, and work constraints
 - `clients/godot/` 已有 Godot 4.x 项目、默认主场景 `scenes/world_main.tscn`、legacy 场景 `scenes/main.tscn`、`ApiClient`、`WorldSync`、`AssetRegistry`。
 - legacy 主场景代码仍能读取世界状态、渲染背景、列出地点和 NPC、展示半身立绘、提交聊天动作；`npm.cmd run client:run:legacy` 用于回看该路径。
 - 新默认 `world_main.tscn` 已接入三场景横向拼图、`WorldClockService`、`EventBusService`、`NpcController`、HUD 暂停/倍速，以及 `/api/world/tick` 返回事件驱动的 NPC 移动/行动状态；2026-05-17 已把默认画面从纯色块占位推进到现有地点背景、`map_idle` 小人、NPC 名称/状态、路径线和底部 tick 状态提示，`ColorRect` 仅作为缺图 fallback。
+- `world_main.tscn` 已新增玩家本地控制闭环：`PlayerController` 显示玩家 `map_idle` 小人，支持 WASD / 方向键在大地图中移动，`Camera2D` 跟随玩家，靠近 NPC 后按 `E` 会通过 `/api/player/action` 提交 `talk`，并由 `WorldVnPanel` 弹出后端返回的对话、关系/记忆/事件计数。
 - 主场景已能渲染地图角色层，显示玩家和当前场景 NPC / event marker，并提供 talk / gift / event 交互 marker。
 - 主场景已新增本地地图移动与靠近反馈：WASD 独立连续移动、点击当前场景空地设置落点、显示落点标记、玩家小人平滑移动、靠近最近 NPC / 事件后只高亮一个交互目标；玩家出生点与 NPC 比例站位槽分离并从底部边缘上移，交互半径已收紧并加入退出滞回；该坐标不写回后端。
 - 主场景已接入地图上下文动作：靠近服务端锚点、交互体、居民或事件后生成候选动作，`E`/`Space` 执行，`Tab`/`Q` 切换；侧栏“场景行动”保留为调试兜底。
@@ -171,7 +172,7 @@ Get-Content docs\daytime_integration_handoff.md
 
 2026-05-16，主人已运行真实 Godot 窗口并确认当前基础体验基本无问题。该结论覆盖：地点切换、背景切换、NPC 选择、`talk` 提交、星灯祭事件查看、choices 展示和事件结算展示。
 
-仍需人工未验收的内容：默认 `world_main.tscn` 真实窗口观感、NPC 自动走动/行动规律、HUD 暂停/倍速、后端未启动时的错误提示、后续玩家控制与 VN 交互，以及表情差分、UI 组件和真实 LLM profile 切换。
+仍需人工未验收的内容：默认 `world_main.tscn` 真实窗口观感、NPC 自动走动/行动规律、HUD 暂停/倍速、玩家移动与 `E` 键 talk、后端未启动时的错误提示、后续日程可视化，以及表情差分、UI 组件和真实 LLM profile 切换。
 
 ## 8. 下一轮建议
 

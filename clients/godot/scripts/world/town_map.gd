@@ -1,10 +1,14 @@
 class_name TownMap
 extends Node2D
 
+const ApiClientScript := preload("res://scripts/api_client.gd")
 const AssetRegistryScript := preload("res://scripts/asset_registry.gd")
+const PlayerControllerScript := preload("res://scripts/world/player_controller.gd")
+const VnPanelScript := preload("res://scripts/ui/vn_panel.gd")
 
 const STAGE_WIDTH := 640.0
 const STAGE_HEIGHT := 1080.0
+const PLAYER_INTERACT_RADIUS := 128.0
 const STAGE_ORDER := ["farm", "plaza", "tavern"]
 const STAGE_NAMES := {
 	"farm": "Farm 农场",
@@ -55,6 +59,7 @@ const NPC_COLORS := {
 @onready var npc_layer: Node2D = $NpcLayer
 @onready var debug_layer: Node2D = $DebugLayer
 
+var _api_client: ApiClient
 var _asset_registry: AssetRegistry
 var _stage_origins: Dictionary = {}
 var _anchor_positions: Dictionary = {}
@@ -62,6 +67,11 @@ var _anchor_graph: Dictionary = {}
 var _npc_nodes: Dictionary = {}
 var _route_lines: Dictionary = {}
 var _event_label: Label
+var _player_controller
+var _camera: Camera2D
+var _vn_panel
+var _nearest_npc_id := ""
+var _talk_in_flight := false
 
 
 func _ready() -> void:
@@ -69,6 +79,9 @@ func _ready() -> void:
 	stage_layer.z_index = 0
 	debug_layer.z_index = 5
 	npc_layer.z_index = 10
+	_api_client = ApiClientScript.new()
+	_api_client.name = "WorldInteractionApiClient"
+	add_child(_api_client)
 	_asset_registry = AssetRegistryScript.new()
 	_asset_registry.name = "WorldAssetRegistry"
 	add_child(_asset_registry)
@@ -76,8 +89,26 @@ func _ready() -> void:
 	_build_anchor_graph()
 	_build_event_label()
 	_spawn_demo_npcs()
+	_spawn_player()
+	_build_camera()
+	_build_vn_panel()
 	_connect_event_bus()
 	_connect_world_clock()
+	set_process(true)
+
+
+func _process(_delta: float) -> void:
+	_update_camera_target()
+	_update_nearest_npc_hint()
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey:
+		var key_event := event as InputEventKey
+		if key_event.pressed and not key_event.echo and key_event.keycode == KEY_E:
+			if _nearest_npc_id != "":
+				_submit_talk(_nearest_npc_id)
+				get_viewport().set_input_as_handled()
 
 
 func _build_stage_visuals() -> void:
@@ -193,7 +224,7 @@ func _build_event_label() -> void:
 	_event_label = Label.new()
 	_event_label.name = "WorldEventLabel"
 	_event_label.position = Vector2(18.0, STAGE_HEIGHT - 96.0)
-	_event_label.size = Vector2(860.0, 56.0)
+	_event_label.size = Vector2(900.0, 56.0)
 	_event_label.text = "Waiting for /api/world/tick ..."
 	_event_label.add_theme_font_size_override("font_size", 18)
 	_event_label.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 0.95))
@@ -208,6 +239,37 @@ func _spawn_demo_npcs() -> void:
 		var npc_id := str(npc_key)
 		var node := _ensure_npc_controller(npc_id)
 		node.set_anchor_position(str(DEMO_SPAWN_ANCHORS[npc_id]))
+
+
+func _spawn_player() -> void:
+	_player_controller = PlayerControllerScript.new()
+	_player_controller.name = "PlayerController"
+	npc_layer.add_child(_player_controller)
+	_player_controller.set_world_bounds(_player_world_bounds())
+	var spawn_point = _anchor_positions.get("plaza_gate", Vector2(STAGE_WIDTH + STAGE_WIDTH * 0.35, STAGE_HEIGHT * 0.76))
+	if spawn_point is Vector2:
+		_player_controller.set_spawn_position(spawn_point)
+	_player_controller.configure_appearance("Player", _asset_registry.get_map_sprite("player"))
+
+
+func _build_camera() -> void:
+	_camera = Camera2D.new()
+	_camera.name = "PlayerCamera"
+	_camera.position_smoothing_enabled = true
+	_camera.position_smoothing_speed = 8.0
+	_camera.limit_left = 0
+	_camera.limit_top = 0
+	_camera.limit_right = int(STAGE_WIDTH * float(STAGE_ORDER.size()))
+	_camera.limit_bottom = int(STAGE_HEIGHT)
+	add_child(_camera)
+	_update_camera_target()
+	_camera.make_current()
+
+
+func _build_vn_panel() -> void:
+	_vn_panel = VnPanelScript.new()
+	_vn_panel.name = "WorldVnPanel"
+	add_child(_vn_panel)
 
 
 func _connect_event_bus() -> void:
@@ -325,7 +387,110 @@ func _update_event_label(npc_id: String, event_type: String, event_payload: Dict
 	if event_type == "npc.action_started":
 		_event_label.text = "%s action: %s" % [npc_name, str(event_payload.get("actionId", "action"))]
 		return
+	if event_type == "player.talked":
+		_event_label.text = "Player talked with %s" % npc_name
+		return
 	_event_label.text = "%s / %s" % [npc_name, event_type]
+
+
+func _update_camera_target() -> void:
+	if _camera == null or _player_controller == null:
+		return
+	_camera.global_position = _player_controller.global_position
+
+
+func _update_nearest_npc_hint() -> void:
+	if _player_controller == null or _vn_panel == null:
+		return
+	var nearest_id := ""
+	var nearest_distance := INF
+	var player_point: Vector2 = _player_controller.interaction_origin()
+	for npc_key in _npc_nodes.keys():
+		var npc_id := str(npc_key)
+		var controller := _npc_nodes[npc_id] as NpcController
+		if controller == null:
+			continue
+		var distance: float = player_point.distance_to(controller.global_position)
+		if distance < nearest_distance:
+			nearest_distance = distance
+			nearest_id = npc_id
+	if nearest_id != "" and nearest_distance <= PLAYER_INTERACT_RADIUS:
+		_nearest_npc_id = nearest_id
+		_vn_panel.show_hint("E: talk to %s  (%.0f px)" % [str(NPC_DISPLAY_NAMES.get(nearest_id, nearest_id)), nearest_distance], true)
+		return
+	_nearest_npc_id = ""
+	_vn_panel.show_hint("WASD / Arrow move - get close to an NPC and press E to talk", false)
+
+
+func _submit_talk(npc_id: String) -> void:
+	if _talk_in_flight:
+		return
+	_talk_in_flight = true
+	var npc_name := str(NPC_DISPLAY_NAMES.get(npc_id, npc_id))
+	if _vn_panel != null:
+		_vn_panel.show_busy(npc_name)
+	var response := await _api_client.post_player_action({
+		"type": "talk",
+		"targetId": npc_id,
+		"locationId": _stage_id_for_position(_player_controller.global_position),
+		"topic": "world_map_greeting",
+		"message": "我在小镇里靠近你，想听听你现在正在忙什么。",
+	})
+	_talk_in_flight = false
+	if not bool(response.get("ok", false)):
+		if _vn_panel != null:
+			_vn_panel.show_error(str(response.get("error", "talk failed")))
+		return
+	var result = response.get("data", {})
+	if not (result is Dictionary):
+		if _vn_panel != null:
+			_vn_panel.show_error("Talk response is not a dictionary.")
+		return
+	var dialogue_text := _dialogue_text(result)
+	var status_text := _talk_status_text(result)
+	if _vn_panel != null:
+		_vn_panel.show_dialogue(npc_name, dialogue_text, status_text)
+	_update_event_label(npc_id, "player.talked", result)
+
+
+func _dialogue_text(result: Dictionary) -> String:
+	var dialogue = result.get("dialogue", [])
+	if dialogue is Array and not dialogue.is_empty():
+		var lines: Array[String] = []
+		for item in dialogue:
+			if item is Dictionary:
+				var speaker := str(item.get("speakerName", item.get("speakerId", "NPC")))
+				var text := str(item.get("text", ""))
+				if text != "":
+					lines.append("%s: %s" % [speaker, text])
+		if not lines.is_empty():
+			return "\n".join(lines)
+	var feedback = result.get("actionFeedback", {})
+	if feedback is Dictionary and str(feedback.get("summary", "")) != "":
+		return str(feedback.get("summary", ""))
+	return "The NPC nods to you."
+
+
+func _talk_status_text(result: Dictionary) -> String:
+	var relation_count := _array_size(result.get("relationshipDeltas", []))
+	var memory_count := _array_size(result.get("memoryWrites", []))
+	var event_count := _array_size(result.get("eventIds", []))
+	return "backend talk - relations=%d memories=%d events=%d" % [relation_count, memory_count, event_count]
+
+
+func _array_size(value) -> int:
+	if value is Array:
+		return value.size()
+	return 0
+
+
+func _stage_id_for_position(point: Vector2) -> String:
+	var index := int(clamp(floor(point.x / STAGE_WIDTH), 0.0, float(STAGE_ORDER.size() - 1)))
+	return str(STAGE_ORDER[index])
+
+
+func _player_world_bounds() -> Rect2:
+	return Rect2(Vector2(48.0, 132.0), Vector2(STAGE_WIDTH * float(STAGE_ORDER.size()) - 96.0, STAGE_HEIGHT - 252.0))
 
 
 func _get_event_bus() -> EventBus:
