@@ -1707,6 +1707,7 @@ class AgentRuntime:
         memory_payloads, memory_events = self._write_event_skill_memories(skill, choice, outcome)
         dialogue_payloads, dialogue_events = self._write_event_skill_dialogue(event, skill, choice, outcome)
         reflection_payloads, reflection_events = self._write_event_skill_reflections(event, skill, choice, outcome)
+        outcome_record = self._event_outcome_record(skill, outcome, choice=choice)
 
         event["status"] = "resolved"
         event["resolution"] = {
@@ -1714,12 +1715,19 @@ class AgentRuntime:
             "choice": choice,
             "summary": outcome["summary"],
             "resolvedTick": self.world["clock"]["tick"],
+            "outcomeRecord": outcome_record,
         }
         self.world.setdefault("completedEvents", []).append(dict(event))
         self.world["player"].setdefault("questFlags", {})[skill.event_id] = f"resolved_{choice}"
         resolved_event = self.event_store.append(
             "town.event_resolved",
-            {"eventId": event_id, "skillId": skill.skill_id, "choice": choice, "summary": outcome["summary"]},
+            {
+                "eventId": event_id,
+                "skillId": skill.skill_id,
+                "choice": choice,
+                "summary": outcome["summary"],
+                "outcomeRecord": outcome_record,
+            },
         )
 
         event_ids = (
@@ -1735,15 +1743,7 @@ class AgentRuntime:
             "dialogue": dialogue_payloads,
             "relationshipDeltas": relationship_payloads,
             "memoryWrites": [profile_payload] + memory_payloads + reflection_payloads,
-            "eventResult": {
-                "eventId": event_id,
-                "skillId": skill.skill_id,
-                "choice": choice,
-                "choiceLabel": outcome["choiceLabel"],
-                "summary": outcome["summary"],
-                "consequenceTypes": outcome["consequenceTypes"],
-                "debugFields": self._skill_debug_payload(skill, outcome, choice=choice),
-            },
+            "eventResult": outcome_record,
             "eventIds": event_ids,
             "playerProfile": self._player_profile_payload(),
         }
@@ -1979,6 +1979,35 @@ class AgentRuntime:
                 context=context,
                 extra_fields=outcome_def.debug_fields,
             ),
+        }
+
+    def _event_outcome_record(
+        self,
+        skill: EventSkillSchema,
+        outcome: dict[str, Any],
+        *,
+        choice: str,
+    ) -> dict[str, Any]:
+        """生成事件结算记录契约，供 API 返回、事件流和 completedEvents 复用。"""
+        memory_templates = outcome.get("memoryTemplates", [])
+        reflection_seeds = outcome.get("reflectionSeeds", [])
+        relation_deltas = outcome.get("relationDeltas", {})
+        return {
+            "recordVersion": skill.outcome_record_version,
+            "eventId": skill.event_id,
+            "skillId": skill.skill_id,
+            "choice": choice,
+            "choiceLabel": outcome.get("choiceLabel"),
+            "summary": outcome.get("summary"),
+            "consequenceTypes": list(outcome.get("consequenceTypes", [])),
+            "styleSignal": outcome.get("styleSignal", ""),
+            "styleLabel": outcome.get("styleLabel", ""),
+            "profileEvidence": outcome.get("profileEvidence", ""),
+            "fallbackMemory": outcome.get("fallbackMemory", ""),
+            "memoryTemplateCount": len(memory_templates) if isinstance(memory_templates, list) else 0,
+            "reflectionSeedCount": len(reflection_seeds) if isinstance(reflection_seeds, list) else 0,
+            "relationDeltaCount": len(relation_deltas) if isinstance(relation_deltas, dict) else 0,
+            "debugFields": self._skill_debug_payload(skill, outcome, choice=choice),
         }
 
     def _skill_fallback_dialogue_payloads(

@@ -24,15 +24,17 @@ const MAP_MARKER_SCALE := 0.43
 const MAP_EVENT_MARKER_SCALE := 0.68
 const PLAYER_LOCAL_MOVE_SPEED := 520.0
 const PLAYER_LOCAL_STOP_DISTANCE := 3.0
-const PLAYER_LOCAL_INTERACT_RADIUS := 124.0
-const MAP_CLUSTER_OFFSETS := [
-	Vector2(-72, -8),
-	Vector2(0, -44),
-	Vector2(72, -8),
-	Vector2(-72, 72),
-	Vector2(0, 46),
-	Vector2(72, 72),
-	Vector2(0, 118),
+const PLAYER_LOCAL_INTERACT_RADIUS := 86.0
+const MAP_PLAYER_SPAWN_RATIO := Vector2(0.50, 0.88)
+const MAP_NPC_SLOT_RATIOS := [
+	Vector2(0.24, 0.30),
+	Vector2(0.76, 0.30),
+	Vector2(0.24, 0.56),
+	Vector2(0.76, 0.56),
+	Vector2(0.50, 0.18),
+	Vector2(0.13, 0.43),
+	Vector2(0.87, 0.43),
+	Vector2(0.50, 0.58),
 ]
 
 var api_client: Node
@@ -579,7 +581,7 @@ func _tick_local_player_motion(delta: float) -> void:
 	if not player_local_initialized or map_character_layer == null:
 		return
 	var bounds := _map_bounds()
-	var input_axis := Input.get_vector("move_left", "move_right", "move_up", "move_down")
+	var input_axis := _read_local_move_axis()
 	var moved := false
 	if input_axis.length() > 0.0:
 		player_local_position = _clamp_point_to_walk_area(
@@ -604,6 +606,23 @@ func _tick_local_player_motion(delta: float) -> void:
 	_update_map_proximity_feedback()
 
 
+func _read_local_move_axis() -> Vector2:
+	# 直接读取物理键作为兜底，避免输入动作被某些 UI 焦点状态吞掉。
+	var input_axis := Input.get_vector("move_left", "move_right", "move_up", "move_down")
+	var direct_axis := Vector2.ZERO
+	if Input.is_physical_key_pressed(KEY_A):
+		direct_axis.x -= 1.0
+	if Input.is_physical_key_pressed(KEY_D):
+		direct_axis.x += 1.0
+	if Input.is_physical_key_pressed(KEY_W):
+		direct_axis.y -= 1.0
+	if Input.is_physical_key_pressed(KEY_S):
+		direct_axis.y += 1.0
+	if direct_axis.length() > 0.0:
+		input_axis = direct_axis
+	return input_axis.normalized() if input_axis.length() > 1.0 else input_axis
+
+
 func _apply_local_player_visual() -> void:
 	if map_character_layer == null:
 		return
@@ -616,7 +635,7 @@ func _apply_local_player_visual() -> void:
 
 
 func _resolve_player_anchor(player_location: String, bounds: Rect2) -> Vector2:
-	var location_anchor := _map_position_for_location(player_location, bounds)
+	var location_anchor := _player_spawn_for_location(player_location, bounds)
 	if not player_local_initialized or player_local_location_id != player_location:
 		player_local_initialized = true
 		player_local_location_id = player_location
@@ -627,6 +646,11 @@ func _resolve_player_anchor(player_location: String, bounds: Rect2) -> Vector2:
 		player_local_position = _clamp_point_to_walk_area(player_local_position, bounds)
 		player_local_target = _clamp_point_to_walk_area(player_local_target, bounds)
 	return player_local_position
+
+
+func _player_spawn_for_location(_location_id: String, bounds: Rect2) -> Vector2:
+	# 玩家固定出生在舞台下缘偏中位置，和 NPC 站位槽错开，避免切场景后直接压在居民头上。
+	return _scene_anchor_from_ratio(bounds, MAP_PLAYER_SPAWN_RATIO)
 
 
 func _clamp_point_to_walk_area(point: Vector2, bounds: Rect2) -> Vector2:
@@ -862,7 +886,7 @@ func _render_map_characters() -> void:
 	var player_anchor := _resolve_player_anchor(player_location, bounds)
 	var player_actor := _create_map_actor_node("player", str(player.get("name", "新来的农场主")), player_location, true, player_anchor)
 	map_character_layer.add_child(player_actor)
-	occupancy[player_location] = 1
+	occupancy[player_location] = 0
 	for npc in world_sync.get_npcs():
 		if not (npc is Dictionary):
 			continue
@@ -913,7 +937,7 @@ func _render_map_event_markers(bounds: Rect2) -> void:
 func _add_map_actor(owner_id: String, display_name: String, location_id: String, is_player: bool, occupancy: Dictionary, bounds: Rect2) -> void:
 	var index := int(occupancy.get(location_id, 0))
 	occupancy[location_id] = index + 1
-	var anchor := _map_position_for_location(location_id, bounds) + _cluster_offset(index)
+	var anchor := _scene_npc_anchor(index, bounds) if location_id == selected_location_id else _map_position_for_location(location_id, bounds)
 	var actor := _create_map_actor_node(owner_id, display_name, location_id, is_player, anchor)
 	map_character_layer.add_child(actor)
 
@@ -1012,16 +1036,33 @@ func _map_bounds() -> Rect2:
 
 
 func _map_position_for_location(location_id: String, bounds: Rect2) -> Vector2:
+	if location_id == selected_location_id:
+		return _scene_stage_center(bounds)
 	var location := _find_location(location_id)
 	var x_ratio := float(location.get("x", 50.0)) / 100.0 if not location.is_empty() else 0.5
 	var y_ratio := float(location.get("y", 55.0)) / 100.0 if not location.is_empty() else 0.55
 	return Vector2(bounds.position.x + bounds.size.x * x_ratio, bounds.position.y + bounds.size.y * y_ratio)
 
 
-func _cluster_offset(index: int) -> Vector2:
-	if index < MAP_CLUSTER_OFFSETS.size():
-		return MAP_CLUSTER_OFFSETS[index] * ui_scale
-	return Vector2((index % 4 - 1.5) * _scaled(58), _scaled(118) + int(index / 4) * _scaled(44))
+func _scene_stage_center(bounds: Rect2) -> Vector2:
+	# 当前只渲染当前场景，统一用舞台中心排阵，避免世界地图坐标把角色挤到边角。
+	return Vector2(bounds.position.x + bounds.size.x * 0.5, bounds.position.y + bounds.size.y * 0.42)
+
+
+func _scene_npc_anchor(index: int, bounds: Rect2) -> Vector2:
+	# NPC 使用按场景比例定义的固定站位槽，不再围绕玩家或单一中心点堆叠。
+	if index < MAP_NPC_SLOT_RATIOS.size():
+		return _scene_anchor_from_ratio(bounds, MAP_NPC_SLOT_RATIOS[index])
+	var column := index % 4
+	var row := int(index / 4)
+	var ratio := Vector2(0.20 + float(column) * 0.20, min(0.62, 0.24 + float(row) * 0.14))
+	return _scene_anchor_from_ratio(bounds, ratio)
+
+
+func _scene_anchor_from_ratio(bounds: Rect2, ratio: Vector2) -> Vector2:
+	# 用当前可移动区域的比例点生成锚点，适配不同窗口尺寸和 UI 缩放。
+	var anchor := Vector2(bounds.position.x + bounds.size.x * ratio.x, bounds.position.y + bounds.size.y * ratio.y)
+	return _clamp_point_to_walk_area(anchor, bounds)
 
 
 func _ensure_map_hint_label(bounds: Rect2) -> void:

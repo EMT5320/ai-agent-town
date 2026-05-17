@@ -87,12 +87,14 @@ def _check_gossip_hook_readiness(cards: dict) -> None:
     """确保每位 NPC 的 gossipHooks 可作为首版谣言传播素材直接消费。"""
     seed_ids = {agent["id"] for agent in AGENTS}
     valid_visibility = {"hidden", "town_known"}
+    summary_max_len = 64
     for npc_id, card in cards.items():
         hooks = list(getattr(card, "gossip_hooks", ()))
         if not hooks:
             raise SystemExit(f"[npc-codex-check] {npc_id} 缺少 gossipHooks，谣言传播无素材可用")
 
         seen_hook_ids: set[str] = set()
+        seen_summaries: set[str] = set()
         has_town_known = False
         has_multi_target_hook = False
         for hook in hooks:
@@ -106,9 +108,16 @@ def _check_gossip_hook_readiness(cards: dict) -> None:
             if hook_id in seen_hook_ids:
                 raise SystemExit(f"[npc-codex-check] {npc_id} gossipHooks.id 重复：{hook_id}")
             seen_hook_ids.add(hook_id)
+            if not hook_id.startswith(f"gossip_{npc_id}_"):
+                raise SystemExit(f"[npc-codex-check] {npc_id}.{hook_id} 必须使用 gossip_{npc_id}_ 前缀，便于后端稳定路由")
 
             if not summary:
                 raise SystemExit(f"[npc-codex-check] {npc_id}.{hook_id} gossipHooks.summary 不能为空")
+            if len(summary) > summary_max_len:
+                raise SystemExit(f"[npc-codex-check] {npc_id}.{hook_id} gossipHooks.summary 过长，需 <= {summary_max_len} 字")
+            if summary in seen_summaries:
+                raise SystemExit(f"[npc-codex-check] {npc_id}.{hook_id} gossipHooks.summary 重复，debug summary 难以区分")
+            seen_summaries.add(summary)
             if visibility not in valid_visibility:
                 raise SystemExit(f"[npc-codex-check] {npc_id}.{hook_id} gossipHooks.visibility 非法：{visibility}")
             if visibility == "town_known":
@@ -125,6 +134,8 @@ def _check_gossip_hook_readiness(cards: dict) -> None:
                 )
             if npc_id in spread_affinity:
                 raise SystemExit(f"[npc-codex-check] {npc_id}.{hook_id} gossipHooks.spreadAffinity 不应包含自己")
+            if len(spread_affinity) > 3:
+                raise SystemExit(f"[npc-codex-check] {npc_id}.{hook_id} gossipHooks.spreadAffinity 需 <=3，保持传播候选可消费")
 
         if not has_town_known:
             raise SystemExit(f"[npc-codex-check] {npc_id} gossipHooks 至少需要 1 条 town_known 话题")

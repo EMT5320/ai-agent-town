@@ -16,7 +16,10 @@ sys.path.insert(0, str(PROJECT_ROOT / "backend"))
 from app.director import DirectorBeat, WorldDigest  # noqa: E402
 from app.config.model_config import ModelConfigStore  # noqa: E402
 from app.main import create_handler, create_town_app  # noqa: E402
-from app.providers.context_builder import build_player_dialogue_context  # noqa: E402
+from app.providers.context_builder import (  # noqa: E402
+    build_player_dialogue_context,
+    validate_gossip_propagation_payload,
+)
 from app.skills import STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID  # noqa: E402
 
 REQUIRED_DEBUG_FIELDS = {
@@ -169,10 +172,12 @@ def assert_gossip_propagation_contract(app) -> None:
         raise RuntimeError("gossipEvidence 应为对象")
     if not isinstance(gossip.get("selectionMeta"), dict):
         raise RuntimeError("gossipEvidence.selectionMeta 应为对象")
+    if not isinstance(gossip.get("candidateDebugSummary"), list):
+        raise RuntimeError("gossipEvidence.candidateDebugSummary 应为数组")
     contract = gossip.get("propagationRecordContract")
     if not isinstance(contract, dict):
         raise RuntimeError("gossipEvidence.propagationRecordContract 应为对象")
-    for field in ("recordVersion", "requiredFields", "directionEnum"):
+    for field in ("recordVersion", "requiredFields", "directionEnum", "forbiddenWorldStateFields", "validator"):
         if field not in contract:
             raise RuntimeError(f"gossipEvidence.propagationRecordContract 缺少字段：{field}")
     items = gossip.get("items")
@@ -189,6 +194,30 @@ def assert_gossip_propagation_contract(app) -> None:
             raise RuntimeError(f"gossipEvidence.items[].propagationDraft 缺少字段：{field}")
     if not isinstance(draft.get("targetNpcIds"), list):
         raise RuntimeError("gossipEvidence.items[].propagationDraft.targetNpcIds 应为数组")
+    if draft["targetNpcIds"]:
+        accepted = validate_gossip_propagation_payload(
+            {
+                "hookId": first["id"],
+                "targetNpcIds": [draft["targetNpcIds"][0]],
+                "direction": draft["direction"],
+                "reason": "smoke 测试采样",
+            },
+            gossip,
+        )
+        if not accepted.get("accepted"):
+            raise RuntimeError(f"gossip_propagation 合法样例被拒绝：{accepted.get('violations')}")
+    rejected = validate_gossip_propagation_payload(
+        {
+            "hookId": "unknown_hook",
+            "targetNpcIds": ["unknown_npc"],
+            "direction": "amplify",
+            "reason": "smoke 测试非法样例",
+            "worldStatePatch": {"townStats": {"stability": 999}},
+        },
+        gossip,
+    )
+    if rejected.get("accepted"):
+        raise RuntimeError("gossip_propagation 非法样例不应通过校验")
 
 
 def assert_client_context_fields(payload: dict, label: str) -> None:
@@ -712,6 +741,12 @@ if event_result["result"]["eventResult"].get("skillId") != STARLIGHT_FESTIVAL_SH
     raise RuntimeError("星灯祭事件结算应返回 Skill ID")
 if not event_result["result"]["eventResult"].get("debugFields"):
     raise RuntimeError("星灯祭事件结算应返回 Skill Debug 字段")
+if event_result["result"]["eventResult"].get("recordVersion") != "event_skill_outcome.v1":
+    raise RuntimeError("星灯祭事件结算应返回通用 outcome recordVersion")
+if event_result["result"]["eventResult"].get("memoryTemplateCount", 0) <= 0:
+    raise RuntimeError("星灯祭事件结算应返回 memoryTemplateCount")
+if event_result["result"]["eventResult"].get("reflectionSeedCount", 0) <= 0:
+    raise RuntimeError("星灯祭事件结算应返回 reflectionSeedCount")
 event_result_debug_fields = {
     str(item.get("id")): str(item.get("value"))
     for item in event_result["result"]["eventResult"].get("debugFields", [])
@@ -730,6 +765,26 @@ if not event_result["state"]["nightReflections"]:
     raise RuntimeError("星灯祭事件后应生成夜间反思摘要")
 if not any(event["type"] == "town.event_resolved" for event in event_result["state"]["recentEvents"]):
     raise RuntimeError("星灯祭事件后应写入事件结算记录")
+resolved_event = next(
+    (event for event in event_result["state"]["recentEvents"] if event["type"] == "town.event_resolved"),
+    None,
+)
+if not resolved_event:
+    raise RuntimeError("星灯祭事件后应返回 town.event_resolved 事件")
+resolved_outcome_record = resolved_event.get("payload", {}).get("outcomeRecord", {})
+if resolved_outcome_record.get("recordVersion") != "event_skill_outcome.v1":
+    raise RuntimeError("town.event_resolved 应附带通用 outcomeRecord")
+if resolved_outcome_record.get("choice") != "donate_crop":
+    raise RuntimeError("town.event_resolved.outcomeRecord 应记录本次选项")
+completed_starlight = next(
+    (event for event in event_result["state"].get("completedEvents", []) if event.get("id") == "starlight_festival_shortage"),
+    None,
+)
+if not completed_starlight:
+    raise RuntimeError("事件结算后 completedEvents 应包含星灯祭事件")
+completed_outcome_record = completed_starlight.get("resolution", {}).get("outcomeRecord", {})
+if completed_outcome_record.get("recordVersion") != "event_skill_outcome.v1":
+    raise RuntimeError("completedEvents.resolution 应附带通用 outcomeRecord")
 event_reaction_debug = assert_feature_debug(app.get_public_state(), "event_reaction")
 night_reflection_debug = assert_feature_debug(app.get_public_state(), "night_reflection")
 if event_reaction_debug.get("skillId") != STARLIGHT_FESTIVAL_SHORTAGE_SKILL_ID or not event_reaction_debug.get("skillDebugFields"):

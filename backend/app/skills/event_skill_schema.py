@@ -134,3 +134,4 @@ class EventSkillSchema:
     fallback_dialogue_templates: tuple[EventDialogueFallback, ...] = ()
     choice_outcomes: tuple[EventChoiceOutcome, ...] = ()
     debug_fields: tuple[EventSkillDebugField, ...] = ()
+    outcome_record_version: str = "event_skill_outcome.v1"

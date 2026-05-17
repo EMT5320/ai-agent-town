@@ -19,6 +19,17 @@ _PHASE_TO_MONOLOGUE_TAGS: dict[str, tuple[str, ...]] = {
 _GOSSIP_VISIBILITY_SCORES: dict[str, int] = {"town_known": 3, "hidden": 1}
 _GOSSIP_PROPAGATION_TRUST_GATE = 55
 _GOSSIP_PROPAGATION_MAX_TARGETS = 3
+_GOSSIP_PROPAGATION_REASON_MAX_LEN = 120
+_GOSSIP_MAX_DEBUG_CANDIDATES = 6
+_GOSSIP_SELECTION_RULE_ID = "score_v2"
+_GOSSIP_FORBIDDEN_STATE_FIELDS: tuple[str, ...] = (
+    "worldStatePatch",
+    "townStatsDelta",
+    "relationshipDelta",
+    "questFlagsDelta",
+    "clockDelta",
+    "memoryWrites",
+)
 
 
 def build_agent_context(world: dict[str, Any], agent: dict[str, Any], event_store: Any) -> dict[str, Any]:
@@ -185,6 +196,116 @@ def _build_gossip_propagation_draft(
     }
 
 
+def _build_gossip_candidate_debug_summary(
+    scored: list[tuple[int, dict[str, Any]]],
+    *,
+    picked_ids: set[str],
+) -> list[dict[str, Any]]:
+    """把候选谣言压成轻量调试摘要，便于前后端直接消费。"""
+    summary: list[dict[str, Any]] = []
+    for score, item in scored[:_GOSSIP_MAX_DEBUG_CANDIDATES]:
+        hook_id = str(item.get("id") or "")
+        propagation = item.get("propagationDraft") if isinstance(item.get("propagationDraft"), dict) else {}
+        targets = propagation.get("targetNpcIds") if isinstance(propagation.get("targetNpcIds"), list) else []
+        reasons = item.get("selectionReasons") if isinstance(item.get("selectionReasons"), list) else []
+        summary.append(
+            {
+                "id": hook_id,
+                "picked": hook_id in picked_ids,
+                "score": int(score),
+                "visibility": str(item.get("visibility") or ""),
+                "direction": str(propagation.get("direction") or ""),
+                "targetCount": len(targets),
+                "reasonHead": str(reasons[0]) if reasons else "",
+            }
+        )
+    return summary
+
+
+def validate_gossip_propagation_payload(
+    payload: Any,
+    gossip_evidence: dict[str, Any],
+) -> dict[str, Any]:
+    """校验 gossip_propagation 回包，保证后端权威约束不被覆盖。"""
+    violations: list[str] = []
+    normalized: dict[str, Any] = {}
+    if not isinstance(payload, dict):
+        return {"accepted": False, "violations": ["payload_not_object"], "normalized": normalized}
+
+    item_map: dict[str, dict[str, Any]] = {}
+    items = gossip_evidence.get("items")
+    if isinstance(items, list):
+        for item in items:
+            if isinstance(item, dict):
+                hook_id = str(item.get("id") or "").strip()
+                if hook_id:
+                    item_map[hook_id] = item
+
+    hook_id = str(payload.get("hookId") or "").strip()
+    if not hook_id:
+        violations.append("hookId_missing")
+    elif hook_id not in item_map:
+        violations.append("hookId_not_in_gossip_evidence")
+    normalized["hookId"] = hook_id
+
+    contract = gossip_evidence.get("propagationRecordContract")
+    allowed_directions = ["seed", "amplify", "contain"]
+    if isinstance(contract, dict):
+        direction_enum = contract.get("directionEnum")
+        if isinstance(direction_enum, list) and direction_enum:
+            allowed_directions = [str(item).strip() for item in direction_enum if str(item).strip()]
+
+    direction = str(payload.get("direction") or "").strip()
+    if not direction:
+        violations.append("direction_missing")
+    elif direction not in allowed_directions:
+        violations.append("direction_not_allowed")
+    normalized["direction"] = direction
+
+    reason = str(payload.get("reason") or "").strip()
+    if not reason:
+        violations.append("reason_missing")
+    elif len(reason) > _GOSSIP_PROPAGATION_REASON_MAX_LEN:
+        violations.append("reason_too_long")
+    normalized["reason"] = reason
+
+    raw_targets = payload.get("targetNpcIds")
+    targets: list[str] = []
+    if not isinstance(raw_targets, list):
+        violations.append("targetNpcIds_not_array")
+    else:
+        seen_targets: set[str] = set()
+        for target in raw_targets:
+            target_id = str(target).strip()
+            if not target_id or target_id in seen_targets:
+                continue
+            seen_targets.add(target_id)
+            targets.append(target_id)
+    if not targets:
+        violations.append("targetNpcIds_empty")
+    normalized["targetNpcIds"] = targets
+
+    if hook_id in item_map:
+        hook = item_map[hook_id]
+        draft = hook.get("propagationDraft") if isinstance(hook.get("propagationDraft"), dict) else {}
+        allowed_targets = draft.get("targetNpcIds")
+        if isinstance(allowed_targets, list):
+            allowed_set = {str(item).strip() for item in allowed_targets if str(item).strip()}
+            invalid_targets = [item for item in targets if item not in allowed_set]
+            if invalid_targets:
+                violations.append(f"targetNpcIds_out_of_allowed_scope:{','.join(invalid_targets)}")
+
+    forbidden_hits = [field for field in _GOSSIP_FORBIDDEN_STATE_FIELDS if field in payload]
+    if forbidden_hits:
+        violations.append(f"forbidden_state_fields:{','.join(forbidden_hits)}")
+
+    return {
+        "accepted": not violations,
+        "violations": violations,
+        "normalized": normalized,
+    }
+
+
 def _select_gossip_evidence(
     world: dict[str, Any],
     npc: dict[str, Any],
@@ -270,9 +391,12 @@ def _select_gossip_evidence(
         "recordVersion": "gossip-spread-v0",
         "requiredFields": ["hookId", "targetNpcIds", "direction", "reason"],
         "directionEnum": ["seed", "amplify", "contain"],
+        "forbiddenWorldStateFields": list(_GOSSIP_FORBIDDEN_STATE_FIELDS),
+        "validator": "validate_gossip_propagation_payload",
         "notes": [
             "hookId 只能使用 gossipEvidence.items 中提供的 id",
             "targetNpcIds 只能从对应条目的 propagationDraft.targetNpcIds 中选择",
+            "gossip_propagation 只用于传播记录，不允许携带世界状态修改字段",
         ],
     }
     selection_meta = {
@@ -280,6 +404,8 @@ def _select_gossip_evidence(
         "knownNpcCount": len(known_npcs),
         "keywordCount": len(keywords),
         "contractVersion": contract["recordVersion"],
+        "selectionRule": _GOSSIP_SELECTION_RULE_ID,
+        "candidateCount": len(scored),
     }
 
     if not scored:
@@ -288,18 +414,28 @@ def _select_gossip_evidence(
             "keywords": sorted(keywords),
             "selectionMeta": selection_meta,
             "propagationRecordContract": contract,
+            "candidateDebugSummary": [],
             "items": [],
         }
 
-    scored.sort(key=lambda item: (item[0], item[1].get("id", "")), reverse=True)
+    scored.sort(
+        key=lambda item: (
+            -int(item[0]),
+            -_GOSSIP_VISIBILITY_SCORES.get(str(item[1].get("visibility") or ""), 0),
+            str(item[1].get("id") or ""),
+        )
+    )
     picked = [item for score, item in scored if score > 0][:limit]
     if not picked:
         picked = [item for _, item in scored[:limit]]
+    picked_ids = {str(item.get("id") or "") for item in picked}
+    selection_meta["pickedCount"] = len(picked)
     return {
         "query": query,
         "keywords": sorted(keywords),
         "selectionMeta": selection_meta,
         "propagationRecordContract": contract,
+        "candidateDebugSummary": _build_gossip_candidate_debug_summary(scored, picked_ids=picked_ids),
         "items": picked,
     }
 
