@@ -208,8 +208,7 @@
         "observation"
       ],
       "locationHints": [
-        "home",
-        "work_spot"
+        "market_stall"
       ],
       "relatedNpcIds": [
         "bram"
@@ -225,8 +224,8 @@
         "day1"
       ],
       "locationHints": [
-        "town_center",
-        "work_spot"
+        "market_stall",
+        "plaza_fountain"
       ],
       "relatedNpcIds": [
         "kai"
@@ -242,8 +241,7 @@
         "day1"
       ],
       "locationHints": [
-        "work_spot",
-        "tavern"
+        "market_stall"
       ],
       "relatedNpcIds": [
         "lena"

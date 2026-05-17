@@ -55,6 +55,10 @@ npc_codex_check = subprocess.run([sys.executable, "scripts/check_npc_codex.py"],
 if npc_codex_check.returncode != 0:
     raise SystemExit(npc_codex_check.returncode)
 
+life_action_target_check = subprocess.run([sys.executable, "scripts/check_life_action_targets.py"], cwd=ROOT)
+if life_action_target_check.returncode != 0:
+    raise SystemExit(life_action_target_check.returncode)
+
 godot_check = subprocess.run([sys.executable, "scripts/check_godot_project.py"], cwd=ROOT)
 if godot_check.returncode != 0:
     raise SystemExit(godot_check.returncode)

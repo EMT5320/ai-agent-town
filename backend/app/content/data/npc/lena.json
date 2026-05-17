@@ -196,8 +196,7 @@
         "observation"
       ],
       "locationHints": [
-        "home",
-        "work_spot"
+        "market_stall"
       ],
       "relatedNpcIds": [
         "bram"
@@ -213,8 +212,8 @@
         "day1"
       ],
       "locationHints": [
-        "town_center",
-        "work_spot"
+        "plaza_fountain",
+        "plaza_gate"
       ],
       "relatedNpcIds": [
         "kai"
@@ -230,8 +229,7 @@
         "day1"
       ],
       "locationHints": [
-        "work_spot",
-        "tavern"
+        "tavern_door"
       ],
       "relatedNpcIds": [
         "mira"

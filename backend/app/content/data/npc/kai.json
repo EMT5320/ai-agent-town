@@ -208,8 +208,7 @@
         "observation"
       ],
       "locationHints": [
-        "home",
-        "work_spot"
+        "tavern_stage"
       ],
       "relatedNpcIds": [
         "bram"
@@ -225,8 +224,8 @@
         "day1"
       ],
       "locationHints": [
-        "town_center",
-        "work_spot"
+        "tavern_door",
+        "market_stall"
       ],
       "relatedNpcIds": [
         "lena"
@@ -242,8 +241,7 @@
         "day1"
       ],
       "locationHints": [
-        "work_spot",
-        "tavern"
+        "tavern_stage"
       ],
       "relatedNpcIds": [
         "mira"

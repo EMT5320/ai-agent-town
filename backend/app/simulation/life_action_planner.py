@@ -253,7 +253,11 @@ def _anchor_ids_for_hint(hint: str, anchor_by_id: dict[str, dict[str, Any]]) -> 
     for anchor_id, anchor in anchor_by_id.items():
         location_id = str(anchor.get("locationId") or "")
         tags = {str(tag).lower() for tag in anchor.get("tags", []) if str(tag).strip()}
-        if normalized == "home" and ("home" in tags or "rest" in tags):
+        if normalized == str(anchor_id).lower():
+            result.append(anchor_id)
+        elif normalized == location_id.lower():
+            result.append(anchor_id)
+        elif normalized == "home" and ("home" in tags or "rest" in tags):
             result.append(anchor_id)
         elif normalized == "work_spot" and (
             "market" in tags or "farm" in tags or "event" in tags or "service" in str(anchor.get("kind") or "")

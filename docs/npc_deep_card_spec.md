@@ -267,6 +267,7 @@ backend/app/content/
 - `lifeActionSeeds` 用于 Day 1 日常行动素材预留，给后续低层玩法做可消费输入。
 - `timeWindow` 取值：`morning / afternoon / evening / night`。
 - 每位 NPC 至少 3 条，并覆盖 `morning / afternoon / evening`。
+- `locationHints` 可填写抽象标签（如 `home`、`work_spot`、`town_center`、`tavern`），也可填写具体 anchor id（如 `market_stall`、`plaza_gate`）；阶段 1 客户端优先使用具体 anchor id，避免多个 NPC 因泛化标签同时涌向同一点。
 - 仅描述“行为倾向与动机”，不写固定剧情节点，不直接改世界状态。
 
 ### 5.12 `dailyRumorBeats`

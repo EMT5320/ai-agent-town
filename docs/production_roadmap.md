@@ -89,6 +89,7 @@ WorldClock(前端) ──tick──►│
 | NPC 决策来源 | **完全规则驱动，不上 LLM** | LLM 调用频率/成本不允许在阶段 1 上 NPC 自主；LLM 仅在玩家对话/事件选择时触发 |
 | 寻路实现 | **anchor graph + 直线插值首选，Godot Navigation2D 后置增强** | 2 周目标优先证明 NPC 迁徙体感，减少 nav polygon 配置风险 |
 | 地图布局 | **三场景横向拼图大画布 + 相机自由跟随玩家** | 取代"按钮切场景"，是体感最关键改造 |
+| Day 1 日程目标 | **lifeActionSeeds 优先绑定可见 anchor id** | 避免泛化 `home/work_spot` 在首个 tick 被解析成同一目标，保证 6 名 NPC 呈现分散的生活动线 |
 
 ### 3.3 后端改造（最小集）
 

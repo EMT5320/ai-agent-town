@@ -22,6 +22,7 @@ var move_target: Vector2 = Vector2.ZERO
 
 var _display_name: String = ""
 var _accent_color: Color = Color(1.0, 1.0, 1.0, 1.0)
+var _crowd_offset: Vector2 = Vector2.ZERO
 var _pending_texture: Texture2D
 var _visual_root: Node2D
 var _sprite: Sprite2D
@@ -99,6 +100,11 @@ func configure_appearance(display_name: String, texture: Texture2D, accent_color
 	_apply_pending_texture()
 
 
+func set_crowd_offset(offset: Vector2) -> void:
+	# 同一锚点允许多个 NPC 站位，表现层加小偏移避免名字和 sprite 完全重叠。
+	_crowd_offset = offset
+
+
 func apply_tick_event(event_payload: Dictionary) -> void:
 	var event_type := str(event_payload.get("type", ""))
 	if event_type == "npc.move_started":
@@ -118,7 +124,7 @@ func apply_tick_event(event_payload: Dictionary) -> void:
 
 
 func set_anchor_position(anchor_id: String) -> void:
-	var point = anchor_positions.get(anchor_id, null)
+	var point = _anchor_point_with_offset(anchor_id)
 	if point is Vector2:
 		current_anchor_id = anchor_id
 		target_anchor_id = anchor_id
@@ -151,8 +157,8 @@ func _handle_move_progress(event_payload: Dictionary) -> void:
 
 	var from_anchor := str(event_payload.get("fromAnchorId", current_anchor_id))
 	var to_anchor := str(event_payload.get("toAnchorId", target_anchor_id))
-	var from_point = anchor_positions.get(from_anchor, null)
-	var to_point = anchor_positions.get(to_anchor, null)
+	var from_point = _anchor_point_with_offset(from_anchor)
+	var to_point = _anchor_point_with_offset(to_anchor)
 	if from_point is Vector2 and to_point is Vector2:
 		var from_vec: Vector2 = from_point
 		var to_vec: Vector2 = to_point
@@ -168,7 +174,7 @@ func _handle_arrived(event_payload: Dictionary) -> void:
 
 
 func _target_anchor_move(anchor_id: String) -> void:
-	var target = anchor_positions.get(anchor_id, null)
+	var target = _anchor_point_with_offset(anchor_id)
 	if not (target is Vector2):
 		return
 	var next_target := target as Vector2
@@ -177,6 +183,13 @@ func _target_anchor_move(anchor_id: String) -> void:
 	target_anchor_id = anchor_id
 	move_target = next_target
 	_enter_state(NpcState.WALKING, "Moving")
+
+
+func _anchor_point_with_offset(anchor_id: String):
+	var point = anchor_positions.get(anchor_id, null)
+	if point is Vector2:
+		return (point as Vector2) + _crowd_offset
+	return null
 
 
 func _move_label(event_payload: Dictionary) -> String:

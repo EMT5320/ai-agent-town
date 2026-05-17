@@ -9,6 +9,7 @@ const VnPanelScript := preload("res://scripts/ui/vn_panel.gd")
 const STAGE_WIDTH := 640.0
 const STAGE_HEIGHT := 1080.0
 const PLAYER_INTERACT_RADIUS := 128.0
+const ROUTE_LINE_VISIBLE_MSEC := 2200
 const STAGE_ORDER := ["farm", "plaza", "tavern"]
 const STAGE_NAMES := {
 	"farm": "Farm 农场",
@@ -31,12 +32,20 @@ const STAGE_ANCHORS := {
 	},
 }
 const DEMO_SPAWN_ANCHORS := {
-	"mira": "tavern_door",
+	"mira": "market_stall",
 	"tomas": "plaza_fountain",
 	"orren": "plaza_fountain",
 	"lena": "plaza_fountain",
 	"kai": "tavern_stage",
 	"bram": "farm_field",
+}
+const NPC_CROWD_OFFSETS := {
+	"mira": Vector2(-22.0, 12.0),
+	"tomas": Vector2(-36.0, 10.0),
+	"orren": Vector2(0.0, -8.0),
+	"lena": Vector2(34.0, 12.0),
+	"kai": Vector2(-18.0, 8.0),
+	"bram": Vector2(20.0, 10.0),
 }
 const NPC_DISPLAY_NAMES := {
 	"mira": "Mira 米娅",
@@ -66,6 +75,7 @@ var _anchor_positions: Dictionary = {}
 var _anchor_graph: Dictionary = {}
 var _npc_nodes: Dictionary = {}
 var _route_lines: Dictionary = {}
+var _route_line_expire_msec: Dictionary = {}
 var _event_label: Label
 var _player_controller
 var _camera: Camera2D
@@ -100,6 +110,7 @@ func _ready() -> void:
 func _process(_delta: float) -> void:
 	_update_camera_target()
 	_update_nearest_npc_hint()
+	_expire_route_lines()
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -332,6 +343,8 @@ func _ensure_npc_controller(npc_id: String) -> NpcController:
 		_asset_registry.get_map_sprite(npc_id),
 		NPC_COLORS.get(npc_id, Color(1.0, 1.0, 1.0, 1.0))
 	)
+	var crowd_offset: Vector2 = NPC_CROWD_OFFSETS.get(npc_id, Vector2.ZERO)
+	controller.set_crowd_offset(crowd_offset)
 	npc_layer.add_child(controller)
 	_npc_nodes[npc_id] = controller
 	return controller
@@ -340,9 +353,8 @@ func _ensure_npc_controller(npc_id: String) -> NpcController:
 func _update_route_line(npc_id: String, event_type: String, event_payload: Dictionary) -> void:
 	var line := _ensure_route_line(npc_id)
 	if event_type == "npc.arrived":
-		var arrived_color: Color = NPC_COLORS.get(npc_id, Color(0.8, 0.9, 1.0, 1.0))
-		arrived_color.a = 0.35
-		line.default_color = arrived_color
+		line.visible = false
+		_route_line_expire_msec.erase(npc_id)
 		return
 
 	var from_anchor := str(event_payload.get("fromAnchorId", ""))
@@ -351,8 +363,9 @@ func _update_route_line(npc_id: String, event_type: String, event_payload: Dicti
 	var to_point = _anchor_positions.get(to_anchor, null)
 	if from_point is Vector2 and to_point is Vector2:
 		line.visible = true
-		line.default_color = NPC_COLORS.get(npc_id, Color(0.8, 0.9, 1.0, 0.9))
+		line.default_color = _route_debug_color(npc_id)
 		line.points = PackedVector2Array([from_point, to_point])
+		_route_line_expire_msec[npc_id] = Time.get_ticks_msec() + ROUTE_LINE_VISIBLE_MSEC
 
 
 func _ensure_route_line(npc_id: String) -> Line2D:
@@ -361,15 +374,36 @@ func _ensure_route_line(npc_id: String) -> Line2D:
 
 	var line := Line2D.new()
 	line.name = "Route_%s" % npc_id
-	line.width = 5.0
-	line.default_color = NPC_COLORS.get(npc_id, Color(0.8, 0.9, 1.0, 0.9))
+	line.width = 2.0
+	line.default_color = _route_debug_color(npc_id)
 	line.joint_mode = Line2D.LINE_JOINT_ROUND
 	line.begin_cap_mode = Line2D.LINE_CAP_ROUND
 	line.end_cap_mode = Line2D.LINE_CAP_ROUND
-	line.z_index = 5
+	line.z_index = 1
+	line.visible = false
 	debug_layer.add_child(line)
 	_route_lines[npc_id] = line
 	return line
+
+
+func _route_debug_color(npc_id: String) -> Color:
+	# 路线只做开发期运动说明，降低透明度，避免压过角色和背景。
+	var route_color: Color = NPC_COLORS.get(npc_id, Color(0.8, 0.9, 1.0, 1.0))
+	route_color.a = 0.42
+	return route_color
+
+
+func _expire_route_lines() -> void:
+	var now := Time.get_ticks_msec()
+	for npc_key in _route_line_expire_msec.keys():
+		var npc_id := str(npc_key)
+		var expires_at := int(_route_line_expire_msec[npc_id])
+		if now < expires_at:
+			continue
+		var line = _route_lines.get(npc_id, null)
+		if line is Line2D:
+			line.visible = false
+		_route_line_expire_msec.erase(npc_id)
 
 
 func _update_event_label(npc_id: String, event_type: String, event_payload: Dictionary) -> void:

@@ -204,8 +204,7 @@
         "observation"
       ],
       "locationHints": [
-        "home",
-        "work_spot"
+        "farm_field"
       ],
       "relatedNpcIds": [
         "kai"
@@ -221,8 +220,7 @@
         "day1"
       ],
       "locationHints": [
-        "town_center",
-        "work_spot"
+        "farm_field"
       ],
       "relatedNpcIds": [
         "lena"
@@ -238,8 +236,8 @@
         "day1"
       ],
       "locationHints": [
-        "work_spot",
-        "tavern"
+        "tavern_door",
+        "farm_field"
       ],
       "relatedNpcIds": [
         "mira"

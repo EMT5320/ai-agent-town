@@ -197,8 +197,7 @@
         "observation"
       ],
       "locationHints": [
-        "home",
-        "work_spot"
+        "plaza_fountain"
       ],
       "relatedNpcIds": [
         "bram"
@@ -214,8 +213,8 @@
         "day1"
       ],
       "locationHints": [
-        "town_center",
-        "work_spot"
+        "plaza_gate",
+        "plaza_fountain"
       ],
       "relatedNpcIds": [
         "kai"
@@ -231,8 +230,7 @@
         "day1"
       ],
       "locationHints": [
-        "work_spot",
-        "tavern"
+        "plaza_fountain"
       ],
       "relatedNpcIds": [
         "lena"
