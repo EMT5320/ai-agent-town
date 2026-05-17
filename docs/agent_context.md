@@ -82,7 +82,8 @@ scope: new-session entrypoint, boundaries, commands, and next steps
 - 地图上下文动作面板已接入：靠近锚点 / 交互体 / 居民 / 事件后生成候选动作，`E`/`Space` 执行，`Tab`/`Q` 切换；左侧“场景行动”降级为调试兜底，VN 面板继续展示后端 `actionFeedback`。
 - `world_main.tscn` 已新增玩家本地控制闭环：`PlayerController` 显示玩家 `map_idle` 小人，WASD / 方向键移动，`Camera2D` 跟随，靠近 NPC 后按 `E` 会通过 `/api/player/action` 提交 `talk`，并由 `WorldVnPanel` 弹出后端返回对话。
 - 2026-05-17 主人已确认玩家移动手感没有问题；同轮已修正 NPC 全员同点迁徙、路径线过强和同锚点标签堆叠，当前目标分布由 `scripts/check_life_action_targets.py` 覆盖 morning / afternoon / evening 防回归。
-- `check_godot_project.py`、Godot headless import、`npm.cmd run client:env` 和 `npm.cmd run client:run:check` 已通过；2026-05-17 `world_main.tscn` 已加载现有地点背景、`map_idle` 小人、NPC 名称/状态、弱化路径线和底部 tick 状态提示。2026-05-16 主人已完成上一版真实窗口人工验收；本轮 NPC 分散行动、`E` talk 与 HUD 暂停/倍速仍需主人窗口复验。
+- 2026-05-17 新增右上角 `WorldPulsePanel`：启动读取 `/api/world/state` 的 active event 与 `npcSchedules`，tick 时用 `agents` diff 和 NPC 事件更新移动 / 行动状态，作为阶段 1 日程可视化最小入口。
+- `check_godot_project.py`、Godot headless import、`npm.cmd run client:env` 和 `npm.cmd run client:run:check` 已通过；2026-05-17 `world_main.tscn` 已加载现有地点背景、`map_idle` 小人、NPC 名称/状态、弱化路径线、右上角世界动态面板和底部 tick 状态提示。2026-05-16 主人已完成上一版真实窗口人工验收；本轮 NPC 分散行动、`WorldPulsePanel`、`E` talk 与 HUD 暂停/倍速仍需主人窗口复验。
 
 ### 资产与文档治理
 
@@ -141,6 +142,6 @@ git diff --check
 2. 生产化计划入口：读取 `docs/production_roadmap.md`，确认阶段 1 "活着的世界"关键决策未变化；阶段 1 内该文档是路线源。
 3. Phase 1 sprint 已完成 D1-D2 基础闭环：`LifeActionExecutor`、`POST /api/world/tick`、`WorldClockService`、`EventBusService`、`NpcController` 与 `world_main.tscn` 均已落地；默认画面已从纯色块占位推进到背景、小人、路径线和 tick 状态提示。
 4. 当前默认客户端入口：`npm.cmd run start` 启动后端，再另开终端运行 `npm.cmd run client:run`，会进入 `world_main.tscn` 观察 NPC tick 移动；旧 UI 用 `npm.cmd run client:run:legacy` 回看。
-5. 下一步 Phase 1 sprint：先复验 NPC 分散行动、弱化路径线、`E` talk 与 HUD 暂停/倍速，再继续补轻量日程可视化、事件远处提示和更自然的生活节奏反馈。
+5. 下一步 Phase 1 sprint：先复验 NPC 分散行动、弱化路径线、`WorldPulsePanel`、`E` talk 与 HUD 暂停/倍速，再继续补事件远处提示和更自然的生活节奏反馈。
 6. 阶段 1 事件通道继续先用 `/api/world/tick` 响应 events 驱动 Godot `EventBus`；SSE 仍作为后置增强。
 7. 30 秒验收标尺：玩家不操作时能看到至少 3 个 NPC 在大地图上走动或做事，玩家可暂停 / 恢复世界时间，并能靠近 NPC 按 `E` 弹出 VN 对话。

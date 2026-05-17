@@ -10,6 +10,7 @@ const STAGE_WIDTH := 640.0
 const STAGE_HEIGHT := 1080.0
 const PLAYER_INTERACT_RADIUS := 128.0
 const ROUTE_LINE_VISIBLE_MSEC := 2200
+const PULSE_PANEL_MAX_LINES := 6
 const STAGE_ORDER := ["farm", "plaza", "tavern"]
 const STAGE_NAMES := {
 	"farm": "Farm 农场",
@@ -77,11 +78,20 @@ var _npc_nodes: Dictionary = {}
 var _route_lines: Dictionary = {}
 var _route_line_expire_msec: Dictionary = {}
 var _event_label: Label
+var _pulse_layer: CanvasLayer
+var _pulse_clock_label: Label
+var _pulse_event_label: Label
+var _pulse_schedule_label: Label
 var _player_controller
 var _camera: Camera2D
 var _vn_panel
 var _nearest_npc_id := ""
 var _talk_in_flight := false
+var _snapshot_in_flight := false
+var _latest_clock: Dictionary = {}
+var _npc_plans: Dictionary = {}
+var _npc_statuses: Dictionary = {}
+var _active_event_summaries: Array[String] = []
 
 
 func _ready() -> void:
@@ -98,12 +108,14 @@ func _ready() -> void:
 	_build_stage_visuals()
 	_build_anchor_graph()
 	_build_event_label()
+	_build_world_pulse_panel()
 	_spawn_demo_npcs()
 	_spawn_player()
 	_build_camera()
 	_build_vn_panel()
 	_connect_event_bus()
 	_connect_world_clock()
+	call_deferred("_request_initial_world_snapshot")
 	set_process(true)
 
 
@@ -245,6 +257,81 @@ func _build_event_label() -> void:
 	debug_layer.add_child(_event_label)
 
 
+func _build_world_pulse_panel() -> void:
+	# 世界动态面板把后端日程快照转成玩家可读提示，避免只看调试路径线。
+	_pulse_layer = CanvasLayer.new()
+	_pulse_layer.name = "WorldPulseLayer"
+	_pulse_layer.layer = 12
+	add_child(_pulse_layer)
+
+	var panel := PanelContainer.new()
+	panel.name = "WorldPulsePanel"
+	panel.anchor_left = 1.0
+	panel.anchor_top = 0.0
+	panel.anchor_right = 1.0
+	panel.anchor_bottom = 0.0
+	panel.offset_left = -440.0
+	panel.offset_top = 72.0
+	panel.offset_right = -18.0
+	panel.offset_bottom = 322.0
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_theme_stylebox_override("panel", _make_pulse_panel_style())
+	_pulse_layer.add_child(panel)
+
+	var margin := MarginContainer.new()
+	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	margin.add_theme_constant_override("margin_left", 16)
+	margin.add_theme_constant_override("margin_right", 16)
+	margin.add_theme_constant_override("margin_top", 12)
+	margin.add_theme_constant_override("margin_bottom", 12)
+	panel.add_child(margin)
+
+	var column := VBoxContainer.new()
+	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	column.add_theme_constant_override("separation", 7)
+	margin.add_child(column)
+
+	var title := _make_pulse_label("WorldPulseTitle", "World Pulse / 小镇动态", 18, Color(1.0, 0.88, 0.52, 1.0))
+	column.add_child(title)
+
+	_pulse_clock_label = _make_pulse_label("WorldPulseClock", "Clock: waiting for tick", 14, Color(0.82, 0.94, 1.0, 0.95))
+	column.add_child(_pulse_clock_label)
+
+	_pulse_event_label = _make_pulse_label("WorldPulseEvent", "Event: loading world state ...", 14, Color(1.0, 0.82, 0.68, 0.95))
+	_pulse_event_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	column.add_child(_pulse_event_label)
+
+	_pulse_schedule_label = _make_pulse_label("WorldPulseSchedule", "NPC Plans: loading ...", 13, Color(0.93, 1.0, 0.90, 0.95))
+	_pulse_schedule_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_pulse_schedule_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	column.add_child(_pulse_schedule_label)
+	_refresh_world_pulse_panel()
+
+
+func _make_pulse_label(label_name: String, text: String, font_size: int, font_color: Color) -> Label:
+	var label := Label.new()
+	label.name = label_name
+	label.text = text
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	label.add_theme_font_size_override("font_size", font_size)
+	label.add_theme_color_override("font_color", font_color)
+	label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.88))
+	label.add_theme_constant_override("shadow_offset_x", 1)
+	label.add_theme_constant_override("shadow_offset_y", 1)
+	return label
+
+
+func _make_pulse_panel_style() -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.04, 0.07, 0.08, 0.72)
+	style.border_color = Color(0.78, 0.95, 0.78, 0.70)
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(14)
+	style.shadow_color = Color(0.0, 0.0, 0.0, 0.28)
+	style.shadow_size = 5
+	return style
+
+
 func _spawn_demo_npcs() -> void:
 	for npc_key in DEMO_SPAWN_ANCHORS.keys():
 		var npc_id := str(npc_key)
@@ -287,6 +374,10 @@ func _connect_event_bus() -> void:
 	var event_bus := _get_event_bus()
 	if event_bus == null:
 		return
+	if not event_bus.tick_clock_updated.is_connected(_on_tick_clock_updated):
+		event_bus.tick_clock_updated.connect(_on_tick_clock_updated)
+	if not event_bus.tick_agents_updated.is_connected(_on_tick_agents_updated):
+		event_bus.tick_agents_updated.connect(_on_tick_agents_updated)
 	if not event_bus.npc_motion_event.is_connected(_on_npc_motion_event):
 		event_bus.npc_motion_event.connect(_on_npc_motion_event)
 	if not event_bus.npc_action_event.is_connected(_on_npc_action_event):
@@ -303,31 +394,134 @@ func _connect_world_clock() -> void:
 		world_clock.tick_failed.connect(_on_tick_failed)
 
 
+func _request_initial_world_snapshot() -> void:
+	if _snapshot_in_flight:
+		return
+	_snapshot_in_flight = true
+	var response := await _api_client.get_world_state()
+	_snapshot_in_flight = false
+	if not bool(response.get("ok", false)):
+		if _pulse_event_label != null:
+			_pulse_event_label.text = "Event: state load failed - %s" % str(response.get("error", "unknown"))
+		return
+	var data = response.get("data", {})
+	if data is Dictionary:
+		_apply_world_state_snapshot(data)
+
+
+func _apply_world_state_snapshot(snapshot: Dictionary) -> void:
+	var clock = snapshot.get("clock", {})
+	if clock is Dictionary:
+		_latest_clock = clock.duplicate(true)
+
+	_active_event_summaries.clear()
+	var active_events = snapshot.get("activeEvents", [])
+	if active_events is Array:
+		for event in active_events:
+			if not (event is Dictionary):
+				continue
+			var title := str(event.get("title", event.get("id", "event")))
+			var phase := str(event.get("phase", ""))
+			var location_id := str(event.get("locationId", ""))
+			_active_event_summaries.append("%s @ %s %s" % [title, _pretty_location(location_id), phase])
+
+	_update_npc_plans(snapshot.get("npcSchedules", []))
+	_refresh_world_pulse_panel()
+
+
+func _update_npc_plans(raw_schedules) -> void:
+	_npc_plans.clear()
+	if not (raw_schedules is Array):
+		return
+	for item in raw_schedules:
+		if not (item is Dictionary):
+			continue
+		var npc_id := str(item.get("npcId", ""))
+		if npc_id == "":
+			continue
+		var active = item.get("activeLifeAction", {})
+		if not (active is Dictionary):
+			continue
+		var target_anchor := _target_anchor_from_schedule(item, active)
+		_npc_plans[npc_id] = {
+			"actionId": str(active.get("id", "")),
+			"summary": str(active.get("summary", "")),
+			"timeWindow": str(active.get("timeWindow", "")),
+			"targetAnchor": target_anchor,
+			"locationId": str(item.get("locationId", "")),
+			"presenceSource": str(item.get("presenceSource", "")),
+		}
+
+
+func _target_anchor_from_schedule(schedule: Dictionary, active_action: Dictionary) -> String:
+	var current_anchor := str(schedule.get("anchorId", ""))
+	var candidates = active_action.get("spaceActionCandidates", [])
+	if not (candidates is Array):
+		return current_anchor
+	for candidate in candidates:
+		if not (candidate is Dictionary):
+			continue
+		var anchor_id := str(candidate.get("anchorId", ""))
+		if anchor_id != "" and anchor_id != current_anchor:
+			return anchor_id
+	for candidate in candidates:
+		if candidate is Dictionary and str(candidate.get("anchorId", "")) != "":
+			return str(candidate.get("anchorId", ""))
+	return current_anchor
+
+
+func _on_tick_clock_updated(clock: Dictionary) -> void:
+	var old_phase := str(_latest_clock.get("phase", ""))
+	_latest_clock = clock.duplicate(true)
+	var next_phase := str(_latest_clock.get("phase", ""))
+	if old_phase != "" and next_phase != "" and old_phase != next_phase:
+		call_deferred("_request_initial_world_snapshot")
+	_refresh_world_pulse_panel()
+
+
+func _on_tick_agents_updated(agents: Array) -> void:
+	_update_npc_statuses_from_agents(agents)
+	_refresh_world_pulse_panel()
+
+
 func _on_npc_motion_event(npc_id: String, event_type: String, event_payload: Dictionary) -> void:
 	var node := _ensure_npc_controller(npc_id)
 	node.apply_tick_event(event_payload)
+	_update_npc_status_from_event(npc_id, event_type, event_payload)
 	_update_route_line(npc_id, event_type, event_payload)
 	_update_event_label(npc_id, event_type, event_payload)
+	_refresh_world_pulse_panel()
 
 
 func _on_npc_action_event(npc_id: String, event_type: String, event_payload: Dictionary) -> void:
 	var node := _ensure_npc_controller(npc_id)
 	node.apply_tick_event(event_payload)
+	_update_npc_status_from_event(npc_id, event_type, event_payload)
 	_update_event_label(npc_id, event_type, event_payload)
+	_refresh_world_pulse_panel()
 
 
 func _on_tick_received(payload: Dictionary) -> void:
-	if _event_label == null:
-		return
+	var clock = payload.get("clock", {})
+	if clock is Dictionary:
+		_on_tick_clock_updated(clock)
+
+	var agents = payload.get("agents", [])
+	if agents is Array:
+		_update_npc_statuses_from_agents(agents)
+
 	var events = payload.get("events", [])
-	if events is Array and events.is_empty():
+	if _event_label != null and events is Array and events.is_empty():
 		_event_label.text = "Tick received: no NPC motion event yet."
+	_refresh_world_pulse_panel()
 
 
 func _on_tick_failed(error_message: String) -> void:
 	if _event_label == null:
 		return
 	_event_label.text = "Tick failed: %s" % error_message
+	if _pulse_event_label != null:
+		_pulse_event_label.text = "Event: tick failed - %s" % error_message
 
 
 func _ensure_npc_controller(npc_id: String) -> NpcController:
@@ -404,6 +598,141 @@ func _expire_route_lines() -> void:
 		if line is Line2D:
 			line.visible = false
 		_route_line_expire_msec.erase(npc_id)
+
+
+func _update_npc_statuses_from_agents(agents: Array) -> void:
+	for item in agents:
+		if not (item is Dictionary):
+			continue
+		var npc_id := str(item.get("npcId", ""))
+		if npc_id == "":
+			continue
+		var life_action = item.get("lifeAction", {})
+		if not (life_action is Dictionary):
+			continue
+		var phase := str(life_action.get("phase", ""))
+		var action_id := str(life_action.get("actionId", ""))
+		if phase == "moving":
+			var progress := float(life_action.get("moveProgress", 0.0))
+			_npc_statuses[npc_id] = "移动中 %.0f%% · %s" % [progress * 100.0, _short_action_label(action_id)]
+		elif phase == "performing":
+			var elapsed := float(life_action.get("elapsedSeconds", 0.0))
+			var duration := maxf(1.0, float(life_action.get("durationSeconds", 1.0)))
+			_npc_statuses[npc_id] = "行动中 %.0f%% · %s" % [elapsed / duration * 100.0, _short_action_label(action_id)]
+
+
+func _update_npc_status_from_event(npc_id: String, event_type: String, event_payload: Dictionary) -> void:
+	if event_type == "npc.move_started":
+		_npc_statuses[npc_id] = "出发 → %s" % _pretty_anchor(str(event_payload.get("toAnchorId", "")))
+		return
+	if event_type == "npc.move_progress":
+		var progress := float(event_payload.get("progress", 0.0))
+		_npc_statuses[npc_id] = "移动 %.0f%% → %s" % [
+			progress * 100.0,
+			_pretty_anchor(str(event_payload.get("toAnchorId", ""))),
+		]
+		return
+	if event_type == "npc.arrived":
+		_npc_statuses[npc_id] = "到达 %s" % _pretty_anchor(str(event_payload.get("anchorId", "")))
+		return
+	if event_type == "npc.action_started":
+		_npc_statuses[npc_id] = "开始行动 · %s" % _short_action_label(str(event_payload.get("actionId", "")))
+		return
+	if event_type == "npc.action_tick":
+		var action_progress := float(event_payload.get("progress", 0.0))
+		_npc_statuses[npc_id] = "行动 %.0f%% · %s" % [
+			action_progress * 100.0,
+			_short_action_label(str(event_payload.get("actionId", ""))),
+		]
+		return
+	if event_type == "npc.action_completed":
+		_npc_statuses[npc_id] = "完成行动 · %s" % _short_action_label(str(event_payload.get("actionId", "")))
+
+
+func _refresh_world_pulse_panel() -> void:
+	if _pulse_clock_label == null or _pulse_event_label == null or _pulse_schedule_label == null:
+		return
+	_pulse_clock_label.text = _format_pulse_clock()
+	_pulse_event_label.text = _format_pulse_event_line()
+
+	var lines: Array[String] = []
+	for npc_key in NPC_DISPLAY_NAMES.keys():
+		var npc_id := str(npc_key)
+		var npc_name := str(NPC_DISPLAY_NAMES.get(npc_id, npc_id))
+		var status := str(_npc_statuses.get(npc_id, ""))
+		if status == "":
+			status = _format_npc_plan(npc_id)
+		if status == "":
+			continue
+		lines.append("· %s：%s" % [npc_name, _truncate_text(status, 54)])
+		if lines.size() >= PULSE_PANEL_MAX_LINES:
+			break
+	if lines.is_empty():
+		_pulse_schedule_label.text = "NPC Plans: waiting for /api/world/state"
+	else:
+		_pulse_schedule_label.text = "NPC Plans:\n%s" % "\n".join(lines)
+
+
+func _format_pulse_clock() -> String:
+	if _latest_clock.is_empty():
+		return "Clock: waiting for tick"
+	var day := int(_latest_clock.get("day", 1))
+	var hour := int(_latest_clock.get("hour", 0))
+	var minute := int(_latest_clock.get("minute", 0))
+	var phase := str(_latest_clock.get("phase", "unknown"))
+	var tick := int(_latest_clock.get("tick", 0))
+	return "Clock: Day %d %02d:%02d %s · tick %d" % [day, hour, minute, phase, tick]
+
+
+func _format_pulse_event_line() -> String:
+	if _active_event_summaries.is_empty():
+		return "Event: no active event loaded"
+	return "Event: %s" % _truncate_text(str(_active_event_summaries[0]), 82)
+
+
+func _format_npc_plan(npc_id: String) -> String:
+	var plan = _npc_plans.get(npc_id, {})
+	if not (plan is Dictionary) or plan.is_empty():
+		return ""
+	var action_id := str(plan.get("actionId", ""))
+	var target_anchor := str(plan.get("targetAnchor", ""))
+	var source := str(plan.get("presenceSource", ""))
+	var label := _short_action_label(action_id)
+	var target := _pretty_anchor(target_anchor)
+	if source != "":
+		return "%s → %s · %s" % [label, target, source]
+	return "%s → %s" % [label, target]
+
+
+func _short_action_label(action_id: String) -> String:
+	var lowered := action_id.to_lower()
+	if lowered.contains("morning"):
+		return "晨间例行"
+	if lowered.contains("afternoon"):
+		return "白天协作"
+	if lowered.contains("evening"):
+		return "夜间收束"
+	if lowered.contains("routine"):
+		return "日常安排"
+	if action_id == "":
+		return "生活行动"
+	return action_id.replace("life_", "").replace("_", " ")
+
+
+func _pretty_anchor(anchor_id: String) -> String:
+	if anchor_id == "":
+		return "未知地点"
+	return anchor_id.replace("_", " ")
+
+
+func _pretty_location(location_id: String) -> String:
+	return str(STAGE_NAMES.get(location_id, location_id)).replace(" / %s" % location_id, "")
+
+
+func _truncate_text(value: String, max_chars: int) -> String:
+	if value.length() <= max_chars:
+		return value
+	return "%s…" % value.substr(0, max(0, max_chars - 1))
 
 
 func _update_event_label(npc_id: String, event_type: String, event_payload: Dictionary) -> void:
