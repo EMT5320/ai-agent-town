@@ -1,25 +1,24 @@
 ---
 status: active
 owner_lane: planning
-last_verified: 2026-05-17
+last_verified: 2026-05-19
 startup_load: on-demand
 source_of_truth: true
-scope: production roadmap, axis decision, phase 1 deep design
+scope: production roadmap, phase axis, phase 1 closeout, phase 2 skeleton design
 ---
 
 # Agent Valley 生产化路线图
 
-> 制定时间：2026-05-17
-> 触发原因：项目当前体验被诊断为"UI 点击看板"——后端有厚实的 Director / Skill / NPC 深度卡 / 记忆 / gossip schema，但客户端只是"表单提交+状态展示"，玩家做的事不在 NPC 之间传播，时间是回合制按钮，NPC 不在地图上"做事"。本文档作为新的事实源，取代 `docs/implementation_plan.md` 作为路线执行依据。
-> 适用边界：本文档定义阶段轴、阶段验收和阶段 1 详细技术方案；阶段 2-6 只给方向，等触发时再细化。
+> 制定时间：2026-05-17，2026-05-19 重排
+> 触发原因：项目当前体验被诊断为"UI 点击看板"——后端有厚实的 Director / Skill / NPC 深度卡 / 记忆 / gossip schema，但客户端只是"表单提交+状态展示"。本文档作为新的事实源，取代旧实施计划（已归档至 `docs/archive/implementation_plan.md`）作为路线执行依据。
+> 2026-05-19 项目重定位后，本文档增补 Phase 2 详细技术方案，并将 Phase 2-6 重新排序，以"少而深 + 可解释 + 可评估"为差异化主轴。
+> 适用边界：本文档定义阶段轴、阶段验收和 Phase 1 / Phase 2 详细技术方案；Phase 3-6 只给方向，等触发时再细化。
 
-## 1. 方向决策（2026-05-17）
+## 1. 方向决策（2026-05-19 重定位）
 
-四条主流派路线中，本项目选定 **A+C 复合**：
+项目从"二次元田园 RPG"重定位为 **"可解释的多 Agent 叙事运行时"**。差异化主轴：**少而深 + 可解释 + 可评估**。
 
-- **主轴 C：沙盒导演 / 操纵**——玩家小动作能引爆 NPC 社会的连锁反应。
-- **副轴 A：社会模拟**——支撑主轴的"涌现"基础，让 NPC 真的在生活。
-- 暂缓的轴：B（陪伴/恋爱深度互动）保留为阶段 4 自然涌现的副产物，不另起系统；D（强叙事沉浸）保留为 Director / Event Skill 的能力延伸。
+旧 A+C 复合（沙盒导演 + 社会模拟）作为外壳保留，但项目核心叙事改为"4 核心深度 NPC + 主观记忆 + 启发式学习 + Eval Framework"。详见 [`project_vision.md`](./project_vision.md) 和 [`agent_loop_architecture.md`](./agent_loop_architecture.md)。
 
 ### 1.1 30 秒 Demo 验收标尺
 
@@ -37,17 +36,17 @@ scope: production roadmap, axis decision, phase 1 deep design
 2 周冲刺看到阶段 1（"活着的世界"）可演示原型。
 后续阶段按里程碑式推进，不绑定固定周期。
 
-## 2. 六阶段路线总览
+## 2. 六阶段路线总览（2026-05-19 重排）
 
-| 阶段 | 名称 | 核心问题 | 玩家体感验收（30 秒标尺） | 状态 |
+| 阶段 | 名称 | 核心问题 | 30 秒验收标尺 | 状态 |
 | --- | --- | --- | --- | --- |
-| **0** | 战略对齐 | 主轴选定、客户端推翻范围、阶段验收标准 | —— | done（本文档落地） |
-| **1** | 活着的世界 | 抛弃回合制 + 推翻 UI 主导客户端，NPC 真的在地图上做事 | 玩家不操作，30 秒内能看到至少 3 个 NPC 在地图上走动、做事 | pending |
-| **2** | 玩家成为变量 | 玩家行为在 NPC 之间传播，社会因果可见 | 玩家送花给 A，第二天 B 在酒馆说起这件事 | pending |
-| **3** | 涌现式叙事 | Director 同时调度多条压力线，事件互相影响 | 第二天的小镇和第一天不一样，因为昨天那场风波 | pending |
-| **4** | 玩家工具感 | 农场/经济/恋爱有真实反馈循环 | 玩家能复述出"我在玩什么" | pending |
-| **5** | Agent 系统作为玩点 | 把 LLM 驱动可解释性变成传播资产 | 玩家自发想截屏分享 | pending |
-| **6** | 生产化打磨 | 性能、成本、存档、打包 | 稳定可发的 Demo 版本 | pending |
+| **0** | 战略对齐 | 主轴选定、客户端推翻范围、阶段验收标准 | —— | done |
+| **1** | 活着的世界 | 抛弃回合制 + 推翻 UI 主导客户端，NPC 真的在地图上做事 | 玩家不操作，30 秒内能看到至少 3 个 NPC 在地图上走动、做事 | 收口中（Phase 1 sprint 已落地，待主人窗口验收） |
+| **2** | 骨架建立期 | 三层工具分层 + 动机系统 + 双轨记忆 + 启发式学习 + 仲裁 + Eval Framework 一次性铺到位 | 关闭某条核心能力（如 subjective_memory），eval 指标可测量退化 | pending |
+| **3** | 内容填充期 | 5 作物 + 25 物品 + 30 工具 + 4 核心 NPC 完整接入动机/启发式数据 | NPC 自己种田、开店、做饭、社交，不需要玩家干预；启发式经验首次可观测 | pending |
+| **4** | 玩家成为变量 | 玩家行为在 NPC 之间传播，社会因果可见；observer 模式可点击追溯 | 玩家送花给 A，第二天 B 在酒馆说起这件事；玩家可点击 B 看到完整因果链 | pending |
+| **5** | 涌现式叙事 | 多 Event Skill + 多日循环 + 启发式演化展示 | 第二天的小镇和第一天不一样；某 NPC 因失败积累形成新行为模式 | pending |
+| **6** | 生产化打磨 | LLM 成本分层、存档、Web Debug Console 公开版、技术博客 + dataset 发布 | 稳定可发的 Demo 版本 + 可分享 portfolio | pending |
 
 ## 3. 阶段 1 详细技术设计（2 周冲刺执行依据）
 
@@ -221,55 +220,123 @@ WorldClock(前端) ──tick──►│
 | Runtime 现有 `step()` 是 Agent 轮换调度，改为时间驱动可能破坏 Director | 中 | 不改 step；新建 `runtime.tick(delta_seconds)`；step 继续给 Debug Console 用 |
 | 三场景横向拼图大地图导致首屏负担/视觉割裂 | 中 | 三背景间用过渡色块/草地拼接；优先保证 NPC 迁徙可见 |
 
-## 4. 阶段 2-6 概述（待激活时细化）
+## 4. Phase 2 详细技术设计（骨架建立期，重定位后核心阶段）
 
-### 阶段 2 · 玩家成为变量
+### 4.1 Phase 2 核心目标
 
-- 核心：把 `gossip.propagation_validated` 从"校验事件"升级为"真的写入 NPC 记忆 + 关系扩散"
-- NPC 行动选择把"目击玩家行为"作为输入
-- 引入"在场感"：哪些 NPC 在哪个地点、能看到什么
-- 验收：玩家送花给 A，B 看到了，30 游戏分钟后 C 在酒馆议论
+**一次性铺好 5 条核心能力的完整骨架**，避免 AI 助手协作下的"无意识收窄"。Phase 2 不追内容广度，追接口完整性 + Eval 可测。
 
-### 阶段 3 · 涌现式叙事
+骨架 = 完整 schema + 接口 + 至少一个端到端可跑通的实例。
+
+### 4.2 直接切换原则
+
+Phase 2 启动时 **直接退役** Phase 1 的 `LifeActionExecutor`，不并行运行。原因：
+
+- AI 助手协作下并行运行会导致两套代码相互污染
+- 新系统证据被旧系统稀释，无法量化对比
+- 早做断舍离对项目有利
+
+### 4.3 必须一次性到位的骨架（验收清单）
+
+| 模块 | 形态 | 落地位置 |
+| --- | --- | --- |
+| ToolDefinition + ToolRegistry | 完整接口，注册 8-12 个工具实现 | `backend/app/tools/` |
+| MotivationEngine | 完整决策周期 + 三层路由 + 决策预算 + Fallback | `backend/app/runtime/motivation_engine.py` |
+| CapabilityRegistry | 4 层动态过滤齐全 | `backend/app/runtime/capability_registry.py` |
+| NeedAccumulator + NeedProfile | 完整 4 类需求，每 NPC 实例 | `backend/app/runtime/need_accumulator.py` |
+| ArbitrationLayer | 完整裁决 + Trace（contributing_sources 写入 EventStore） | `backend/app/runtime/arbitration.py` |
+| ResultObserver + BiasFilter | 模板 + slot fill 版（LLM 增强放 Phase 3） | `backend/app/memory/observer.py` |
+| SubjectiveMemoryStore | 完整 schema：衰减、归档、召回 | `backend/app/memory/subjective.py` |
+| RelationshipEdgeStore | 双时间戳 + 至少 5 种边类型 | `backend/app/memory/relationship_edges.py` |
+| HeuristicLibrary | 完整 schema + 规则提取 + LLM 提取（受预算约束） | `backend/app/memory/heuristic.py` |
+| WorldEntities | FarmPlot / Item / Inventory / Shop / Building / Time / Weather schema | `backend/app/world/entities/` |
+| EvalFramework | scripts/run_agent_eval.py + L1 scenario suite (5-8 个) | `scripts/run_agent_eval.py`, `backend/app/eval/` |
+| 观察者模式 | Godot 内最小可用：切换 + NPC 信息面板 | `clients/godot/scripts/ui/observer_panel.gd` |
+
+### 4.4 NPC 数量调整：4 核心 + 2 stub
+
+- **4 核心 NPC**（kai / mira / bram / lena）：完整 motivationProfile / capabilityPreferences / heuristicSeeds 数据
+- **2 stub NPC**（tomas / orren）：schema 占位，使用默认权重，行为简化
+
+每个核心 NPC 必须能撑起一篇 blog 文章的深度。
+
+### 4.5 Eval 是 Phase 2 硬验收线
+
+Phase 2 收口标准：
+
+- `npm.cmd run eval:rule` 通过
+- L1 scenario suite 全部通过
+- 至少 1 次 ablation 实验数据（关闭 subjective_memory 或 heuristic_library，对比关键指标）
+- 规则版 NPC 决策周期可稳定运行 24 游戏小时不崩溃
+- Debug Trace 可完整解释任意一次决策
+
+不达标不进入 Phase 3。详见 [`agent_loop_architecture.md`](./agent_loop_architecture.md) §10、§13.6。
+
+### 4.6 Phase 2 开发线推荐
+
+| 开发线 | 写入范围 | 阻塞依赖 |
+| --- | --- | --- |
+| 后端骨架线 | `backend/app/tools/`、`backend/app/runtime/`、`backend/app/memory/`、`backend/app/world/entities/` | 无 |
+| Eval 线 | `scripts/run_agent_eval.py`、`backend/app/eval/` | 后端骨架线先到位 |
+| Godot 观察者线 | `clients/godot/scripts/ui/observer_panel.gd`、`clients/godot/scripts/observer_mode/` | 后端骨架线 API 先到位 |
+| 内容 schema 线 | NPC 深度卡新增 motivationProfile / capabilityPreferences / heuristicSeeds 占位 | 无（schema-only） |
+| 资产线 | 仅维持，不阻塞 Phase 2 | 独立 |
+| 文档治理 | 持续更新 current_status / goal_board | 持续 |
+
+## 5. Phase 3-6 概述（待激活时细化）
+
+### Phase 3 · 内容填充期
+
+- 5 作物 × 5 阶段实现
+- 25 物品全部实现
+- 30 工具全部实现
+- 4 核心 NPC 完整 motivationProfile / capabilityPreferences / heuristicSeeds 数据
+- L2/L3 scenario suite 完整
+- 资产批次 B1-B5 落地
+- Reflector + LLM 增强 BiasFilter
+- 验收：NPC 自己种田、开店、做饭、社交，不需要玩家干预；启发式经验首次可观测
+
+### Phase 4 · 玩家成为变量
+
+- 把 `gossip.propagation_validated` 升级为"真的写入 NPC 记忆 + 关系扩散"
+- 玩家行为目击纳入 ResultObserver
+- 观察者模式因果链追溯 UI（点击 NPC 反应 → 展开 6 跳因果树）
+- 信念模型（belief_about）首次接入决策
+- 验收：玩家送花给 A，B 看到了，30 游戏分钟后 C 在酒馆议论；玩家可点击 C 看到完整因果链
+
+### Phase 5 · 涌现式叙事
 
 - 写第 2、3、4 个 Event Skill（情人冲突、店铺危机、流浪商人到访）
 - Director Beat 队列引入优先级、衰减、冲突解决
+- 多日循环 + 启发式演化展示
 - "今日新闻"UI 元素让玩家感知导演在工作
-- 验收：第二天小镇和第一天不一样
+- 公开 dataset 第一版（24 游戏日运行结果）
+- 验收：第二天小镇和第一天不一样；某 NPC 因失败积累形成新行为模式
 
-### 阶段 4 · 玩家工具感
-
-- 农场地块状态 + 时间生长 + 收成
-- 简单市场：玩家供给影响 NPC 行为
-- 恋爱线作为"长期关系阶段"的具象化，不另起系统
-- 验收：玩家能复述"我在玩什么"
-
-### 阶段 5 · Agent 系统作为玩点
-
-- 日记本/小镇志 UI，叙事化呈现 NPC 记忆
-- "可分享时刻"导出（30 秒 GIF + 字幕）
-- Debug 控制台保持研究院视角
-- 验收：玩家自发想截屏分享
-
-### 阶段 6 · 生产化打磨
+### Phase 6 · 生产化打磨
 
 - LLM 成本分层：强模型用于 Director，便宜模型用于背景 NPC，规则用于 fallback
 - 存档、断线恢复、windowed Demo 模式
+- Web Debug Console 公开版（精简版可在浏览器运行）
+- 技术博客主文 + 3-5 个短录屏 + dataset 发布
 - 作品集页面
-- 验收：稳定可发的 Demo 版本
 
-## 5. 与现有文档的关系
+## 6. 与现有文档的关系
 
 | 文档 | 关系处理 |
 | --- | --- |
-| `docs/project_vision.md` | 不变，本文档完全在愿景边界内执行 |
-| `docs/agentic_game_design.md` | 不变，作为 Director / Skill / NPC Agent 的设计源 |
-| `docs/gameplay_system_architecture.md` | 不变，本文档实现其中"涌现式田园生活模拟"目标 |
-| `docs/vertical_slice_spec.md` | 保留为切片规格参考；切片定义不变（6 NPC / 3 地点 / 1 完整日 / 1 事件） |
-| `docs/implementation_plan.md` | 标记为 snapshot（已是 snapshot 状态），本文档取代其执行依据角色 |
-| `docs/current_status.md` | 不变，继续记录当前已验证事实；阶段 1 推进后该文档更新事实 |
-| `docs/goal_board.md` | 保留为开发线看板；阶段 1 推进期间新增 "Phase 1 sprint" 开发线 |
-| `docs/agent_context.md` | 阶段 1 启动时更新"下一轮最短开发入口"指向本文档 |
+| `docs/project_vision.md` | 已重写：新定位"可解释多 Agent 叙事运行时"，5 条核心创新点 |
+| `docs/agentic_game_design.md` | 不变，作为 Director / Skill / 多层 Agent 的设计源 |
+| `docs/agent_loop_architecture.md` | **新事实源**：NPC agent loop 三层工具、动机系统、记忆架构、启发式学习、仲裁、Eval |
+| `docs/world_entity_model.md` | **新事实源**：世界实体 schema + 工具空间 |
+| `docs/gameplay_system_architecture.md` | 已重写第 2.4 节：软日程 → 动机系统 |
+| `docs/npc_deep_card_spec.md` | Phase 2 启动时增补 motivationProfile / capabilityPreferences / heuristicSeeds 字段 |
+| `docs/archive/vertical_slice_spec.md` | 已归档；切片范围被新阶段定义和 `world_entity_model.md` 覆盖 |
+| `docs/archive/implementation_plan.md` | 已归档；本文档取代其执行依据角色 |
+| `docs/archive/core_map.md` | 已归档；结论吸收到 `agent_loop_architecture.md` + `world_entity_model.md` + 本文档 Phase 2 设计 |
+| `docs/current_status.md` | 持续更新：Phase 1 收口事实、Phase 2 启动准备 |
+| `docs/goal_board.md` | 持续更新：Phase 1 收口 → Phase 2 骨架开发线 |
+| `docs/agent_context.md` | 已更新指向新核心文档 |
 
 ## 6. 验收命令
 
@@ -296,14 +363,33 @@ curl.exe -N http://localhost:8787/api/events
 
 ## 7. 立即接续步骤
 
-1. **本文档落地后**：运行 `npm.cmd run context:check` 验证 frontmatter 兼容性；运行 `git diff --check` 检查空白。
-2. **D1 启动条件**：`docs/agent_context.md` 第 6 节已指向本文档；`docs/goal_board.md` 已新增 "Phase 1 sprint" 开发线。
-3. **D1 第一个具体动作**：新建 `backend/app/simulation/life_action_executor.py` 雏形 + 对应单元测试；并行新建 `clients/godot/scripts/core/world_clock.gd`、`event_bus.gd` 与 `world_main.tscn` 骨架。
-4. **任何阶段 1 推进前**：先确认本文档"3.2 关键技术决策"未发生变化，避免开发线漂移。
+### Phase 1 收口（当前）
+
+1. 主人窗口验收 NPC 分散行动、`WorldPulsePanel`、远处事件提示、`E` talk 与 HUD 暂停/倍速。
+2. 验收完成后在 `current_status.md` 标记 Phase 1 done。
+
+### Phase 2 启动条件
+
+1. Phase 1 已收口；`current_status.md` / `goal_board.md` 已同步。
+2. `docs/agent_loop_architecture.md` 已落地（已完成）。
+3. `docs/world_entity_model.md` 已落地（已完成）。
+4. NPC 深度卡 schema 已增补 motivationProfile / capabilityPreferences / heuristicSeeds 三个字段（schema only，数据 Phase 3 填）。
+5. `npm.cmd run context:check` 通过、`git diff --check` 通过。
+
+### Phase 2 第一组开工动作
+
+- **后端骨架线**：新建 `backend/app/tools/`、`backend/app/runtime/motivation_engine.py`、`backend/app/memory/subjective.py` 雏形 + 单元测试。
+- **Eval 线**：新建 `scripts/run_agent_eval.py` 雏形 + L1 scenario 第一个用例。
+- **Godot 观察者线**：先做"按 Tab 切换 + 点击 NPC 显示空白面板"最小骨架。
+- **内容 schema 线**：在 6 份 NPC 深度卡里加三个字段占位（不填实际值）。
+
+### Phase 2 推进前必做
+
+确认 [`agent_loop_architecture.md`](./agent_loop_architecture.md) §13.3 中的 12 项骨架清单未发生变化，避免开发线漂移。
 
 ## 8. 维护规则
 
-- 本文档是阶段 1 内的"路线源"，**不复制源设计长文**。
-- 阶段 1 推进过程中如有决策调整，先更新 "3.2 关键技术决策" 表格，再开始实施。
+- 本文档是 Phase 1 / Phase 2 内的"路线源"，**不复制源设计长文**。NPC agent loop 细节去 `agent_loop_architecture.md`，世界实体 schema 去 `world_entity_model.md`。
+- Phase 推进过程中如有决策调整，先更新对应阶段的"必须一次性到位的骨架"清单，再开始实施。
 - 任何已完成项必须有命令验证证据；任何未验证项必须显式标注 `manual unverified`。
-- 阶段 2-6 在被激活前不细化，避免规划幻觉。
+- Phase 3-6 在被激活前不细化，避免规划幻觉。

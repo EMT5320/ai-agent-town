@@ -11,7 +11,7 @@ scope: NPC deep-card schema, writing rules, and validation contract
 
 > 起草时间：2026-05-16
 > 用途：定义 `Agent Valley` 第二轮内容扩充的 NPC 深度卡（`npc_codex`）数据契约，作为后续批量内容写作工作流的统一蓝本。
-> 设计依据：[`project_vision.md`](./project_vision.md)、[`agentic_game_design.md`](./agentic_game_design.md)、[`vertical_slice_spec.md`](./vertical_slice_spec.md)、[`current_status.md`](./current_status.md)。
+> 设计依据：[`project_vision.md`](./project_vision.md)、[`agentic_game_design.md`](./agentic_game_design.md)、[`agent_loop_architecture.md`](./agent_loop_architecture.md)、[`current_status.md`](./current_status.md)。
 
 ## 1. 设计目标
 
@@ -342,7 +342,7 @@ backend/app/content/
 - NPC `id`
 - 现有 `seed_data` 字段
 - `art_direction.md` 中该 NPC 的视觉与人设描述
-- `vertical_slice_spec.md` 中该 NPC 的核心张力与恋爱铺垫倾向
+- 该 NPC 在 `agent_loop_architecture.md` motivationProfile 矩阵中的差异化定位
 
 输出契约：
 

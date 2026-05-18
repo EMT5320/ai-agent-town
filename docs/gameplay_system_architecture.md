@@ -1,16 +1,17 @@
 ---
 status: active
 owner_lane: godot-client
-last_verified: 2026-05-17
+last_verified: 2026-05-19
 startup_load: on-demand
 source_of_truth: true
-scope: gameplay loop, map interactions, soft schedules, and Godot/backend boundaries
+scope: gameplay loop, map interactions, motivation-driven npc actions, godot/backend boundaries
 ---
 
-# 游戏本体架构定调：涌现式田园生活模拟
+# 游戏本体架构定调：可解释多 Agent 叙事运行时的可玩切片
 
-> 状态更新时间：2026-05-16
-> 本文用于约束 `Agent Valley` 的游戏本体路线，避免 Godot 客户端继续沿着“背景图 + UI 面板 + 按钮操作”的临时 demo 形态扩写。后续客户端、后端玩法系统、资产、Debug 与无人值守 goal 都应先对齐本文。
+> 状态更新时间：2026-05-19
+> 本文用于约束 `Agent Valley` 的游戏本体路线，定义 Godot 切片如何承载 [`agent_loop_architecture.md`](./agent_loop_architecture.md) 定义的 NPC agent loop。后续客户端、后端玩法系统、资产、Debug 与无人值守 goal 都应先对齐本文。
+> 边界：本文聚焦"游戏切片如何呈现 agent 系统"。NPC 决策机制详见 `agent_loop_architecture.md`，世界实体 schema 详见 `world_entity_model.md`。
 
 ## 1. 核心结论
 
@@ -75,23 +76,31 @@ NPC 的职责：
 
 导演层可以安排“谁更可能进入玩家视野”和“什么冲突值得推到台前”，具体台词、态度、记忆解释和行动选择交给 NPC Agent。
 
-### 2.4 软日程代替固定排班
+### 2.4 动机系统驱动行为（替换软日程）
 
-每个 NPC 可以拥有生活习惯和职业倾向，例如：
+> 2026-05-19 项目重定位后，软日程系统整体退役。NPC 行为由 **MotivationEngine** 驱动，详见 [`agent_loop_architecture.md`](./agent_loop_architecture.md)。
 
-- 米娅白天更可能围绕广场、杂货事务和家庭照顾行动。
-- 布兰娜更常被农场、作物供应和欠账压力牵引。
-- 凯娅在傍晚和酒馆事件中权重更高。
+每个 NPC 拥有 `motivationProfile`，包含 4 类需求（生理 / 经济 / 社交 / 目标），每类带 personality 权重与衰减速率。需求自动累积或衰减，到阈值后触发对应工具的候选选择。
 
-这些信息只提供：
+```text
+内部需求（NeedAccumulator 自动累积/衰减）
+  +
+长期目标（NPC 深度卡 goals）
+  +
+导演层临时偏置（Director Beat）
+  +
+启发式经验（HeuristicLibrary）
+  +
+当下情境约束（地点 / 持有物 / 关系）
+  ↓
+ArbitrationLayer 结构化裁决
+  ↓
+最迫切需求 + 候选工具集 → 三层路由（Physiological / Vocational / Social-Strategic）
+```
 
-- 地点权重。
-- 行动偏好。
-- 时间段倾向。
-- 社交对象倾向。
-- 事件参与倾向。
+`lifeActionPlan` / `npcSchedules` API 字段保留，但语义从"今天的计划"改为"基于当前需求的下一步候选"，给 Godot 客户端做日程可视化用。NPC 不再被锁进固定时间表。
 
-实际位置和行动由运行时根据世界状态、导演 brief、可见性预算、当前事件、玩家行为和 NPC 自主判断生成。这样可以保留生活规律，又不会把 LLM NPC 锁进传统固定脚本。
+导演层的角色不变：通过 Director Beat 注入临时需求权重偏置（"今晚 social 重要性 +30%"）和临时目标，过期自动消失。导演层不替 NPC 选工具，只调整动机权重。
 
 ### 2.5 反 UI 点击化硬约束
 

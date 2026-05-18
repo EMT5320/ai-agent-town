@@ -1,7 +1,7 @@
 ---
 status: active
 owner_lane: decisions
-last_verified: 2026-05-17
+last_verified: 2026-05-19
 startup_load: on-demand
 source_of_truth: true
 scope: confirmed decisions, unresolved questions, and validation points
@@ -9,9 +9,110 @@ scope: confirmed decisions, unresolved questions, and validation points
 
 # 决策记录与剩余问题
 
-本文记录主人已经拍板的边界，以及后续仍需要在实现中验证的问题。当前信息已经足够启动初版垂直切片。
+本文记录主人已经拍板的边界，以及后续仍需要在实现中验证的问题。当前信息已经足够启动 Phase 2 骨架建立期。
 
-## 已确认决策
+## 2026-05-19 项目重定位决策（最高优先级）
+
+### 项目重定位
+
+- 项目从"二次元田园 RPG"重定位为 **"可解释的多 Agent 叙事运行时"**。
+- 对外口径："一个可解释的多 Agent 叙事运行时：通过 Director / Event Skill、主观记忆、关系演化和 Debug Trace，让少量深度 NPC 在可玩的 Godot 生活模拟切片中产生可追踪成长。"
+- 项目名继续保留 `Agent Valley`，不重命名。
+- 差异化主轴：**少而深 + 可解释 + 可评估**。
+- 与 Smallville / AI Town / AIvilization / Project Sid 的"广而浅"路线区分。
+
+### 五条核心能力
+
+1. 三层工具分层 + 动机系统（替换软日程）
+2. 双轨主观记忆（Rashomon 玩法）
+3. 失败驱动的启发式学习（NPC 看得见地成长）
+4. 竞争上下文仲裁（全过程可解释）
+5. Eval Framework（量化差异化论点）
+
+详见 `docs/project_vision.md` 和 `docs/agent_loop_architecture.md`。
+
+### NPC 数量调整
+
+- 旧规模：6 NPC（5 女 1 男）。
+- 新规模：**4 核心 NPC + 2 stub NPC**（核心 NPC 完整接入 motivationProfile / capabilityPreferences / heuristicSeeds，stub 使用默认权重）。
+- 4 核心建议：kai / mira / bram / lena；2 stub：tomas / orren。最终名单可在 Phase 2 启动前再调整。
+
+### 决策周期与 LLM 预算
+
+- 决策周期：每个 NPC 每 15-30 游戏分钟评估一次需求（首版 20 分钟）。
+- LLM 预算：social_strategic_layer ≤ 8 次/NPC/日；vocational_local_llm ≤ 6 次/NPC/日；reflection 1 次/日；heuristic_extraction ≤ 2 次/日；dialogue 与玩家不计预算。
+- 预算耗尽时自动 fallback 到工具的 fallback_rule。
+
+### Capability Registry
+
+- **动态生成**（NPC × 当前位置 × 当前持有物 × 当前需求类型）。
+- 每决策周期暴露 3-8 个候选工具，避免 LLM 上下文被全量工具淹没。
+- NPC 深度卡 `capabilityPreferences` 字段提供权重加权。
+
+### 直接切换不并行
+
+- Phase 2 启动时 `LifeActionExecutor` 直接退役，**不与 MotivationEngine 并行运行**。
+- 原因：AI 助手协作下并行运行会导致两套代码相互污染，新系统证据被旧系统稀释。早做断舍离对项目有利。
+- `lifeActionPlan` / `npcSchedules` API 字段保留，语义改为"基于当前需求的下一步候选"。
+
+### 广度骨架优先（不收窄）
+
+- Phase 2 必须一次性铺好 12 项骨架（详见 `agent_loop_architecture.md` §13.3）。
+- 内容可以稀薄（Phase 2 只实现 8-12 工具 + 1 作物），但骨架不能稀薄。
+- 防止 AI 助手协作下的"无意识收窄项目"。
+
+### 记忆架构（自研抽象层）
+
+- **不接 Graphiti / Mem0 / Letta / RAGFlow**，自研抽象层借鉴 Graphiti 范式（双时间戳 + episodic/semantic/community 三层）。
+- 四层架构：Objective Event Log + Subjective Memory Views + Semantic Facts + Relationship Edges。
+- BiasFilter 决定主观记忆差异化（关系/情绪/注意力/性格偏置）。
+- 首版用模板 + slot fill 实现 BiasFilter，Phase 3+ 升级为局部 LLM。
+- 后期如需扩展规模，可把 store 后端换成 Neo4j 或接 Graphiti，retrieve 层不动。
+- 详见 `docs/agent_loop_architecture.md` §7.7 决策记录。
+
+### 启发式学习（Heuristic Library）
+
+- **作为 Phase 2 骨架核心**：schema + 规则提取 + LLM 提取（受预算约束）+ 激活机制 + 衰减 + 设计师 heuristicSeeds 注入 + Debug 可视化都必须 Phase 2 到位。
+- 提取触发条件：失败/痛苦记忆 emotional_intensity ≥ 0.7。
+- 是项目"自我进化"叙事的硬支撑，可视化是作品集传播点。
+- 详见 `docs/agent_loop_architecture.md` §8。
+
+### 工具中断 + 失败记忆
+
+- 工具声明 `interruptible` 和 `interrupt_priority_threshold`。
+- 中断和失败必须写入观察者主观记忆，带情绪强度。
+- 高情绪强度的失败/中断记忆**必须**进入 reflector 的 heuristic 候选池。
+- 失败也是社会信号（"我去借东西被拒了"），通过 ResultObserver 写入相关 NPC 主观记忆。
+
+### Eval Framework（第五条核心能力）
+
+- `scripts/run_agent_eval.py` 跑分层 scenario suite（L1 单 NPC × 5-8 / L2 社交 × 5-8 / L3 涌现 × 3-5）。
+- 11 个核心指标（详见 `docs/agent_loop_architecture.md` §10.4）。
+- 双模式：`--provider rule` 走规则跑（CI 友好、零成本）；`--provider cloud` 真实 LLM 跑（手动触发）。
+- Ablation 实验（关闭 subjective_memory / heuristic_library / director_layer）作为差异化论点的量化证明。
+- **Eval 是 Phase 2 硬验收线，不达标不进入 Phase 3**。
+- 输出 EventStore + 主观视图 dump 作为公开 dataset。
+
+### 观察者模式（Phase 2 核心能力）
+
+- 玩家 + 观察者双模式，从 Phase 5 提升为 Phase 2 必须支持的核心能力。
+- 玩家在游戏内随时切换（默认 Tab 键）。
+- 观察者模式下玩家可点击任意 NPC 查看 motivation / 激活 heuristic / 主观记忆 / 关系图边 / Arbitration trace。
+- 观察者模式可"干预"：投放物品、注入临时 Director Beat 等，编码为 `directorBeat(beatType="player_intervention")`。
+
+### NPC 与玩家共享接口
+
+- 玩家工具调用走同一套 ToolDefinition 注册表。
+- 玩家行为打 `actor_type=player` 标记，BiasFilter 看到时可差异化 prompt。
+- 玩家行为产生的 EventStore 条目和 NPC 行为完全一致，ResultObserver 一视同仁分发主观记忆。
+
+### Eval 的具体指标
+
+- 核心 8 个：action_validity_rate / memory_reference_rate / memory_grounding_precision / causal_trace_coverage / relationship_consistency / fallback_rate / avg_latency_ms / estimated_cost_usd。
+- 新定位差异化指标：causal_trace_depth_avg（玩家行为引发因果链平均跳数） / subjective_divergence（同事件视角差异度） / heuristic_uptake_rate（启发式采纳率）。
+- 详见 `docs/agent_loop_architecture.md` §10.4。
+
+## 已确认决策（旧）
 
 ### 1. 主客户端
 
@@ -174,3 +275,60 @@ scope: confirmed decisions, unresolved questions, and validation points
 - 星灯祭事件 CG 与角色立绘共用当前 `portrait_rect` 是否适合演示，后续是否需要独立 CG 层。
 - `happy` / `troubled` 表情差分补齐后，Godot 表情选择策略应由后端返回字段驱动，还是由客户端根据事件结果做轻量映射。
 - 地图层继续深入时，当前 `move` / `inspect` / `attend_event` API 是否先补 `anchorId` / `interactableId` 锚点校验，还是一步到位补坐标、交互半径或场景状态字段。
+
+
+## 2026-05-19 Phase 2 实施期待验证（工程细节，不阻塞决策）
+
+这些问题不影响 Phase 2 启动，可在实施期再决定，先记录避免遗忘：
+
+### 工具失败 / 冲突处理
+
+- 默认采用乐观执行 + 失败事件，不做悲观锁。
+- 失败事件如何分发为观察者主观记忆的具体 BiasFilter 模板（首版 5-8 个模板覆盖大部分情况）。
+- 工具冲突频率上限：如果某 NPC 一周期内 ≥ 3 次工具失败，是否触发"挫败"情绪状态。
+
+### 玩家观察记忆的细化
+
+- 玩家行为对不在场 NPC 的"间接知晓"传播路径：通过其他 NPC 转述 vs 直接事实写入。
+- 玩家观察者模式干预（投放物品、修改情绪）写入哪些 NPC 的主观记忆，以及如何标记"超自然事件"。
+
+### 工具时间与动画对齐
+
+- 客户端动画时长是否需要严格匹配后端 `actionDuration`，或允许客户端做轻微缓动加速。
+- `npc.action_tick` 事件是否算作其他 NPC 的"观察记忆"（建议：低重要性默认不写入，只有 ≥ 0.5 importance 才写）。
+
+### 一致性约束的工程前置
+
+- B1 角色姿态批次开工前，每个 NPC 必须先准备 reference image stack（neutral 立绘 + 至少 2 张多角度参考）。
+- `npc_*_reference.txt` prompt 模板扩展为多姿态版本（不仅描述外观，要包括姿态结构）。
+- 一致性验收标准（脸型 / 发色 hex / 服装色块 / 瞳色 / 特征标记）必须先写下来。
+- 不做这一步，资产返工率预计 30-50%。
+
+### 信念模型（belief_about）
+
+- Phase 2 schema 占位（NPC 主观视图新增 `belief_about` 条目类型）。
+- Phase 4 实际接入决策上下文（"我以为 X 想做 Y" → LLM 决策时纳入）。
+- Phase 5 加 counterfactual 反思（"我以为 vs 实际"差距驱动 belief update）。
+
+### NPC 决策周期粒度
+
+- 默认 20 游戏分钟，离屏拉长到 60 分钟，玩家在场缩短到 10 分钟。
+- 是否需要"事件触发立即评估"的优先队列（避免事件在周期间隙发生时延迟响应）。
+- 离屏 NPC 是否需要批量 tick 优化（一次推进多个 NPC 多个周期）。
+
+### Heuristic 衰减与冲突
+
+- 多条互相矛盾的 heuristic 由 confidence 加权裁决，但具体公式（线性 vs softmax）待实现期决定。
+- heuristic 长期未激活的衰减曲线（建议指数衰减，半衰期 = duration_days）。
+- 设计师注入的 seed heuristic 是否允许被失败经验完全覆盖（建议：可以，confidence 可降到 0）。
+
+### 与现有 gossipHooks / monologueSeeds 的迁移
+
+- gossipHooks 和 monologueSeeds 在 Phase 2 是否继续保留，还是合并到 SubjectiveMemoryStore 的某种特殊条目类型。
+- 已有的 `gossip.propagation_validated` 校验事件如何与新主观记忆路径并存或合并（建议：Phase 2 保留校验事件，Phase 4 改写为真正传播）。
+
+### 资产路线的范围调整
+
+- 旧 230-250 张资产计划在新定位下偏多。
+- 实际 Phase 2-3 需要：4 核心 NPC × 多姿态（保守 5 姿态）× 2 方向 = 40 张 + 2 stub × 2 姿态 = 4 张 + 表情差分 + 物件状态 ≈ 100-120 张。
+- 砍掉的部分：日夜雨变体（用 shader）、未实现作物的生长阶段、第二批节日 CG 等。

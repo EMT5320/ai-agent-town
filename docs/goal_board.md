@@ -1,7 +1,7 @@
 ---
 status: active
 owner_lane: planning
-last_verified: 2026-05-17
+last_verified: 2026-05-19
 startup_load: after-agent-context
 source_of_truth: true
 scope: lane board, write boundaries, and handoff format
@@ -9,8 +9,9 @@ scope: lane board, write boundaries, and handoff format
 
 # Agent Valley 目标看板
 
-> 更新时间：2026-05-17
+> 更新时间：2026-05-19（项目重定位 + 文档治理）
 > 用途：为无人值守开发、并行子代理和下一轮收口提供状态、写入范围和验收命令。
+> 2026-05-19 项目重定位为"可解释多 Agent 叙事运行时"，差异化主轴改为"少而深 + 可解释 + 可评估"。Phase 2-6 已重排，详见 `docs/production_roadmap.md`。
 
 ## 1. 状态标记
 
@@ -132,12 +133,28 @@ scope: lane board, write boundaries, and handoff format
 
 ## 8. 下一轮推荐排程
 
-1. 文档与治理：保持本轮状态收紧后的 checkpoint，后续只记录已验证变化。
-2. Phase 1 sprint：D1-D2 tick 闭环、新 `world_main.tscn` 骨架、玩家本地控制和 `E` 键后端 talk 已落地；下一轮推进轻量日程可视化、事件远处提示和更自然的生活节奏反馈。
-3. Godot 玩法客户端：`npm.cmd run client:run` 默认进入 `world_main.tscn`；旧 `main.tscn` / `main.gd` 通过 `npm.cmd run client:run:legacy` 保留回看入口。
-4. Content Codex：阶段 1 只把 `lifeActionSeeds` 作为规则 NPC 行动素材输入；谣言记忆 / 关系扩散留到阶段 2。
-5. 后端：围绕 `LifeActionExecutor`、`runtime.tick(delta_seconds)` 和 `POST /api/world/tick` 做最小增量，不扩写新的复杂 Director 能力。
-6. LLM / Debug：保持当前真实 smoke 证据；阶段 1 不让 LLM 进入高频 NPC 自主 tick。
-7. 资产：按 `docs/asset_batches/prompt_ready_export.md` 推进表情差分、生活 UI 组件和行动反馈图标，但不阻塞阶段 1 的 NPC 行动体感闭环。
+### Phase 1 收口（最高优先级）
 
-白天整合后的详细交接和可直接投喂的 goal 见 `docs/daytime_integration_handoff.md`。
+1. **主人窗口验收**：`npm.cmd run start` + `npm.cmd run client:run`，按 30 秒标尺验收 NPC 分散行动、HUD 暂停/倍速、`E` talk、`WorldPulsePanel`、远处事件提示。
+2. 验收完成后在 `current_status.md` §1 标记 Phase 1 done，本看板新增"Phase 2 骨架"开发线占位。
+
+### Phase 2 启动前置
+
+3. NPC 深度卡 schema 增补 motivationProfile / capabilityPreferences / heuristicSeeds 占位字段（schema only）。
+4. `npm.cmd run context:check`、`npm.cmd run check`、`git diff --check` 确认文档治理无残留错误。
+5. 阅读 `docs/agent_loop_architecture.md` §13.3 + `docs/world_entity_model.md` §10。
+
+### Phase 2 启动后并行开发线（详见 `production_roadmap.md` §4.6）
+
+6. **后端骨架线**：`backend/app/tools/` + `backend/app/runtime/motivation_engine.py` + `backend/app/memory/subjective.py`。
+7. **Eval 线**：`scripts/run_agent_eval.py` + L1 scenario suite。
+8. **Godot 观察者线**：Tab 切换 + NPC 信息面板最小骨架。
+9. **内容 schema 线**：NPC 深度卡三个字段实际数据填充（Phase 3 内容期）。
+
+### 持续维持
+
+10. LLM / Debug 在切换模型、key 或 profile 后刷新真实 smoke。
+11. 资产线按新定位重新评估范围（详见 `open_questions.md` 末尾"资产路线的范围调整"）。
+12. Web Debug 追加 Director / Skill / fallback 视图，Phase 2 后新增 Heuristic / Arbitration / 主观记忆对比视图。
+
+早期白天整合交接快照已归档至 `docs/archive/daytime_integration_handoff.md`，仅供历史溯源。

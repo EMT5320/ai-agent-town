@@ -7,7 +7,7 @@ source_of_truth: false
 scope: user-authored comprehensive development direction after Phase 1 closeout
 ---
 
-# Agent Valley 全面开发计划（Phase 1 收口后）
+# Agent Valley 全面开发计划（Phase 1 收口后）（待进一步讨论）
 制定时间：2026-05-18 核心判断：游戏内容（种田、物品、场景、交互）是 NPC Agent 的"工具集"和"行动空间"。没有丰富的行动空间，Agent 涌现无从谈起。当前最大缺口不是系统架构，而是 NPC 和玩家能做的事太少、世界状态实体太少、视觉表现太简陋。
 
 1. 方向重申

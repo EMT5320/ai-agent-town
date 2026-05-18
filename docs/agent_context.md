@@ -1,7 +1,7 @@
 ---
 status: active
 owner_lane: context-governance
-last_verified: 2026-05-17
+last_verified: 2026-05-19
 startup_load: first-read
 source_of_truth: true
 scope: new-session entrypoint, boundaries, commands, and next steps
@@ -9,23 +9,25 @@ scope: new-session entrypoint, boundaries, commands, and next steps
 
 # Agent Valley 新对话入口
 
-> 更新时间：2026-05-17
+> 更新时间：2026-05-19（项目重定位 + 文档治理）
 > 用途：下一轮新对话、无人值守开发、并行子代理任务的第一入口。
 
 ## 1. 当前入口
 
 - 先读本文，再按任务线读取源文档。
-- 长期方向以 `docs/project_vision.md` 为准。
-- 生产化阶段路线与阶段 1 执行轴以 `docs/production_roadmap.md` 为准。
+- 长期方向以 `docs/project_vision.md` 为准（已重写为"可解释多 Agent 叙事运行时"定位）。
+- **NPC agent loop 核心圣经**：`docs/agent_loop_architecture.md`（三层工具、动机系统、双轨记忆、启发式学习、仲裁、Eval）。
+- **世界实体 schema**：`docs/world_entity_model.md`（FarmPlot / Item / Inventory / Shop / Building / Time / Weather + 工具空间）。
+- 多层 Agent 系统设计：`docs/agentic_game_design.md`（Director / Skill / Memory / Model 分工）。
+- 生产化阶段路线：`docs/production_roadmap.md`（Phase 1 收口中，Phase 2 骨架建立期待启动）。
 - 当前事实以 `docs/current_status.md` 为准。
 - 并行写入范围以 `docs/goal_board.md` 为准。
-- 游戏内容剧本线以 `docs/game_content_storyline.md` 为准。
-- 多层 Agent 设计细节见 `docs/agentic_game_design.md`。
 - 视觉和资产细节见 `docs/art_direction.md`、`docs/asset_generation_prompts.md`、`assets/manifests/asset_manifest.json`。
+- 历史草案、已归档文档统一放在 `docs/archive/`，**不得作为当前事实源**。
 
-## 2. 一句话定位
+## 2. 一句话定位（2026-05-19 重定位后）
 
-`Agent Valley` 是一个由 Godot 承担玩家体验、Python Agent Server 承担权威世界状态与 LLM NPC 的二次元轻幻想田园生活模拟 RPG。当前生产化主轴是把早期 UI 看板式体验纠偏为"活着的世界"：玩家能在地图中观察 NPC 迁徙、行动和社会连锁反应。
+`Agent Valley` 是一个**可解释的多 Agent 叙事运行时**：通过 Director / Event Skill、主观记忆、关系演化、启发式学习与 Debug Trace，让少量深度 NPC（4 核心 + 2 stub）在可玩的 Godot 生活模拟切片中产生可追踪成长。差异化主轴：**少而深 + 可解释 + 可评估**。
 
 ## 3. 当前已验证事实
 
@@ -102,6 +104,8 @@ scope: new-session entrypoint, boundaries, commands, and next steps
 - 资产入库必须登记来源、提示词引用、用途、状态、授权备注和 Godot 引用。
 - 未在当前轮次复验的云端 LLM、表情差分、资产晋级和新增玩法循环只能记录为待验证项。
 - `frontend/` 继续作为迁移期 Debug 观察台；正式 Web Debug 后续再收敛到 `web-admin/`。
+- 重定位后硬约束：所有 NPC 决策必须可解释（contributing_sources 写入 EventStore）；广度铺开不能稀释主观记忆/启发式学习/Eval 三条核心能力。
+- Phase 2 启动后旧 `LifeActionExecutor` 退役，**不并行运行**（详见 `agent_loop_architecture.md` §13.2）。
 
 ## 5. 常用命令
 
@@ -139,10 +143,35 @@ git diff --check
 
 ## 6. 下一轮最短开发入口
 
-1. 固定离线基线：运行 `npm.cmd run context:check`、`npm.cmd run check`、`npm.cmd run smoke`、`npm.cmd run asset:check`、`npm.cmd run client:env`、`npm.cmd run client:run:check`。
-2. 生产化计划入口：读取 `docs/production_roadmap.md`，确认阶段 1 "活着的世界"关键决策未变化；阶段 1 内该文档是路线源。
-3. Phase 1 sprint 已完成 D1-D2 基础闭环：`LifeActionExecutor`、`POST /api/world/tick`、`WorldClockService`、`EventBusService`、`NpcController` 与 `world_main.tscn` 均已落地；默认画面已从纯色块占位推进到背景、小人、路径线和 tick 状态提示。
-4. 当前默认客户端入口：`npm.cmd run start` 启动后端，再另开终端运行 `npm.cmd run client:run`，会进入 `world_main.tscn` 观察 NPC tick 移动；旧 UI 用 `npm.cmd run client:run:legacy` 回看。
-5. 下一步 Phase 1 sprint：先复验 NPC 分散行动、弱化路径线、`WorldPulsePanel`、远处事件提示、`E` talk 与 HUD 暂停/倍速，再继续补 NPC 行动图标和更自然的生活节奏反馈。
-6. 阶段 1 事件通道继续先用 `/api/world/tick` 响应 events 驱动 Godot `EventBus`；SSE 仍作为后置增强。
-7. 30 秒验收标尺：玩家不操作时能看到至少 3 个 NPC 在大地图上走动或做事，玩家可暂停 / 恢复世界时间，并能靠近 NPC 按 `E` 弹出 VN 对话。
+### 当前状态
+
+- Phase 1（活着的世界）已落地，待主人窗口验收（NPC 分散行动、`WorldPulsePanel`、远处事件提示、`E` talk、HUD 暂停/倍速）。
+- 项目已于 2026-05-19 重定位为"可解释多 Agent 叙事运行时"，差异化主轴改为"少而深 + 可解释 + 可评估"。
+- 文档治理已完成第一轮：归档过时文档、新增 `agent_loop_architecture.md` + `world_entity_model.md`、重写 `project_vision.md` + `production_roadmap.md` Phase 2 设计 + `gameplay_system_architecture.md` §2.4。
+
+### Phase 1 收口（当前最高优先级）
+
+1. 启动后端：`npm.cmd run start`
+2. 另开终端运行 `npm.cmd run client:run`，进入 `world_main.tscn`
+3. 验收 30 秒标尺：玩家不操作时能看到至少 3 个 NPC 在地图上走动、做事；玩家可暂停/恢复世界时间；能靠近 NPC 按 `E` 弹出 VN 对话。
+4. 验收完成后在 `current_status.md` 标记 Phase 1 done。
+
+### Phase 2 启动前置
+
+1. 阅读 `docs/agent_loop_architecture.md` §13.3 骨架清单（12 项）。
+2. 阅读 `docs/world_entity_model.md` §10 Phase 2 验收标准。
+3. NPC 深度卡 schema 增补 motivationProfile / capabilityPreferences / heuristicSeeds 占位字段（schema only）。
+4. 启动条件 checklist（详见 `production_roadmap.md` §7.2）全部满足后才能开 Phase 2 worker。
+
+### 离线基线检查
+
+每轮新对话启动建议运行：
+
+```powershell
+npm.cmd run context:check
+npm.cmd run check
+npm.cmd run smoke
+npm.cmd run asset:check
+npm.cmd run client:env
+npm.cmd run client:run:check
+```

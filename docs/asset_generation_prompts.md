@@ -9,7 +9,7 @@ scope: asset prompt pack and manifest registration examples
 
 # 首版生图提示词包
 
-> 本文是 `art_direction.md` 的执行补充，提供下一步调用生图能力时可直接复制的提示词。所有提示词都围绕二次元轻幻想轻异世界田园生活模拟方向，生成后按 `vertical_slice_spec.md` 和 `art_direction.md` 登记资产清单。
+> 本文是 `art_direction.md` 的执行补充，提供下一步调用生图能力时可直接复制的提示词。所有提示词都围绕二次元轻幻想轻异世界田园生活模拟方向，生成后按 `art_direction.md` 与 `assets/manifests/asset_manifest.json` 登记资产清单。
 
 ## 通用风格锚点
 

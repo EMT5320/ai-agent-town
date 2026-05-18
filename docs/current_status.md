@@ -1,7 +1,7 @@
 ---
 status: active
 owner_lane: project-status
-last_verified: 2026-05-17
+last_verified: 2026-05-19
 startup_load: after-agent-context
 source_of_truth: true
 scope: current implementation facts, verification state, and work constraints
@@ -9,22 +9,28 @@ scope: current implementation facts, verification state, and work constraints
 
 # 当前项目状态与开发前约束
 
-> 状态更新时间：2026-05-17
-> 本文只记录当前仓库中已核对、命令已检或明确标注人工未验收的事实。长期方向见 `docs/project_vision.md`，系统设计细节见 `docs/agentic_game_design.md`。
+> 状态更新时间：2026-05-19（项目重定位 + 文档治理）
+> 本文只记录当前仓库中已核对、命令已检或明确标注人工未验收的事实。长期方向见 `docs/project_vision.md`，NPC agent loop 设计见 `docs/agent_loop_architecture.md`，世界实体 schema 见 `docs/world_entity_model.md`，多层 Agent 系统设计见 `docs/agentic_game_design.md`。
 
 ## 1. 当前阶段判断
 
-项目已经从早期 `AI Agent 小镇观察台` 进入 `Agent Valley` 第一版垂直切片收束阶段。当前仓库具备：
+项目已经从早期 `AI Agent 小镇观察台` 进入 `Agent Valley` 第一版垂直切片收束阶段。**2026-05-19 项目重定位**为"可解释多 Agent 叙事运行时"，差异化主轴改为"少而深 + 可解释 + 可评估"。
+
+当前仓库具备：
 
 - 可运行的 Python Agent Server。
-- Godot 4.x P0 客户端骨架，已接入事件查看、事件选择、地图角色层和交互 marker；真实窗口已由主人验收，基本可用。
+- Godot 4.x P0 客户端骨架，已接入事件查看、事件选择、地图角色层和交互 marker；真实窗口已由主人验收旧 P0 版本基本可用。
+- Phase 1 sprint 已落地：`world_main.tscn` + tick 闭环 + `LifeActionExecutor`（即将退役）+ 玩家本地控制 + `E` talk + `WorldPulsePanel` + 远处事件提示 + 三场景横向拼图。
 - 首批静态视觉资产、地图小人候选与 manifest 校验。
 - 规则版 Director v0 + 单个 Event Skill 的最小闭环。
 - LLM profile、fallback、Debug 字段记录路径，以及 Debug / Memory / influence 查询 API。
 - 首发 6 名 NPC 的深度卡、关系阶段、送礼反应和写作工作流。
 - 新对话入口与目标看板。
 
-本阶段已经具备可人工验收的一天游戏闭环雏形；当前重点转为补足玩法深度，让体验从背景图和简单 UI 点击推进到地图移动、空间交互、生活行动反馈和内容驱动节奏。
+### 当前阶段位置
+
+- **Phase 1（活着的世界）**：sprint 已落地，**待主人窗口验收**（NPC 分散行动、`WorldPulsePanel`、远处事件提示、`E` talk、HUD 暂停/倍速）。
+- **Phase 2（骨架建立期）**：未启动。文档前置工作已完成（`agent_loop_architecture.md` + `world_entity_model.md` 落地，`project_vision.md` + `production_roadmap.md` + `gameplay_system_architecture.md` 重写）。Phase 1 验收完成后启动。
 
 ## 2. 本轮核对结果
 
@@ -120,12 +126,34 @@ scope: current implementation facts, verification state, and work constraints
 
 ## 4. 当前主要缺口
 
-1. **玩法深度主线**：旧 P0 窗口基础链路已通过；新默认 `world_main` 已具备 tick 驱动 NPC 移动骨架、HUD 暂停/倍速、玩家移动、`E` 键 VN talk、右上角世界动态面板、远处事件提示和三场景横向拼图；玩家移动手感已由主人确认，本轮 NPC 轨迹异常已修复但仍需要主人用 `npm.cmd run start` + `npm.cmd run client:run` 复验 NPC 分散行动、路径线弱化、日程可视化和事件提示节奏。
-2. **Content Codex 二阶段接入**：`monologueSeeds` 已接入夜间反思/RAG；`gossipHooks` 已进入对话证据选择、传播草案、validator 和运行时校验事件；`lifeActionSeeds` / `dailyRumorBeats` / `relationshipBeatSeeds` 已进入 `npcSchedules` / `lifeActionPlan` 快照，仍需扩展为 NPC 实际工具行动、记忆 / 关系层谣言传播。
-3. **Event Skill 数据化深度**：当前已有 schema 和单技能注册表，画像证据、`styleSignal`、事件反应记忆、asset hints 与通用 fallback 台词模板已迁入 Skill；更多结算模板和复用测试仍需推进。
-4. **真实 LLM 证据刷新**：当前本机 `config/models.json` 已跑通真实 smoke；切换模型、key 或 profile 后，需要重新验证 DeepSeek / OpenAI-compatible profile 的真实延迟、成本、错误和 fallback。
-5. **资产补齐**：表情差分、UI 组件和行动反馈图标已进入三批 `prompt_ready` backlog 和导出清单，仍待生成、筛选、登记源图和接入；地图小人晋级状态需主人确认。
-6. **Debug Console 扩展**：后端已有 Debug / Memory 查询 API，Web 侧仍需展示 Director 队列、Skill 激活、fallback 和成本字段。
+### Phase 1 收口缺口
+
+1. **Phase 1 主人窗口验收**：旧 P0 窗口基础链路已通过；新默认 `world_main` 已具备 tick 驱动 NPC 移动骨架、HUD 暂停/倍速、玩家移动、`E` 键 VN talk、右上角世界动态面板、远处事件提示和三场景横向拼图；玩家移动手感已由主人确认，本轮 NPC 轨迹异常已修复但仍需要主人用 `npm.cmd run start` + `npm.cmd run client:run` 复验 NPC 分散行动、路径线弱化、日程可视化和事件提示节奏。
+
+### Phase 2 启动前置（已完成的文档前置工作）
+
+2. **核心圣经文档已落地**：`docs/agent_loop_architecture.md`（NPC agent loop）+ `docs/world_entity_model.md`（世界实体 schema）。
+3. **方向文档已重写**：`project_vision.md` 重定位 + `production_roadmap.md` Phase 2 设计 + `gameplay_system_architecture.md` §2.4 软日程 → 动机系统。
+4. **历史文档已归档**：9 份过时文档移到 `docs/archive/`。
+
+### Phase 2 启动后的实施缺口（pending）
+
+5. **三层工具分层 + ToolDefinition 注册表**：完整接口 + 8-12 个工具实现，pending。
+6. **MotivationEngine（替换 LifeActionExecutor）**：完整决策周期 + 三层路由 + 决策预算 + Fallback，pending。
+7. **CapabilityRegistry**：4 层动态过滤齐全，pending。
+8. **双轨主观记忆**：SubjectiveMemoryStore + RelationshipEdgeStore + ResultObserver + BiasFilter（模板版），pending。
+9. **HeuristicLibrary**：完整 schema + 规则提取 + 设计师 seed 注入 + Debug 可视化，pending。
+10. **ArbitrationLayer**：完整裁决 + contributing_sources Trace，pending。
+11. **WorldEntities**：FarmPlot / Item / Inventory / Shop / Building / Time / Weather schema 实现，pending。
+12. **EvalFramework**：scripts/run_agent_eval.py + L1 scenario suite (5-8 个) + ablation 实验入口，pending。
+13. **Godot 观察者模式最小骨架**：Tab 切换 + NPC 信息面板，pending。
+14. **NPC 深度卡 schema 增补**：motivationProfile / capabilityPreferences / heuristicSeeds 三个字段（schema only，数据 Phase 3 填），pending。
+
+### 持续维持
+
+15. **真实 LLM 证据刷新**：当前本机 `config/models.json` 已跑通真实 smoke；切换模型/key/profile 后需要重新验证。
+16. **资产补齐**：表情差分、UI 组件和行动反馈图标已进入三批 `prompt_ready` backlog 和导出清单，仍待生成、筛选、登记源图和接入；地图小人晋级状态需主人确认。
+17. **Debug Console 扩展**：后端已有 Debug / Memory 查询 API，Web 侧仍需展示 Director 队列、Skill 激活、fallback 和成本字段。Phase 2 后还要新增 Heuristic Library / Arbitration trace / 主观记忆对比视图。
 
 ## 5. 开发前硬性约束
 
@@ -166,10 +194,10 @@ npm.cmd run client:run:check
 git diff --check
 ```
 
-白天整合交接和晚上开工目标见：
+早期白天整合交接快照已归档：
 
 ```powershell
-Get-Content docs\daytime_integration_handoff.md
+Get-Content docs\archive\daytime_integration_handoff.md
 ```
 
 ## 7. 人工验收状态
@@ -180,11 +208,24 @@ Get-Content docs\daytime_integration_handoff.md
 
 ## 8. 下一轮建议
 
-1. 文档治理已把真实窗口验收记录为已人工确认；后续每轮继续只更新已验证事实、剩余缺口和下一步。
-2. Godot 玩法线先复验默认 `world_main`：启动后端后运行 `npm.cmd run client:run`，确认 NPC 自动移动、HUD 暂停/倍速和三场景横向拼图可见，再补玩家控制、VN 交互和轻量日程可视化。
-3. 玩法线优先把“自运转小镇”做成玩家可见体验：补首版生活对象、行动表现模板、NPC 今日意图、行动碰撞、玩家介入入口和离屏结果痕迹，避免只把后端事件显示成文本。
-4. 内容线优先让 `lifeActionPlan` 驱动 NPC 实际行动候选，再把 `gossip.propagation_validated` 从校验事件扩展为第一版谣言记忆 / 关系传播。
-5. 后端线继续收紧 Event Skill 数据化：用 Skill 定义驱动更多结算模板和复用测试。
-6. LLM / Debug 线在切换模型、key 或 profile 后刷新真实 smoke，记录 dialogue / event_reaction / night_reflection 的真实输出、延迟和 fallback。
-7. 资产线按 `docs/asset_batches/prompt_ready_export.md` 推进表情差分、生活 UI 组件和行动反馈图标，地图小人晋级状态等待主人筛选结论。
-8. Web Debug 追加 Director / Skill / fallback 视图，保持旧观察台服务调试和回放。
+### 立即（Phase 1 收口）
+
+1. 主人在 Windows 真实窗口运行 `npm.cmd run start` + `npm.cmd run client:run`，按 30 秒标尺验收 NPC 分散行动、HUD 暂停/倍速、`E` talk、`WorldPulsePanel`、远处事件提示。
+2. 验收完成后在 `current_status.md` §1 标记 Phase 1 done。
+
+### 短期（Phase 2 启动前置）
+
+3. NPC 深度卡 schema 增补 motivationProfile / capabilityPreferences / heuristicSeeds 占位字段（schema only）。
+4. 跑通完整离线基线 + `git diff --check`，确认重定位后的文档治理无残留链接错误。
+5. 阅读 `agent_loop_architecture.md` §13.3（12 项骨架清单）和 `world_entity_model.md` §10（Phase 2 验收标准），熟悉 Phase 2 写入范围。
+
+### 中期（Phase 2 启动后）
+
+6. 后端骨架线、Eval 线、Godot 观察者线、内容 schema 线四条并行启动（详见 `production_roadmap.md` §4.6）。
+7. Eval 是 Phase 2 硬验收线，不达标不进入 Phase 3。
+
+### 持续维持
+
+8. LLM / Debug 线在切换模型、key 或 profile 后刷新真实 smoke。
+9. 资产线按 `docs/asset_batches/prompt_ready_export.md` 推进表情差分、生活 UI 组件和行动反馈图标，**注意 Phase 2 后资产规划要按 `open_questions.md` 末尾的"资产路线的范围调整"重新评估**。
+10. Web Debug 追加 Director / Skill / fallback 视图，Phase 2 后新增 Heuristic Library / Arbitration trace / 主观记忆对比视图。
