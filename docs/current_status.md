@@ -182,8 +182,9 @@ Get-Content docs\daytime_integration_handoff.md
 
 1. 文档治理已把真实窗口验收记录为已人工确认；后续每轮继续只更新已验证事实、剩余缺口和下一步。
 2. Godot 玩法线先复验默认 `world_main`：启动后端后运行 `npm.cmd run client:run`，确认 NPC 自动移动、HUD 暂停/倍速和三场景横向拼图可见，再补玩家控制、VN 交互和轻量日程可视化。
-3. 内容线优先让 `lifeActionPlan` 驱动 NPC 实际行动候选，再把 `gossip.propagation_validated` 从校验事件扩展为第一版谣言记忆 / 关系传播。
-4. 后端线继续收紧 Event Skill 数据化：用 Skill 定义驱动更多结算模板和复用测试。
-5. LLM / Debug 线在切换模型、key 或 profile 后刷新真实 smoke，记录 dialogue / event_reaction / night_reflection 的真实输出、延迟和 fallback。
-6. 资产线按 `docs/asset_batches/prompt_ready_export.md` 推进表情差分、生活 UI 组件和行动反馈图标，地图小人晋级状态等待主人筛选结论。
-7. Web Debug 追加 Director / Skill / fallback 视图，保持旧观察台服务调试和回放。
+3. 玩法线优先把“自运转小镇”做成玩家可见体验：补首版生活对象、行动表现模板、NPC 今日意图、行动碰撞、玩家介入入口和离屏结果痕迹，避免只把后端事件显示成文本。
+4. 内容线优先让 `lifeActionPlan` 驱动 NPC 实际行动候选，再把 `gossip.propagation_validated` 从校验事件扩展为第一版谣言记忆 / 关系传播。
+5. 后端线继续收紧 Event Skill 数据化：用 Skill 定义驱动更多结算模板和复用测试。
+6. LLM / Debug 线在切换模型、key 或 profile 后刷新真实 smoke，记录 dialogue / event_reaction / night_reflection 的真实输出、延迟和 fallback。
+7. 资产线按 `docs/asset_batches/prompt_ready_export.md` 推进表情差分、生活 UI 组件和行动反馈图标，地图小人晋级状态等待主人筛选结论。
+8. Web Debug 追加 Director / Skill / fallback 视图，保持旧观察台服务调试和回放。
